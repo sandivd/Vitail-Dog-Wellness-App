@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'walk_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
   runApp(const VitailApp());
 }
 
@@ -54,12 +55,11 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
 
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-        );
-      }
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
@@ -142,13 +142,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       );
       
       // Navigate to the Home Screen!
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
-      }
-
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Database Error: $e')),
@@ -194,8 +192,42 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 // ---------------- HOME SCREEN ----------------
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  int _totalPoints = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPoints();
+  }
+
+  Future<void> _fetchPoints() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select('total_points')
+          .eq('id', userId)
+          .single();
+      
+      setState(() {
+        _totalPoints = response['total_points'] ?? 0;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -228,14 +260,22 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text('Points: 0', style: TextStyle(fontSize: 18, color: Colors.grey)),
+            _isLoading 
+              ? const CircularProgressIndicator()
+              : Text(
+                  'Points: $_totalPoints', 
+                  style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold),
+                ),
             const SizedBox(height: 48),
             ElevatedButton.icon(
-              onPressed: () {
-                // We will build the Walk screen next!
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Walk feature coming next!')),
+              onPressed: () async {
+                // Wait for the WalkScreen to close
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WalkScreen()),
                 );
+                // When it closes, refresh the points
+                _fetchPoints();
               },
               icon: const Icon(Icons.directions_walk),
               label: const Padding(

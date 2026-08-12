@@ -1,8 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Location permissions should be here, above the application tag -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <application
         android:label="vitail"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- Google Maps API Key goes here, inside the application tag -->
+        <meta-data android:name="com.google.android.geo.API_KEY"
+                   android:value="AIzaSyCEQt-jIVAt32vpWwcicfIKZbhaVMLHzqw" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
