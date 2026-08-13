@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
 import 'rewards_screen.dart';
+import 'profile_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -41,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-  Future<void> _authenticate(bool isLogin) async {
+    Future<void> _authenticate(bool isLogin) async {
     setState(() => _isLoading = true);
     try {
       if (isLogin) {
@@ -56,11 +57,29 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
 
+      // Check if user already has a profile
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-      );
+      
+      // If profile exists, go to Home. If not, go to Onboarding.
+      if (response != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
+        );
+      }
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
@@ -274,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
       // Index 3: Venues (Placeholder)
       const Center(child: Text('Venues Page (Coming Soon)')),
       // Index 4: Profile (Placeholder)
-      const Center(child: Text('Profile Page (Coming Soon)')),
+      const ProfileScreen(),
     ];
 
     return Scaffold(
