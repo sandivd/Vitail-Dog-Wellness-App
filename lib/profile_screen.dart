@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'main.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -145,6 +146,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildMilestoneIcon(Icons.task_alt, '18', 'Quests'),
                 _buildMilestoneIcon(Icons.attach_money, '\$$_totalPoints', 'Rewards'), // Using points as mock rewards $               
               ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Logout Button
+          ElevatedButton.icon(
+            onPressed: () async {
+              await Supabase.instance.client.auth.signOut();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                  (route) => false,
+                );
+              }
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Logout'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[400],
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
         ],

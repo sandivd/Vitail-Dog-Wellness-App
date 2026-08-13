@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
+import 'venues_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -139,6 +140,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _ownerNameController = TextEditingController();
   final _dogNameController = TextEditingController();
   final _breedController = TextEditingController();
+  final _ageController = TextEditingController();
+  final _weightController = TextEditingController();
   bool _isLoading = false;
 
   Future<void> _saveToDatabase() async {
@@ -151,26 +154,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'full_name': _ownerNameController.text.trim(),
       });
 
+      // Convert text to numbers, defaulting to 0.0 if empty
+      double age = double.tryParse(_ageController.text.trim()) ?? 0.0;
+      double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
+
       await Supabase.instance.client.from('dogs').insert({
         'owner_id': userId,
         'dog_name': _dogNameController.text.trim(),
         'breed': _breedController.text.trim(),
+        'age': age,
+        'weight': weight,
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile saved successfully!')),
-      );
-      
-      // Navigate to the Home Screen!
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomeScreen()),
       );
+
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Database Error: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Database Error: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -180,7 +187,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Set up your profile')),
-      body: Padding(
+      body: SingleChildScrollView( // Wrapped in SingleChildScrollView so keyboard doesn't cover fields
         padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -198,6 +205,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             TextField(
               controller: _breedController,
               decoration: const InputDecoration(labelText: 'Dog Breed (e.g., Golden Retriever)', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ageController,
+                    decoration: const InputDecoration(labelText: 'Age (years)', border: OutlineInputBorder()),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    controller: _weightController,
+                    decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 32),
             ElevatedButton(
@@ -290,29 +317,15 @@ class _HomeScreenState extends State<HomeScreen> {
       const Center(child: Text('Walk Page')),
       // Index 2: Rewards
       const RewardsScreen(),
-      // Index 3: Venues (Placeholder)
-      const Center(child: Text('Venues Page (Coming Soon)')),
-      // Index 4: Profile (Placeholder)
+      // Index 3: Venues
+      const VenuesScreen(),
+      // Index 4: Profile
       const ProfileScreen(),
     ];
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vitail'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              }
-            },
-          )
-        ],
       ),
       body: screens[_currentIndex],
       bottomNavigationBar: NavigationBar(
