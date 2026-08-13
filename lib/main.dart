@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
+import 'rewards_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -200,6 +201,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentIndex = 0;
   int _totalPoints = 0;
   bool _isLoading = true;
 
@@ -231,6 +233,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // List of screens for the bottom nav
+    final screens = [
+      // Index 0: Home
+      Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.pets, size: 100, color: Colors.green),
+            const SizedBox(height: 16),
+            const Text('Welcome to Vitail!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            _isLoading 
+              ? const CircularProgressIndicator()
+              : Text('Points: $_totalPoints', style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 48),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WalkScreen()),
+                );
+              },
+              icon: const Icon(Icons.directions_walk),
+              label: const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('Start Walk', style: TextStyle(fontSize: 18)),
+              ),
+              style: ElevatedButton.styleFrom(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              ),
+            ),
+          ],
+        ),
+      ),
+      // Index 1: Walk (Placeholder, usually triggered by button, but added for nav)
+      const Center(child: Text('Walk Page')),
+      // Index 2: Rewards
+      const RewardsScreen(),
+      // Index 3: Venues (Placeholder)
+      const Center(child: Text('Venues Page (Coming Soon)')),
+      // Index 4: Profile (Placeholder)
+      const Center(child: Text('Profile Page (Coming Soon)')),
+    ];
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vitail'),
@@ -249,47 +295,21 @@ class _HomeScreenState extends State<HomeScreen> {
           )
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.pets, size: 100, color: Colors.green),
-            const SizedBox(height: 16),
-            const Text(
-              'Welcome to Vitail!',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            _isLoading 
-              ? const CircularProgressIndicator()
-              : Text(
-                  'Points: $_totalPoints', 
-                  style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold),
-                ),
-            const SizedBox(height: 48),
-            ElevatedButton.icon(
-              onPressed: () async {
-                // Wait for the WalkScreen to close
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const WalkScreen()),
-                );
-                // When it closes, refresh the points
-                _fetchPoints();
-              },
-              icon: const Icon(Icons.directions_walk),
-              label: const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('Start Walk', style: TextStyle(fontSize: 18)),
-              ),
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-            ),
-          ],
-        ),
+      body: screens[_currentIndex],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.directions_walk), label: 'Walk'),
+          NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Rewards'),
+          NavigationDestination(icon: Icon(Icons.map), label: 'Venues'),
+          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
+        ],
       ),
     );
   }
