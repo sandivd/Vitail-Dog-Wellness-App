@@ -252,6 +252,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _totalPoints = 0;
   int _dailyStreak = 0;
   bool _isLoading = true;
+  bool _walkTaskDone = false;
+  bool _weightTaskDone = false;
 
   @override
   void initState() {
@@ -278,6 +280,28 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     }
+    _fetchTasks();
+  }
+
+  Future<void> _fetchTasks() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      
+      final response = await Supabase.instance.client
+          .from('daily_tasks')
+          .select()
+          .eq('user_id', userId)
+          .eq('task_date', today)
+          .maybeSingle();
+
+      setState(() {
+        _walkTaskDone = response?['walk_done'] ?? false;
+        _weightTaskDone = response?['weight_done'] ?? false;
+      });
+    } catch (e) {
+      // Silently fail
+    }
   }
 
   @override
@@ -286,41 +310,62 @@ class _HomeScreenState extends State<HomeScreen> {
     final screens = [
       // Index 0: Home
       Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.pets, size: 100, color: Colors.green),
-            const SizedBox(height: 16),
-            const Text('Welcome to Vitail!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            _isLoading 
-              ? const CircularProgressIndicator()
-              : Text('Points: $_totalPoints', style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange)),
-            const SizedBox(height: 48),
-            ElevatedButton.icon(
-              onPressed: () {
-                setState(() {
-                  _currentIndex = 1; // Switch to Walk screen
-                });
-              },
-              icon: const Icon(Icons.directions_walk),
-              label: const Padding(
-                padding: EdgeInsets.all(16.0),
-                child: Text('Start Walk', style: TextStyle(fontSize: 18)),
+        child: SingleChildScrollView( // Wrap in SingleChildScrollView to prevent overflow
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.pets, size: 80, color: Colors.green),
+              const SizedBox(height: 16),
+              const Text('Welcome to Vitail!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              _isLoading 
+                ? const CircularProgressIndicator()
+                : Text('Points: $_totalPoints', style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange)),
+              const SizedBox(height: 24),
+              
+              // Daily Quests Card
+              Card(
+                margin: const EdgeInsets.symmetric(horizontal: 32),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Daily Quests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      _buildQuestTile('Walk 1km today', _walkTaskDone, Icons.directions_walk),
+                      _buildQuestTile('Log dog\'s weight', _weightTaskDone, Icons.scale),
+                    ],
+                  ),
+                ),
               ),
-              style: ElevatedButton.styleFrom(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              const SizedBox(height: 24),
+
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _currentIndex = 1; // Switch to Walk tab
+                  });
+                },
+                icon: const Icon(Icons.directions_walk),
+                label: const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Text('Start Walk', style: TextStyle(fontSize: 18)),
+                ),
+                style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
               ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
-              },
-              child: const Text('View Walk History'),
-            ),
-          ],
+              TextButton(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
+                },
+                child: const Text('View Walk History'),
+              ),
+            ],
+          ),
         ),
       ),
       // Index 1: Walk
@@ -354,6 +399,21 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Rewards'),
           NavigationDestination(icon: Icon(Icons.map), label: 'Venues'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestTile(String title, bool isDone, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, color: isDone ? Colors.green : Colors.grey),
+          const SizedBox(width: 16),
+          Text(title, style: TextStyle(fontSize: 16, color: isDone ? Colors.grey : Colors.black, decoration: isDone ? TextDecoration.lineThrough : TextDecoration.none)),
+          const Spacer(),
+          Icon(isDone ? Icons.check_circle : Icons.radio_button_unchecked, color: isDone ? Colors.green : Colors.grey),
         ],
       ),
     );

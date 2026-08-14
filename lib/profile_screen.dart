@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main.dart';
+import 'package:fl_chart/fl_chart.dart';
+
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -16,6 +18,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _ageController = TextEditingController();
   final _weightController = TextEditingController();
   double _totalDistanceKm = 0.0;
+  List<Map<String, dynamic>> _weightHistory = [];
+  double _weightChange = 0.0;
+  final _weightInputController = TextEditingController();
 
   @override
   void initState() {
@@ -40,11 +45,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .eq('id', userId)
           .single();
 
-      // NEW: Fetch all walks to calculate total distance
       final walksResponse = await Supabase.instance.client
           .from('walks')
           .select('distance_meters')
           .eq('user_id', userId);
+
+      // NEW: Fetch weight history
+      final weightResponse = await Supabase.instance.client
+          .from('weight_history')
+          .select()
+          .eq('dog_id', dogResponse?['id'])
+          .order('recorded_date', ascending: true);
 
       double totalDistanceMeters = 0;
       for (var walk in walksResponse) {
@@ -54,13 +65,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _dogData = dogResponse;
         _totalPoints = profileResponse['total_points'] ?? 0;
-        _totalDistanceKm = totalDistanceMeters / 1000; // Convert to km
+        _totalDistanceKm = totalDistanceMeters / 1000;
+        _weightHistory = List<Map<String, dynamic>>.from(weightResponse);
+        
+        // Calculate weight change (latest vs previous)
+        if (_weightHistory.length >= 2) {
+          double latest = (_weightHistory.last['weight_kg'] as num).toDouble();
+          double previous = (_weightHistory[_weightHistory.length - 2]['weight_kg'] as num).toDouble();
+          _weightChange = latest - previous;
+        }
         _isLoading = false;
       });
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
     }
   }
 
@@ -120,6 +137,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _logNewWeight() async {
+    _weightInputController.clear();
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Log Weight'),
+          content: TextField(
+            controller: _weightInputController,
+            decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
+            keyboardType: TextInputType.number,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  double newWeight = double.tryParse(_weightInputController.text) ?? 0.0;
+                  if (newWeight <= 0) return;
+                  
+                  await Supabase.instance.client.from('weight_history').insert({
+                    'dog_id': _dogData?['id'],
+                    'weight_kg': newWeight,
+                  });
+
+                  // Update the main dogs table too
+                  await Supabase.instance.client.from('dogs').update({
+                    'weight': newWeight,
+                  }).eq('id', _dogData?['id']);
+
+                  // Complete the daily weight task!
+                  await _completeDailyTask('weight_done');
+
+                  if (context.mounted) Navigator.pop(context);
+                  _fetchProfile(); // Refresh UI
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Helper to complete daily tasks
+  Future<void> _completeDailyTask(String taskColumn) async {
+    final userId = Supabase.instance.client.auth.currentUser!.id;
+    final today = DateTime.now().toIso8601String().split('T')[0];
+    
+    // Try to update, if it doesn't exist, insert
+    await Supabase.instance.client.from('daily_tasks').upsert({
+      'user_id': userId,
+      'task_date': today,
+      taskColumn: true,
+    }, onConflict: 'user_id, task_date');
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -168,17 +245,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Weight Tracker Card
           _buildSectionCard(
             title: 'Weight Tracker',
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Stable Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.green[100],
-                    borderRadius: BorderRadius.circular(20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _weightChange >= 0 ? Colors.orange[100] : Colors.green[100],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${_weightChange >= 0 ? '+' : ''}${_weightChange.toStringAsFixed(1)}kg recently', 
+                        style: TextStyle(color: _weightChange >= 0 ? Colors.orange[800] : Colors.green[800], fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // The Line Chart
+                _weightHistory.length > 1 
+                  ? SizedBox(
+                      height: 100,
+                      child: LineChart(
+                        LineChartData(
+                          gridData: const FlGridData(show: false),
+                          titlesData: const FlTitlesData(show: false),
+                          borderData: FlBorderData(show: false),
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: _weightHistory.asMap().entries.map((e) {
+                                return FlSpot(e.key.toDouble(), (e.value['weight_kg'] as num).toDouble());
+                              }).toList(),
+                              isCurved: true,
+                              color: Colors.green,
+                              barWidth: 4,
+                              dotData: const FlDotData(show: true),
+                              belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.1)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : const Text('Log at least 2 weights to see the graph', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _logNewWeight,
+                    icon: const Icon(Icons.scale),
+                    label: const Text('Log New Weight'),
                   ),
-                  child: Text('+0.8kg this month', style: TextStyle(color: Colors.green[800], fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

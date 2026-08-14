@@ -99,6 +99,19 @@ class _WalkScreenState extends State<WalkScreen> {
                     }
                   }
 
+                  // COMPLETE WALK QUEST
+                  if (_totalDistance >= 1000) {
+                    final today = DateTime.now().toIso8601String().split('T')[0];
+                    await Supabase.instance.client.from('daily_tasks').upsert({
+                      'user_id': userId,
+                      'task_date': today,
+                      'walk_done': true,
+                    }, onConflict: 'user_id, task_date');
+                    
+                    // Give bonus points for completing quest!
+                    pointsEarned += 50; 
+                  }
+
                   // 4. Update profile with new points, streak, and date
                   await Supabase.instance.client.from('profiles').update({
                     'total_points': currentPoints + pointsEarned,
