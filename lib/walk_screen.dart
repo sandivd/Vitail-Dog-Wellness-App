@@ -59,45 +59,61 @@ class _WalkScreenState extends State<WalkScreen> {
           actions: [
             TextButton(
               onPressed: () async {
-                // 1. Calculate points (1 point per meter)
                 int pointsEarned = (_totalDistance / 100).floor();
                 final userId = Supabase.instance.client.auth.currentUser!.id;
 
                 try {
-                  // 2. Save the walk to the walks table
+                  // 1. Save the walk
                   await Supabase.instance.client.from('walks').insert({
                     'user_id': userId,
                     'distance_meters': _totalDistance,
-                    'duration_seconds': 1800, // Mock 30 mins for now
+                    'duration_seconds': 1800, 
                     'points_earned': pointsEarned,
                   });
 
-                  // 3. Fetch the user's current points
-                  final response = await Supabase.instance.client
+                  // 2. Fetch current points and streak
+                  final profileRes = await Supabase.instance.client
                       .from('profiles')
-                      .select('total_points')
+                      .select('total_points, daily_streak, last_walk_date')
                       .eq('id', userId)
                       .single();
                   
-                  int currentPoints = response['total_points'] ?? 0;
-                  int newTotalPoints = currentPoints + pointsEarned;
+                  int currentPoints = profileRes['total_points'] ?? 0;
+                  int currentStreak = profileRes['daily_streak'] ?? 0;
+                  String? lastWalkStr = profileRes['last_walk_date'];
 
-                  // 4. Update the user's total points
+                  // 3. Calculate new streak
+                  DateTime today = DateTime.now();
+                  DateTime todayDateOnly = DateTime(today.year, today.month, today.day);
+                  int newStreak = 1; // Default to 1 if streak is broken
+
+                  if (lastWalkStr != null) {
+                    DateTime lastWalk = DateTime.parse(lastWalkStr);
+                    DateTime lastWalkDateOnly = DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
+                    int diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
+                    
+                    if (diffInDays == 1) {
+                      newStreak = currentStreak + 1; // Consecutive day!
+                    } else if (diffInDays == 0) {
+                      newStreak = currentStreak; // Already walked today
+                    }
+                  }
+
+                  // 4. Update profile with new points, streak, and date
                   await Supabase.instance.client.from('profiles').update({
-                    'total_points': newTotalPoints,
+                    'total_points': currentPoints + pointsEarned,
+                    'daily_streak': newStreak,
+                    'last_walk_date': todayDateOnly.toIso8601String().split('T')[0],
                   }).eq('id', userId);
 
-                  if (dialogContext.mounted) {
-                    // 5. Close dialog and go back to Home Screen
-                    Navigator.pop(dialogContext); // Close dialog
-                    Navigator.pop(context); // Close WalkScreen, return to Home
+                  if (context.mounted) {
+                    Navigator.popUntil(context, (route) => route.isFirst);
                   }
                 } catch (e) {
-                  if (dialogContext.mounted) {
-                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Error saving walk: $e')),
                     );
-                    Navigator.pop(dialogContext); // Close dialog on error
                   }
                 }
               },

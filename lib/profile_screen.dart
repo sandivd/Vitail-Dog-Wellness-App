@@ -13,6 +13,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _dogData;
   int _totalPoints = 0;
   bool _isLoading = true;
+  final _ageController = TextEditingController();
+  final _weightController = TextEditingController();
+  double _totalDistanceKm = 0.0;
 
   @override
   void initState() {
@@ -37,9 +40,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .eq('id', userId)
           .single();
 
+      // NEW: Fetch all walks to calculate total distance
+      final walksResponse = await Supabase.instance.client
+          .from('walks')
+          .select('distance_meters')
+          .eq('user_id', userId);
+
+      double totalDistanceMeters = 0;
+      for (var walk in walksResponse) {
+        totalDistanceMeters += (walk['distance_meters'] as num).toDouble();
+      }
+
       setState(() {
         _dogData = dogResponse;
         _totalPoints = profileResponse['total_points'] ?? 0;
+        _totalDistanceKm = totalDistanceMeters / 1000; // Convert to km
         _isLoading = false;
       });
     } catch (e) {
@@ -47,6 +62,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _isLoading = false;
       });
     }
+  }
+
+
+  Future<void> _editDogDetails() async {
+    // Pre-fill the text fields with current data
+    _ageController.text = (_dogData?['age'] ?? 0).toString();
+    _weightController.text = (_dogData?['weight'] ?? 0).toString();
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Edit Dog Details'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _ageController,
+                decoration: const InputDecoration(labelText: 'Age (years)'),
+                keyboardType: TextInputType.number,
+              ),
+              TextField(
+                controller: _weightController,
+                decoration: const InputDecoration(labelText: 'Weight (kg)'),
+                keyboardType: TextInputType.number,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  final dogId = _dogData?['id'];
+                  await Supabase.instance.client.from('dogs').update({
+                    'age': double.tryParse(_ageController.text) ?? 0.0,
+                    'weight': double.tryParse(_weightController.text) ?? 0.0,
+                  }).eq('id', dogId);
+                  
+                  if (context.mounted) Navigator.pop(context);
+                  _fetchProfile(); // Refresh the UI
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -64,9 +135,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String vaccDate = _dogData?['vaccination_date'] ?? 'Aug 2026';
 
     return Scaffold(
-      appBar: AppBar(
+        appBar: AppBar(
         title: const Text('Profile'),
         automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _editDogDetails,
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
@@ -142,9 +219,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildMilestoneIcon(Icons.directions_walk, '340km', 'Walked'),
-                _buildMilestoneIcon(Icons.task_alt, '18', 'Quests'),
-                _buildMilestoneIcon(Icons.attach_money, '\$$_totalPoints', 'Rewards'), // Using points as mock rewards $               
+                _buildMilestoneIcon(Icons.directions_walk, '${_totalDistanceKm.toStringAsFixed(1)}km', 'Walked'),
+                _buildMilestoneIcon(Icons.task_alt, '0', 'Quests'), // Set to 0 since we don't have quests yet
+                _buildMilestoneIcon(Icons.attach_money, '\$$_totalPoints', 'Rewards'),
               ],
             ),
           ),

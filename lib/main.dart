@@ -4,6 +4,7 @@ import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'venues_screen.dart';
+import 'walk_history_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -249,6 +250,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   int _totalPoints = 0;
+  int _dailyStreak = 0;
   bool _isLoading = true;
 
   @override
@@ -268,6 +270,7 @@ class _HomeScreenState extends State<HomeScreen> {
       
       setState(() {
         _totalPoints = response['total_points'] ?? 0;
+        _dailyStreak = response['daily_streak'] ?? 0;
         _isLoading = false;
       });
     } catch (e) {
@@ -293,13 +296,14 @@ class _HomeScreenState extends State<HomeScreen> {
             _isLoading 
               ? const CircularProgressIndicator()
               : Text('Points: $_totalPoints', style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange)),
             const SizedBox(height: 48),
             ElevatedButton.icon(
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const WalkScreen()),
-                );
+                setState(() {
+                  _currentIndex = 1; // Switch to Walk screen
+                });
               },
               icon: const Icon(Icons.directions_walk),
               label: const Padding(
@@ -310,11 +314,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
               ),
             ),
+            TextButton(
+              onPressed: () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
+              },
+              child: const Text('View Walk History'),
+            ),
           ],
         ),
       ),
-      // Index 1: Walk (Placeholder, usually triggered by button, but added for nav)
-      const Center(child: Text('Walk Page')),
+      // Index 1: Walk
+      const WalkScreen(),
       // Index 2: Rewards
       const RewardsScreen(),
       // Index 3: Venues
@@ -333,6 +343,9 @@ class _HomeScreenState extends State<HomeScreen> {
         onDestinationSelected: (index) {
           setState(() {
             _currentIndex = index;
+            if (index == 0) {
+              _fetchPoints(); // Refresh points when returning to Home
+            }
           });
         },
         destinations: const [
