@@ -275,21 +275,21 @@ class _HomeScreenState extends State<HomeScreen> {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       final response = await Supabase.instance.client
           .from('profiles')
-          .select('total_points')
+          .select('total_points, daily_streak') 
           .eq('id', userId)
           .single();
       
       setState(() {
         _totalPoints = response['total_points'] ?? 0;
-        _dailyStreak = response['daily_streak'] ?? 0;
+        _dailyStreak = response['daily_streak'] ?? 0; // Now it will grab the real number!
         _isLoading = false;
       });
+      _fetchTasks();
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
     }
-    _fetchTasks();
   }
 
   Future<void> _fetchTasks() async {
