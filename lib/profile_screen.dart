@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main.dart';
 import 'package:fl_chart/fl_chart.dart';
-
+import 'package:intl/intl.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -137,48 +137,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  DateTime _selectedDate = DateTime.now();
+
   Future<void> _logNewWeight() async {
     _weightInputController.clear();
+    _selectedDate = DateTime.now(); // Reset date to today
+
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Log Weight'),
-          content: TextField(
-            controller: _weightInputController,
-            decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
-            keyboardType: TextInputType.number,
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  double newWeight = double.tryParse(_weightInputController.text) ?? 0.0;
-                  if (newWeight <= 0) return;
-                  
-                  await Supabase.instance.client.from('weight_history').insert({
-                    'dog_id': _dogData?['id'],
-                    'weight_kg': newWeight,
-                  });
+        // Use StatefulBuilder so the dialog updates when we pick a new date
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Log Weight'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Date Picker Display
+                  InkWell(
+                    onTap: () async {
+                      DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setStateDialog(() {
+                          _selectedDate = picked;
+                        });
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(labelText: 'Date', border: OutlineInputBorder()),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
+                          const Icon(Icons.calendar_today, size: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Weight Input
+                  TextField(
+                    controller: _weightInputController,
+                    decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      double newWeight = double.tryParse(_weightInputController.text) ?? 0.0;
+                      if (newWeight <= 0) return;
+                      
+                      // Check if an entry for this exact date already exists
+                      final existingEntry = await Supabase.instance.client
+                          .from('weight_history')
+                          .select('id')
+                          .eq('dog_id', _dogData?['id'])
+                          .eq('recorded_date', _selectedDate.toIso8601String().split('T')[0])
+                          .maybeSingle();
 
-                  // Update the main dogs table too
-                  await Supabase.instance.client.from('dogs').update({
-                    'weight': newWeight,
-                  }).eq('id', _dogData?['id']);
+                      if (existingEntry != null) {
+                        // UPDATE existing entry for this date
+                        await Supabase.instance.client.from('weight_history').update({
+                          'weight_kg': newWeight,
+                        }).eq('id', existingEntry['id']);
+                      } else {
+                        // INSERT new entry
+                        await Supabase.instance.client.from('weight_history').insert({
+                          'dog_id': _dogData?['id'],
+                          'weight_kg': newWeight,
+                          'recorded_date': _selectedDate.toIso8601String().split('T')[0], // Format as YYYY-MM-DD
+                        });
+                      }
 
-                  // Complete the daily weight task!
-                  await _completeDailyTask('weight_done');
+                      // Update the main dogs table with the latest weight
+                      await Supabase.instance.client.from('dogs').update({
+                        'weight': newWeight,
+                      }).eq('id', _dogData?['id']);
 
-                  if (context.mounted) Navigator.pop(context);
-                  _fetchProfile(); // Refresh UI
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
+                      // Complete the daily weight task (Only if they picked today)
+                      if (_selectedDate.year == DateTime.now().year && _selectedDate.month == DateTime.now().month && _selectedDate.day == DateTime.now().day) {
+                        await _completeDailyTask('weight_done');
+                      }
+
+                      if (context.mounted) Navigator.pop(context);
+                      _fetchProfile(); // Refresh UI
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          }
         );
       },
     );
@@ -284,7 +345,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               color: Colors.green,
                               barWidth: 4,
                               dotData: const FlDotData(show: true),
-                              belowBarData: BarAreaData(show: true, color: Colors.green.withOpacity(0.1)),
+                              belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.1)),
                             ),
                           ],
                         ),
@@ -382,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

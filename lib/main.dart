@@ -150,6 +150,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
 
+      // 1. Save owner to profiles table
       await Supabase.instance.client.from('profiles').upsert({
         'id': userId,
         'full_name': _ownerNameController.text.trim(),
@@ -159,12 +160,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       double age = double.tryParse(_ageController.text.trim()) ?? 0.0;
       double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
 
-      await Supabase.instance.client.from('dogs').insert({
+      // 2. Insert Dog and get the newly generated dog_id
+      final dogResponse = await Supabase.instance.client.from('dogs').insert({
         'owner_id': userId,
         'dog_name': _dogNameController.text.trim(),
         'breed': _breedController.text.trim(),
         'age': age,
         'weight': weight,
+      }).select().single(); // .select().single() returns the inserted row so we can get its ID!
+
+      // 3. Save the initial weight to the weight_history table (for the MFP graph)
+      await Supabase.instance.client.from('weight_history').insert({
+        'dog_id': dogResponse['id'],
+        'weight_kg': weight,
+        'recorded_date': DateTime.now().toIso8601String(), // Today's date
       });
 
       if (!mounted) return;
