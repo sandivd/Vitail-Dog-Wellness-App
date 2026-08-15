@@ -21,6 +21,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<Map<String, dynamic>> _weightHistory = [];
   double _weightChange = 0.0;
   final _weightInputController = TextEditingController();
+  int _totalQuests = 0;
 
   @override
   void initState() {
@@ -50,12 +51,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .select('distance_meters')
           .eq('user_id', userId);
 
-      // NEW: Fetch weight history
       final weightResponse = await Supabase.instance.client
           .from('weight_history')
           .select()
           .eq('dog_id', dogResponse?['id'])
           .order('recorded_date', ascending: true);
+
+      // NEW: Fetch all daily tasks to count completed quests
+      final tasksResponse = await Supabase.instance.client
+          .from('daily_tasks')
+          .select()
+          .eq('user_id', userId);
+
+      // Count individual tasks completed
+      int questCount = 0;
+      for (var task in tasksResponse) {
+        if (task['walk_done'] == true) questCount++;
+        if (task['weight_done'] == true) questCount++;
+      }
 
       double totalDistanceMeters = 0;
       for (var walk in walksResponse) {
@@ -67,8 +80,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _totalPoints = profileResponse['total_points'] ?? 0;
         _totalDistanceKm = totalDistanceMeters / 1000;
         _weightHistory = List<Map<String, dynamic>>.from(weightResponse);
+        _totalQuests = questCount; // Update the quest count!
         
-        // Calculate weight change (latest vs previous)
         if (_weightHistory.length >= 2) {
           double latest = (_weightHistory.last['weight_kg'] as num).toDouble();
           double previous = (_weightHistory[_weightHistory.length - 2]['weight_kg'] as num).toDouble();
@@ -224,8 +237,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         'weight': newWeight,
                       }).eq('id', _dogData?['id']);
 
-                      // Complete the daily weight task (Only if they picked today)
-                      if (_selectedDate.year == DateTime.now().year && _selectedDate.month == DateTime.now().month && _selectedDate.day == DateTime.now().day) {
+                      // Complete the daily weight task & give points (Only if they picked today)
+                      if (_selectedDate.year == DateTime.now().year && 
+                          _selectedDate.month == DateTime.now().month && 
+                          _selectedDate.day == DateTime.now().day) {
+                        
+                        final userId = Supabase.instance.client.auth.currentUser!.id;
+                        final today = DateTime.now().toIso8601String().split('T')[0];
+                        
+                        // 1. Check if weight quest was already done today
+                        final taskCheck = await Supabase.instance.client
+                            .from('daily_tasks')
+                            .select('weight_done')
+                            .eq('user_id', userId)
+                            .eq('task_date', today)
+                            .maybeSingle();
+
+                        // 2. If NOT done yet, give 50 points!
+                        if (taskCheck?['weight_done'] != true) {
+                          final profileRes = await Supabase.instance.client
+                              .from('profiles')
+                              .select('total_points')
+                              .eq('id', userId)
+                              .single();
+                          
+                          int currentPoints = profileRes['total_points'] ?? 0;
+                          await Supabase.instance.client.from('profiles').update({
+                            'total_points': currentPoints + 50,
+                          }).eq('id', userId);
+                        }
+
+                        // 3. Mark task as done
                         await _completeDailyTask('weight_done');
                       }
 
@@ -401,7 +443,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _buildMilestoneIcon(Icons.directions_walk, '${_totalDistanceKm.toStringAsFixed(1)}km', 'Walked'),
-                _buildMilestoneIcon(Icons.task_alt, '0', 'Quests'), // Set to 0 since we don't have quests yet
+                _buildMilestoneIcon(Icons.task_alt, '$_totalQuests', 'Quests'), // <-- Now uses real data!
                 _buildMilestoneIcon(Icons.attach_money, '\$$_totalPoints', 'Rewards'),
               ],
             ),

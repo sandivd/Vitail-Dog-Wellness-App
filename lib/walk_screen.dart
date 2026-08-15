@@ -99,17 +99,29 @@ class _WalkScreenState extends State<WalkScreen> {
                     }
                   }
 
-                  // COMPLETE WALK QUEST
+                                    // COMPLETE WALK QUEST & GIVE POINTS
                   if (_totalDistance >= 1000) {
                     final today = DateTime.now().toIso8601String().split('T')[0];
-                    await Supabase.instance.client.from('daily_tasks').upsert({
-                      'user_id': userId,
-                      'task_date': today,
-                      'walk_done': true,
-                    }, onConflict: 'user_id, task_date');
                     
-                    // Give bonus points for completing quest!
-                    pointsEarned += 50; 
+                    // 1. Check if walk quest was already done today
+                    final taskCheck = await Supabase.instance.client
+                        .from('daily_tasks')
+                        .select('walk_done')
+                        .eq('user_id', userId)
+                        .eq('task_date', today)
+                        .maybeSingle();
+
+                    // 2. If NOT done yet, give 50 points!
+                    if (taskCheck?['walk_done'] != true) {
+                      pointsEarned += 50; 
+                      
+                      // 3. Mark task as done
+                      await Supabase.instance.client.from('daily_tasks').upsert({
+                        'user_id': userId,
+                        'task_date': today,
+                        'walk_done': true,
+                      }, onConflict: 'user_id, task_date');
+                    }
                   }
 
                   // 4. Update profile with new points, streak, and date
