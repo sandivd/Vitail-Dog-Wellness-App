@@ -49,13 +49,12 @@ class _WalkScreenState extends State<WalkScreen> {
       });
       
       // Show a popup with the final distance
-      if (!mounted) return;
       showDialog(
         context: context,
-        barrierDismissible: false, // User must click the button to close
-        builder: (dialogContext) => AlertDialog(
+        barrierDismissible: false, // User must click the button
+        builder: (context) => AlertDialog(
           title: const Text('Walk Finished!'),
-          content: Text('You walked ${_totalDistance.toStringAsFixed(2)} meters!\nPoints earned: ${(_totalDistance / 100).floor()}'),
+          content: Text('You walked ${_totalDistance.toStringAsFixed(0)} meters!'),
           actions: [
             TextButton(
               onPressed: () async {
@@ -71,7 +70,7 @@ class _WalkScreenState extends State<WalkScreen> {
                     'points_earned': pointsEarned,
                   });
 
-                  // 2. Fetch current points and streak
+                  // 2. Fetch current points, streak, and last walk date
                   final profileRes = await Supabase.instance.client
                       .from('profiles')
                       .select('total_points, daily_streak, last_walk_date')
@@ -99,11 +98,11 @@ class _WalkScreenState extends State<WalkScreen> {
                     }
                   }
 
-                                    // COMPLETE WALK QUEST & GIVE POINTS
+                  // 4. COMPLETE WALK QUEST & GIVE POINTS
                   if (_totalDistance >= 1000) {
                     final today = DateTime.now().toIso8601String().split('T')[0];
                     
-                    // 1. Check if walk quest was already done today
+                    // Check if walk quest was already done today
                     final taskCheck = await Supabase.instance.client
                         .from('daily_tasks')
                         .select('walk_done')
@@ -111,11 +110,11 @@ class _WalkScreenState extends State<WalkScreen> {
                         .eq('task_date', today)
                         .maybeSingle();
 
-                    // 2. If NOT done yet, give 50 points!
+                    // If NOT done yet, give 50 points!
                     if (taskCheck?['walk_done'] != true) {
                       pointsEarned += 50; 
                       
-                      // 3. Mark task as done
+                      // Mark task as done
                       await Supabase.instance.client.from('daily_tasks').upsert({
                         'user_id': userId,
                         'task_date': today,
@@ -124,7 +123,7 @@ class _WalkScreenState extends State<WalkScreen> {
                     }
                   }
 
-                  // 4. Update profile with new points, streak, and date
+                  // 5. Update profile with new points, streak, and date
                   await Supabase.instance.client.from('profiles').update({
                     'total_points': currentPoints + pointsEarned,
                     'daily_streak': newStreak,
@@ -135,10 +134,16 @@ class _WalkScreenState extends State<WalkScreen> {
                     Navigator.popUntil(context, (route) => route.isFirst);
                   }
                 } catch (e) {
+                  // If internet drops, catch the error so the app doesn't crash!
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error saving walk: $e')),
+                      const SnackBar(
+                        content: Text('Network error: Could not save walk. Check your connection.'),
+                        backgroundColor: Colors.red,
+                      ),
                     );
+                    // Still navigate home, but the walk data is lost.
+                    Navigator.popUntil(context, (route) => route.isFirst);
                   }
                 }
               },
@@ -150,7 +155,12 @@ class _WalkScreenState extends State<WalkScreen> {
     } else {
       // Start the walk
       bool hasPermission = await _checkPermissions();
-      if (!hasPermission) return;
+      if (!hasPermission) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Location permission is required to track your walk.')),
+        );
+        return;
+      }
 
       setState(() {
         _isWalking = true;

@@ -44,7 +44,23 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _walks.isEmpty
-              ? const Center(child: Text('No walks yet. Go outside!'))
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.history, size: 80, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      const Text('No Walks Yet!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey)),
+                      const SizedBox(height: 8),
+                      const Text('Start your first walk to see it here.', style: TextStyle(color: Colors.grey)),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Go for a Walk'),
+                      ),
+                    ],
+                  ),
+                )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: _walks.length,

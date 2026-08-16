@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,8 +16,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _dogData;
   int _totalPoints = 0;
   bool _isLoading = true;
-  final _ageController = TextEditingController();
-  final _weightController = TextEditingController();
   double _totalDistanceKm = 0.0;
   List<Map<String, dynamic>> _weightHistory = [];
   double _weightChange = 0.0;
@@ -95,60 +94,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 
-  Future<void> _editDogDetails() async {
-    // Pre-fill the text fields with current data
-    _ageController.text = (_dogData?['age'] ?? 0).toString();
-    _weightController.text = (_dogData?['weight'] ?? 0).toString();
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit Dog Details'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _ageController,
-                decoration: const InputDecoration(labelText: 'Age (years)'),
-                keyboardType: TextInputType.number,
-              ),
-              TextField(
-                controller: _weightController,
-                decoration: const InputDecoration(labelText: 'Weight (kg)'),
-                keyboardType: TextInputType.number,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  final dogId = _dogData?['id'];
-                  await Supabase.instance.client.from('dogs').update({
-                    'age': double.tryParse(_ageController.text) ?? 0.0,
-                    'weight': double.tryParse(_weightController.text) ?? 0.0,
-                  }).eq('id', dogId);
-                  
-                  if (context.mounted) Navigator.pop(context);
-                  _fetchProfile(); // Refresh the UI
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   DateTime _selectedDate = DateTime.now();
 
@@ -321,7 +267,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
-            onPressed: _editDogDetails,
+            onPressed: () async {
+              // Navigate to Settings Screen and refresh profile when returning
+              await Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => const SettingsScreen())
+              );
+              _fetchProfile(); // Refresh data in case they changed the dog's name/weight
+            },
           ),
         ],
       ),
@@ -450,26 +403,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Logout Button
-          ElevatedButton.icon(
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[400],
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-          ),
+          
         ],
       ),
     );

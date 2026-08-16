@@ -15,18 +15,31 @@ Future<void> main() async {
   runApp(const VitailApp());
 }
 
+// Global notifier for Dark Mode
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
+
 class VitailApp extends StatelessWidget {
   const VitailApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Vitail',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
-        useMaterial3: true,
-      ),
-      home: const LoginScreen(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, ThemeMode currentMode, __) {
+        return MaterialApp(
+          title: 'Vitail',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light),
+            useMaterial3: true,
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.dark),
+            useMaterial3: true,
+          ),
+          themeMode: currentMode, // This switches the theme!
+          home: const LoginScreen(),
+        );
+      },
     );
   }
 }
@@ -83,9 +96,29 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      String errorMessage = 'An error occurred. Please try again.';
+      
+      // Convert raw error to string so we can check what it says
+      String errorString = e.toString();
+
+      if (errorString.contains('Invalid login credentials')) {
+        errorMessage = 'Incorrect email or password.';
+      } else if (errorString.contains('already registered') || errorString.contains('already been registered')) {
+        errorMessage = 'An account with this email already exists.';
+      } else if (errorString.contains('rate limit exceeded')) {
+        errorMessage = 'Too many attempts. Please wait a minute.';
+      } else if (errorString.contains('network') || errorString.contains('Failed host lookup')) {
+        errorMessage = 'No internet connection. Please check your network.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
