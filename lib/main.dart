@@ -25,7 +25,7 @@ class VitailApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
-      builder: (_, ThemeMode currentMode, __) {
+      builder: (_, ThemeMode currentMode, _) {
         return MaterialApp(
           title: 'Vitail',
           theme: ThemeData(
@@ -57,22 +57,14 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
-    Future<void> _authenticate(bool isLogin) async {
+  Future<void> _login() async {
     setState(() => _isLoading = true);
     try {
-      if (isLogin) {
-        await Supabase.instance.client.auth.signInWithPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-      } else {
-        await Supabase.instance.client.auth.signUp(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-      }
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
 
-      // Check if user already has a profile
       final userId = Supabase.instance.client.auth.currentUser!.id;
       final response = await Supabase.instance.client
           .from('profiles')
@@ -82,43 +74,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
       
-      // If profile exists, go to Home. If not, go to Onboarding.
       if (response != null) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
       } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const OnboardingScreen()),
-        );
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
       }
-
     } catch (e) {
       String errorMessage = 'An error occurred. Please try again.';
-      
-      // Convert raw error to string so we can check what it says
-      String errorString = e.toString();
-
-      if (errorString.contains('Invalid login credentials')) {
+      if (e.toString().contains('Invalid login credentials')) {
         errorMessage = 'Incorrect email or password.';
-      } else if (errorString.contains('already registered') || errorString.contains('already been registered')) {
-        errorMessage = 'An account with this email already exists.';
-      } else if (errorString.contains('rate limit exceeded')) {
-        errorMessage = 'Too many attempts. Please wait a minute.';
-      } else if (errorString.contains('network') || errorString.contains('Failed host lookup')) {
-        errorMessage = 'No internet connection. Please check your network.';
+      } else if (e.toString().contains('network') || e.toString().contains('Failed host lookup')) {
+        errorMessage = 'No internet connection.';
       }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -127,35 +95,184 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Vitail', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-            const SizedBox(height: 32),
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
-              obscureText: true,
-            ),
-            const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: _isLoading ? null : () => _authenticate(true),
-              child: const Text('Log In'),
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton(
-              onPressed: _isLoading ? null : () => _authenticate(false),
-              child: const Text('Sign Up'),
-            ),
-          ],
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Login', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black)),
+              const SizedBox(height: 8),
+              const Text('Please sign in to continue.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
+                obscureText: true,
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _login,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('LOGIN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Don't have an account? ", style: TextStyle(color: Colors.grey)),
+                  GestureDetector(
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen())),
+                    child: const Text('Sign up', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------- REGISTER SCREEN ----------------
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
+
+  @override
+  State<RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<RegisterScreen> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _signUp() async {
+    if (_passwordController.text.trim() != _confirmPasswordController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match!'), backgroundColor: Colors.red));
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      await Supabase.instance.client.auth.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      
+      // Save the user's name to the database immediately
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': userId,
+        'full_name': _nameController.text.trim(),
+      });
+
+      if (!mounted) return;
+      // Go to Onboarding to collect Dog details
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
+    } catch (e) {
+      String errorMessage = 'An error occurred. Please try again.';
+      String errorStr = e.toString().toLowerCase(); // Convert to lowercase to easily check
+
+      if (errorStr.contains('already registered') || errorStr.contains('user already registered')) {
+        errorMessage = 'An account with this email already exists.';
+      } else if (errorStr.contains('network') || errorStr.contains('failed host lookup')) {
+        errorMessage = 'No internet connection. Please check your network.';
+      } else if (errorStr.contains('invalid') || errorStr.contains('email_address_invalid') || errorStr.contains('validate email address')) {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (errorStr.contains('password')) {
+        errorMessage = 'Password must be at least 6 characters.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Create Account', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black)),
+              const SizedBox(height: 8),
+              const Text('Start your journey with us today.', style: TextStyle(color: Colors.grey, fontSize: 16)),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person_outline)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
+                obscureText: true,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
+                obscureText: true,
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _signUp,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('SIGN UP', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("Already have an account? ", style: TextStyle(color: Colors.grey)),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: const Text('Sign in', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              )
+            ],
+          ),
         ),
       ),
     );
@@ -171,7 +288,6 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _ownerNameController = TextEditingController();
   final _dogNameController = TextEditingController();
   final _breedController = TextEditingController();
   final _ageController = TextEditingController();
@@ -183,44 +299,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
 
-      // 1. Save owner to profiles table
-      await Supabase.instance.client.from('profiles').upsert({
-        'id': userId,
-        'full_name': _ownerNameController.text.trim(),
-      });
-
-      // Convert text to numbers, defaulting to 0.0 if empty
       double age = double.tryParse(_ageController.text.trim()) ?? 0.0;
       double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
 
-      // 2. Insert Dog and get the newly generated dog_id
       final dogResponse = await Supabase.instance.client.from('dogs').insert({
         'owner_id': userId,
         'dog_name': _dogNameController.text.trim(),
         'breed': _breedController.text.trim(),
         'age': age,
         'weight': weight,
-      }).select().single(); // .select().single() returns the inserted row so we can get its ID!
+      }).select().single();
 
-      // 3. Save the initial weight to the weight_history table (for the MFP graph)
       await Supabase.instance.client.from('weight_history').insert({
         'dog_id': dogResponse['id'],
         'weight_kg': weight,
-        'recorded_date': DateTime.now().toIso8601String(), // Today's date
+        'recorded_date': DateTime.now().toIso8601String(),
       });
 
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Database Error: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Database Error: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -230,16 +329,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Set up your profile')),
-      body: SingleChildScrollView( // Wrapped in SingleChildScrollView so keyboard doesn't cover fields
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: _ownerNameController,
-              decoration: const InputDecoration(labelText: 'Your Name', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
+            // Removed Owner Name field!
             TextField(
               controller: _dogNameController,
               decoration: const InputDecoration(labelText: 'Dog\'s Name', border: OutlineInputBorder()),
@@ -252,21 +347,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ageController,
-                    decoration: const InputDecoration(labelText: 'Age (years)', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
+                Expanded(child: TextField(controller: _ageController, decoration: const InputDecoration(labelText: 'Age (years)', border: OutlineInputBorder()), keyboardType: TextInputType.number)),
                 const SizedBox(width: 16),
-                Expanded(
-                  child: TextField(
-                    controller: _weightController,
-                    decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                  ),
-                ),
+                Expanded(child: TextField(controller: _weightController, decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()), keyboardType: TextInputType.number)),
               ],
             ),
             const SizedBox(height: 32),
@@ -364,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ? const CircularProgressIndicator()
                 : Text('Points: $_totalPoints', style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange)),
+              Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
               const SizedBox(height: 24),
               
               // Daily Quests Card
