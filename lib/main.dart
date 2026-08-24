@@ -301,7 +301,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 600,       // Downscale to max 600px width
+      imageQuality: 70,    // Compress to 70% quality (optimizes JPEG)
+    );
     if (image != null) {
       setState(() {
         _imageFile = image;
