@@ -299,9 +299,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Column(
               children: [
                 CircleAvatar(
-                  radius: 40,
+                  radius: 50,
                   backgroundColor: Colors.green[100],
-                  child: const Icon(Icons.pets, size: 40, color: Colors.green),
+                  // Check if photo exists in the database
+                  backgroundImage: _dogData?['photo_url'] != null 
+                      ? NetworkImage(_dogData!['photo_url']) 
+                      : null,
+                  // If no photo, show the default paw icon
+                  child: _dogData?['photo_url'] == null
+                      ? const Icon(Icons.pets, size: 50, color: Colors.green)
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 Text(dogName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
