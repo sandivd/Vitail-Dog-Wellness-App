@@ -210,11 +210,6 @@ class _WalkScreenState extends State<WalkScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_isWalking 
-          ? 'Walking... ${_totalDistance.toStringAsFixed(0)} m' 
-          : 'Dog Walk'),
-      ),
       body: Stack(
         children: [
           GoogleMap(

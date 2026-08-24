@@ -593,7 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
               const SizedBox(height: 24),
               
-              // Daily Quests Card
+              // Weekly Quests Card
               Card(
                 margin: const EdgeInsets.symmetric(horizontal: 32),
                 child: Padding(
@@ -601,10 +601,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Daily Quests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text('Weekly Quests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // <-- Changed to Weekly
                       const SizedBox(height: 12),
-                      _buildQuestTile('Walk 1km today', _walkTaskDone, Icons.directions_walk),
-                      _buildQuestTile('Log dog\'s weight', _weightTaskDone, Icons.scale),
+                      _buildQuestTile('Walk 1km this week', _walkTaskDone, Icons.directions_walk), // <-- Updated text
+                      _buildQuestTile('Log dog\'s weight (Bonus)', _weightTaskDone, Icons.scale),
                     ],
                   ),
                 ),
