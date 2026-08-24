@@ -5,6 +5,9 @@ import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'venues_screen.dart';
 import 'walk_history_screen.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -283,27 +286,88 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _dogNameController = TextEditingController();
-  final _breedController = TextEditingController();
-  final _ageController = TextEditingController();
   final _weightController = TextEditingController();
+  
+  String? _selectedBreed;
+  DateTime? _birthday;
+  String _selectedSex = 'Male';
+  XFile? _imageFile;
   bool _isLoading = false;
 
+  // The massive list of breeds
+  static const List<String> dogBreeds = [
+    'Affenpinscher', 'Afghan Hound', 'Airedale Terrier', 'Akbash', 'Akita', 'Alaskan Malamute', 'American Bulldog', 'American Bully', 'American Cocker Spaniel', 'American Eskimo Dog', 'American Foxhound', 'American Hairless Terrier', 'American Pit Bull Terrier', 'American Staffordshire Terrier', 'American Water Spaniel', 'Anatolian Shepherd Dog', 'Appenzeller Sennenhund', 'Australian Cattle Dog', 'Australian Kelpie', 'Australian Shepherd', 'Australian Terrier', 'Azawakh', 'Barbet', 'Basenji', 'Basset Fauve de Bretagne', 'Basset Hound', 'Beagle', 'Bearded Collie', 'Beauceron', 'Bedlington Terrier', 'Belgian Malinois', 'Belgian Sheepdog', 'Belgian Tervuren', 'Bergamasco Sheepdog', 'Berger Picard', 'Bernese Mountain Dog', 'Bichon Frise', 'Biewer Terrier', 'Black and Tan Coonhound', 'Black Russian Terrier', 'Bloodhound', 'Bluetick Coonhound', 'Boerboel', 'Bolognese', 'Border Collie', 'Border Terrier', 'Borzoi', 'Boston Terrier', 'Bouvier des Flandres', 'Boxer', 'Boykin Spaniel', 'Bracco Italiano', 'Braque du Bourbonnais', 'Briard', 'Brittany', 'Brussels Griffon', 'Bull Terrier', 'Bulldog', 'Bullmastiff', 'Cairn Terrier', 'Canaan Dog', 'Cane Corso', 'Cardigan Welsh Corgi', 'Catahoula Leopard Dog', 'Caucasian Shepherd Dog', 'Cavalier King Charles Spaniel', 'Central Asian Shepherd Dog', 'Cesky Terrier', 'Chesapeake Bay Retriever', 'Chihuahua', 'Chinese Crested', 'Chinese Shar-Pei', 'Chinook', 'Chow Chow', 'Clumber Spaniel', 'Cocker Spaniel', 'Collie', 'Coton de Tulear', 'Curly-Coated Retriever', 'Dachshund', 'Dalmatian', 'Dandie Dinmont Terrier', 'Doberman Pinscher', 'Dogo Argentino', 'Dogue de Bordeaux', 'Dutch Shepherd', 'English Cocker Spaniel', 'English Foxhound', 'English Mastiff', 'English Setter', 'English Springer Spaniel', 'English Toy Spaniel', 'Entlebucher Mountain Dog', 'Estrela Mountain Dog', 'Eurasier', 'Field Spaniel', 'Fila Brasileiro', 'Finnish Lapphund', 'Finnish Spitz', 'Flat-Coated Retriever', 'French Bulldog', 'German Pinscher', 'German Shepherd Dog', 'German Shorthaired Pointer', 'German Spitz', 'German Wirehaired Pointer', 'Giant Schnauzer', 'Glen of Imaal Terrier', 'Golden Retriever', 'Gordon Setter', 'Grand Basset Griffon Vendéen', 'Great Dane', 'Great Pyrenees', 'Greater Swiss Mountain Dog', 'Greyhound', 'Griffon Bruxellois', 'Hamiltonstovare', 'Harrier', 'Havanese', 'Hokkaido', 'Hovawart', 'Ibizan Hound', 'Icelandic Sheepdog', 'Irish Red and White Setter', 'Irish Setter', 'Irish Terrier', 'Irish Water Spaniel', 'Irish Wolfhound', 'Italian Greyhound', 'Jack Russell Terrier', 'Japanese Chin', 'Japanese Spitz', 'Japanese Terrier', 'Jindo', 'Kai Ken', 'Kangal Shepherd Dog', 'Keeshond', 'Kerry Blue Terrier', 'King Charles Spaniel', 'Komondor', 'Kooikerhondje', 'Kuvasz', 'Labrador Retriever', 'Lagotto Romagnolo', 'Lakeland Terrier', 'Lancashire Heeler', 'Leonberger', 'Lhasa Apso', 'Löwchen', 'Maltese', 'Manchester Terrier', 'Mastiff', 'Miniature American Shepherd', 'Miniature Bull Terrier', 'Miniature Pinscher', 'Miniature Schnauzer', 'Mudi', 'Neapolitan Mastiff', 'Nederlandse Kooikerhondje', 'Newfoundland', 'Norfolk Terrier', 'Norwegian Buhund', 'Norwegian Elkhound', 'Norwegian Lundehund', 'Norwich Terrier', 'Nova Scotia Duck Tolling Retriever', 'Old English Sheepdog', 'Otterhound', 'Papillon', 'Parson Russell Terrier', 'Patterdale Terrier', 'Pekingese', 'Pembroke Welsh Corgi', 'Peruvian Hairless Dog', 'Pharaoh Hound', 'Plott Hound', 'Pointer', 'Polish Lowland Sheepdog', 'Pomeranian', 'Poodle (Standard, Miniature, Toy)', 'Portuguese Podengo', 'Portuguese Water Dog', 'Presa Canario', 'Pug', 'Puli', 'Pumi', 'Pyrenean Mastiff', 'Pyrenean Shepherd', 'Rat Terrier', 'Redbone Coonhound', 'Rhodesian Ridgeback', 'Rottweiler', 'Russell Terrier', 'Russian Toy', 'Russian Tsvetnaya Bolonka', 'Saint Bernard', 'Saluki', 'Samoyed', 'Schapendoes', 'Schipperke', 'Scottish Deerhound', 'Scottish Terrier', 'Sealyham Terrier', 'Shetland Sheepdog', 'Shiba Inu', 'Shih Tzu', 'Shikoku', 'Siberian Husky', 'Silky Terrier', 'Skye Terrier', 'Sloughi', 'Small Munsterlander', 'Soft Coated Wheaten Terrier', 'Spanish Mastiff', 'Spanish Water Dog', 'Spinone Italiano', 'Staffordshire Bull Terrier', 'Standard Schnauzer', 'Sussex Spaniel', 'Swedish Vallhund', 'Taiwan Dog', 'Thai Ridgeback', 'Tibetan Mastiff', 'Tibetan Spaniel', 'Tibetan Terrier', 'Toy Fox Terrier', 'Treeing Walker Coonhound', 'Vizsla', 'Volpino Italiano', 'Weimaraner', 'Welsh Springer Spaniel', 'Welsh Terrier', 'West Highland White Terrier', 'Whippet', 'Wire Fox Terrier', 'Wirehaired Pointing Griffon', 'Wirehaired Vizsla', 'Xoloitzcuintli', 'Yakutian Laika', 'Yorkshire Terrier'
+  ];
+
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() {
+        _imageFile = image;
+      });
+    }
+  }
+
+  Future<void> _pickBirthday() async {
+    DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _birthday = picked;
+      });
+    }
+  }
+
+  // Calculate age in years as a double (e.g., 2.5 years)
+  double _calculateAge(DateTime bday) {
+    final today = DateTime.now();
+    int years = today.year - bday.year;
+    int months = today.month - bday.month;
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+    return years + (months / 12);
+  }
+
   Future<void> _saveToDatabase() async {
+    if (_dogNameController.text.isEmpty || _selectedBreed == null || _birthday == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-
-      double age = double.tryParse(_ageController.text.trim()) ?? 0.0;
       double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
+      String? photoUrl;
 
+      // 1. Upload photo to Supabase Storage if user picked one
+      if (_imageFile != null) {
+        final fileName = '${userId}_dog_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await Supabase.instance.client.storage.from('dog_photos').upload(fileName, File(_imageFile!.path));
+        photoUrl = Supabase.instance.client.storage.from('dog_photos').getPublicUrl(fileName);
+      }
+
+      // 2. Insert Dog details
       final dogResponse = await Supabase.instance.client.from('dogs').insert({
         'owner_id': userId,
         'dog_name': _dogNameController.text.trim(),
-        'breed': _breedController.text.trim(),
-        'age': age,
+        'breed': _selectedBreed,
         'weight': weight,
+        'birthday': _birthday!.toIso8601String().split('T')[0], // YYYY-MM-DD
+        'sex': _selectedSex,
+        'photo_url': photoUrl,
       }).select().single();
 
+      // 3. Save initial weight to history
       await Supabase.instance.client.from('weight_history').insert({
         'dog_id': dogResponse['id'],
         'weight_kg': weight,
@@ -322,34 +386,115 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Set up your profile')),
+      appBar: AppBar(title: const Text('Your Dog')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(32.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Removed Owner Name field!
+            // Photo Picker
+            Center(
+              child: GestureDetector(
+                onTap: _pickImage,
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.grey[200],
+                  backgroundImage: _imageFile != null ? FileImage(File(_imageFile!.path)) : null,
+                  child: _imageFile == null
+                      ? Icon(Icons.camera_alt, size: 40, color: Colors.grey[600])
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Dog Name
             TextField(
               controller: _dogNameController,
-              decoration: const InputDecoration(labelText: 'Dog\'s Name', border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Your dog\'s name*', border: OutlineInputBorder()),
             ),
             const SizedBox(height: 16),
+
+            // Breed Dropdown (Autocomplete)
+            Autocomplete<String>(
+              optionsBuilder: (TextEditingValue textEditingValue) {
+                if (textEditingValue.text.isEmpty) {
+                  return const Iterable<String>.empty();
+                }
+                return dogBreeds.where((String breed) {
+                  return breed.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                });
+              },
+              onSelected: (String selection) {
+                setState(() {
+                  _selectedBreed = selection;
+                });
+              },
+              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: controller,
+                  focusNode: focusNode,
+                  decoration: const InputDecoration(labelText: 'Your dog\'s breed*', border: OutlineInputBorder()),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Birthday Picker
+            InkWell(
+              onTap: _pickBirthday,
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'Your dog\'s birthday*', border: OutlineInputBorder()),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_birthday == null 
+                      ? 'Select Date' 
+                      : DateFormat('MMM d, yyyy').format(_birthday!)),
+                    const Icon(Icons.calendar_today, size: 20),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Weight
             TextField(
-              controller: _breedController,
-              decoration: const InputDecoration(labelText: 'Dog Breed (e.g., Golden Retriever)', border: OutlineInputBorder()),
+              controller: _weightController,
+              decoration: const InputDecoration(labelText: 'Current Weight (kg)*', border: OutlineInputBorder()),
+              keyboardType: TextInputType.number,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
+
+            // Sex Selector
+            const Text('Is your dog male or female?*', style: TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: TextField(controller: _ageController, decoration: const InputDecoration(labelText: 'Age (years)', border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Center(child: Text('Male')),
+                    selected: _selectedSex == 'Male',
+                    onSelected: (selected) => setState(() => _selectedSex = 'Male'),
+                  ),
+                ),
                 const SizedBox(width: 16),
-                Expanded(child: TextField(controller: _weightController, decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()), keyboardType: TextInputType.number)),
+                Expanded(
+                  child: ChoiceChip(
+                    label: const Center(child: Text('Female')),
+                    selected: _selectedSex == 'Female',
+                    onSelected: (selected) => setState(() => _selectedSex = 'Female'),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 32),
+
+            // Finish Button
             ElevatedButton(
               onPressed: _isLoading ? null : _saveToDatabase,
-              child: _isLoading ? const CircularProgressIndicator() : const Text('Save & Continue'),
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+              child: _isLoading ? const CircularProgressIndicator() : const Text('Finish', style: TextStyle(fontSize: 18)),
             ),
           ],
         ),
