@@ -155,7 +155,6 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -169,6 +168,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
+      // 1. Create the auth user
       await Supabase.instance.client.auth.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
@@ -176,10 +176,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       final userId = Supabase.instance.client.auth.currentUser!.id;
       
-      // Save the user's name to the database immediately
+      // 2. Create a blank profile row (needed for points/streaks to work)
+      // We no longer save the owner's full name here.
       await Supabase.instance.client.from('profiles').upsert({
         'id': userId,
-        'full_name': _nameController.text.trim(),
       });
 
       if (!mounted) return;
@@ -187,21 +187,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
     } catch (e) {
       String errorMessage = 'An error occurred. Please try again.';
-      String errorStr = e.toString().toLowerCase(); // Convert to lowercase to easily check
+      String errorStr = e.toString().toLowerCase();
 
       if (errorStr.contains('already registered') || errorStr.contains('user already registered')) {
         errorMessage = 'An account with this email already exists.';
       } else if (errorStr.contains('network') || errorStr.contains('failed host lookup')) {
-        errorMessage = 'No internet connection. Please check your network.';
+        errorMessage = 'No internet connection.';
       } else if (errorStr.contains('invalid') || errorStr.contains('email_address_invalid') || errorStr.contains('validate email address')) {
         errorMessage = 'Please enter a valid email address.';
       } else if (errorStr.contains('password')) {
         errorMessage = 'Password must be at least 6 characters.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -229,11 +227,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 8),
               const Text('Start your journey with us today.', style: TextStyle(color: Colors.grey, fontSize: 16)),
               const SizedBox(height: 32),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Full Name', border: OutlineInputBorder(), prefixIcon: Icon(Icons.person_outline)),
-              ),
-              const SizedBox(height: 16),
+              // Removed Full Name Field
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
