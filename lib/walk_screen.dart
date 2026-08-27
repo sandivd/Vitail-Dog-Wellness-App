@@ -19,6 +19,108 @@ class _WalkScreenState extends State<WalkScreen> {
   double _totalDistance = 0.0;
   final List<LatLng> _polylinePoints = [];
   StreamSubscription<Position>? _positionStream;
+  bool _microchipVerified = false;
+  bool _isCheckingMicrochip = true;
+  final _microchipController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _checkMicrochipStatus();
+  }
+
+  Future<void> _checkMicrochipStatus() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      final dogResponse = await Supabase.instance.client
+          .from('dogs')
+          .select('microchip_number')
+          .eq('owner_id', userId)
+          .limit(1)
+          .maybeSingle();
+
+      setState(() {
+        _microchipVerified = dogResponse?['microchip_number'] != null && 
+                             (dogResponse?['microchip_number'] as String).length == 15;
+        _isCheckingMicrochip = false;
+      });
+    } catch (e) {
+      setState(() => _isCheckingMicrochip = false);
+    }
+  }
+
+  Future<void> _showMicrochipDialog() async {
+    _microchipController.clear();
+    await showDialog(
+      context: context,
+      barrierDismissible: false, // Force them to enter it!
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Verify Your Dog 🐶'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'To track walks and earn points, you must verify your dog by entering their 15-digit microchip number.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _microchipController,
+                decoration: const InputDecoration(
+                  labelText: 'Microchip Number',
+                  border: OutlineInputBorder(),
+                  hintText: '15 digits only',
+                ),
+                keyboardType: TextInputType.number,
+                maxLength: 15, // Prevents typing more than 15
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                String chip = _microchipController.text.trim();
+                
+                // Validation: exactly 15 characters and only numbers
+                if (chip.length != 15 || int.tryParse(chip) == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Must be exactly 15 digits (numbers only).'), backgroundColor: Colors.red),
+                  );
+                  return;
+                }
+
+                try {
+                  final userId = Supabase.instance.client.auth.currentUser!.id;
+                  
+                  // Save to database
+                  await Supabase.instance.client.from('dogs').update({
+                    'microchip_number': chip,
+                  }).eq('owner_id', userId);
+
+                  setState(() {
+                    _microchipVerified = true;
+                  });
+
+                  if (context.mounted) Navigator.pop(context);
+                  
+                  // Now actually start the walk!
+                  _toggleWalk();
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error saving: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: const Text('Verify & Start'),
+            ),
+          ],
+        );
+      },
+    );
+  }
   
   // Default camera position (Melbourne)
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
@@ -209,6 +311,10 @@ class _WalkScreenState extends State<WalkScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingMicrochip) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return Scaffold(
       body: Stack(
         children: [
@@ -216,11 +322,10 @@ class _WalkScreenState extends State<WalkScreen> {
             onMapCreated: _onMapCreated,
             initialCameraPosition: const CameraPosition(
               target: _melbourne,
-              zoom: 16.0, // Zoomed in a bit more
+              zoom: 16.0,
             ),
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
-            // Draw the walking path!
             polylines: {
               Polyline(
                 polylineId: const PolylineId('walk_route'),
@@ -231,13 +336,19 @@ class _WalkScreenState extends State<WalkScreen> {
             },
           ),
           
-          // The Start/Stop Walk Button
           Positioned(
             bottom: 40,
             left: 20,
             right: 20,
             child: ElevatedButton.icon(
-              onPressed: _toggleWalk,
+              // Intercept the button press!
+              onPressed: () {
+                if (!_microchipVerified) {
+                  _showMicrochipDialog();
+                } else {
+                  _toggleWalk();
+                }
+              },
               icon: Icon(_isWalking ? Icons.stop : Icons.play_arrow, size: 30),
               label: Padding(
                 padding: const EdgeInsets.all(16.0),
