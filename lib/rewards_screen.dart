@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:math';
+import 'package:flutter/services.dart';
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key});
@@ -47,6 +49,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
   }
 
+  // Helper function to generate a random 6-character code
+  String _generatePromoCode() {
+    const chars = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
+    Random rnd = Random();
+    return String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+  }
+
   Future<void> _redeemReward(int cost, String title) async {
     if (_userPoints < cost) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -59,18 +68,70 @@ class _RewardsScreenState extends State<RewardsScreen> {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       int newPoints = _userPoints - cost;
 
-      // Deduct points from user profile
+      // 1. Deduct points from user profile
       await Supabase.instance.client.from('profiles').update({
         'total_points': newPoints,
       }).eq('id', userId);
+
+      // 2. Generate the unique 6-digit code
+      String promoCode = _generatePromoCode();
+
+      // 3. Save the redeemed code to the database
+      await Supabase.instance.client.from('redeemed_rewards').insert({
+        'user_id': userId,
+        'reward_title': title,
+        'promo_code': promoCode,
+      });
 
       setState(() {
         _userPoints = newPoints;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Successfully redeemed: $title!')),
-      );
+      // 4. Show Success Dialog with the code
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('Reward Redeemed! 🎉', textAlign: TextAlign.center),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Show this code at $title to claim your reward:', textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green, width: 2),
+                    ),
+                    child: Text(
+                      promoCode,
+                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.green),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: promoCode));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Code copied to clipboard!')),
+                    );
+                  },
+                  child: const Text('Copy Code'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done'),
+                ),
+              ],
+            );
+          },
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
