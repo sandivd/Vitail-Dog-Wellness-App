@@ -299,25 +299,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    // Fallbacks in case data is missing
-    String dogName = _dogData?['dog_name'] ?? 'Your Dog';
-    String breed = _dogData?['breed'] ?? 'Unknown Breed';
-    
-    // Calculate age dynamically from birthday
-    double age = 0.0;
-    if (_dogData?['birthday'] != null) {
-      final bday = DateTime.parse(_dogData!['birthday']);
-      final today = DateTime.now();
-      int years = today.year - bday.year;
-      int months = today.month - bday.month;
-      if (months < 0) {
-        years--;
-        months += 12;
-      }
-      age = years + (months / 12);
-    }
-
-    double weight = (_dogData?['weight'] ?? 0).toDouble();
     String insurance = _dogData?['insurance_partner'] ?? 'Bow Wow Meow';
     String vaccDate = _dogData?['vaccination_date'] ?? 'Aug 2026';
 

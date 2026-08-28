@@ -70,7 +70,6 @@ class _WalkScreenState extends State<WalkScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Microchip Number',
                   border: OutlineInputBorder(),
-                  hintText: '15 digits only',
                 ),
                 keyboardType: TextInputType.number,
                 maxLength: 15, // Prevents typing more than 15

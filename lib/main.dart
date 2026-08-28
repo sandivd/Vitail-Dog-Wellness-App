@@ -8,6 +8,7 @@ import 'walk_history_screen.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -95,6 +96,54 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+    Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. Trigger the Google Sign In flow
+      final GoogleSignInAccount? googleUser = await GoogleSignIn(
+        serverClientId: '919287771219-4r09c1mtjrruriu921rvpntqukjv0uji.apps.googleusercontent.com',
+      ).signIn();
+      if (googleUser == null) {
+        // User cancelled the sign-in
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 2. Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // 3. Sign in to Supabase with the Google ID Token
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: googleAuth.idToken!,
+        accessToken: googleAuth.accessToken,
+      );
+
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      
+      // 5. Check if they already have a profile
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (!mounted) return;
+      
+      if (response != null) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -121,16 +170,58 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: true,
               ),
               const SizedBox(height: 32),
+              
+              // Standard Login Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('LOGIN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green, 
+                    foregroundColor: Colors.white, 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                  ),
+                  child: _isLoading 
+                    ? const CircularProgressIndicator(color: Colors.white) 
+                    : const Text('LOGIN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 16),
+              
+              // Divider
+              Row(
+                children: [
+                  const Expanded(child: Divider(thickness: 1)),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text('OR', style: TextStyle(color: Colors.grey)),
+                  ),
+                  const Expanded(child: Divider(thickness: 1)),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Google Sign In Button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _signInWithGoogle,
+                  icon: Image.network(
+                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1920px-Google_%22G%22_logo.svg.png',
+                    height: 24,
+                  ),
+                  label: const Text('Continue with Google', style: TextStyle(color: Colors.black54, fontSize: 16)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.grey),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Sign Up Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -208,6 +299,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+    Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      // 1. Trigger the Google Sign In flow
+      final GoogleSignInAccount? googleUser = await GoogleSignIn(
+        serverClientId: '919287771219-4r09c1mtjrruriu921rvpntqukjv0uji.apps.googleusercontent.com',
+      ).signIn();
+      if (googleUser == null) {
+        // User cancelled the sign-in
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // 2. Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // 3. Sign in to Supabase with the Google ID Token
+      await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: googleAuth.idToken!,
+        accessToken: googleAuth.accessToken,
+      );
+
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      
+      // 5. Check if they already have a profile
+      final response = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (!mounted) return;
+      
+      if (response != null) {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+      } else {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -230,24 +369,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
               const SizedBox(height: 8),
               const Text('Start your journey with us today.', style: TextStyle(color: Colors.grey, fontSize: 16)),
               const SizedBox(height: 32),
-              // Removed Full Name Field
+              
+              // Email Field
               TextField(
                 controller: _emailController,
                 decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
               ),
               const SizedBox(height: 16),
+              
+              // Password Field
               TextField(
                 controller: _passwordController,
                 decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
                 obscureText: true,
               ),
               const SizedBox(height: 16),
+              
+              // Confirm Password Field
               TextField(
                 controller: _confirmPasswordController,
                 decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
                 obscureText: true,
               ),
               const SizedBox(height: 32),
+              
+              // Sign Up Button
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -257,7 +403,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('SIGN UP', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              
+              // Divider
+              Row(
+                children: [
+                  const Expanded(child: Divider(thickness: 1)),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text('OR', style: TextStyle(color: Colors.grey)),
+                  ),
+                  const Expanded(child: Divider(thickness: 1)),
+                ],
+              ),
+              const SizedBox(height: 20),
+              
+              // Google Sign In Button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _isLoading ? null : _signInWithGoogle, // Make sure you have this function in RegisterScreen too!
+                  icon: Image.network(
+                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1920px-Google_%22G%22_logo.svg.png',
+                    height: 24,
+                  ),
+                  label: const Text('Continue with Google', style: TextStyle(color: Colors.black54, fontSize: 16)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.grey),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Back to Login Link
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -267,7 +447,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: const Text('Sign in', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                   ),
                 ],
-              )
+              ),
+              const SizedBox(height: 40), // Bottom padding
             ],
           ),
         ),
@@ -327,17 +508,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  // Calculate age in years as a double (e.g., 2.5 years)
-  double _calculateAge(DateTime bday) {
-    final today = DateTime.now();
-    int years = today.year - bday.year;
-    int months = today.month - bday.month;
-    if (months < 0) {
-      years--;
-      months += 12;
-    }
-    return years + (months / 12);
-  }
+
 
   Future<void> _saveToDatabase() async {
     if (_dogNameController.text.isEmpty || _selectedBreed == null || _birthday == null) {
