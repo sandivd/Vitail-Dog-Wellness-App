@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -743,6 +744,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Custom SVG Icon paths extracted from Figma 
+  static const String homeIconPath = 'M38.8218 39V30.44L45.0018 24.64L51.1818 30.44V39H38.8218ZM40.7218 37.1H49.2818V31.12L45.0018 27.1L40.7218 31.12V37.1Z';
+  static const String exploreIconPath = 'M135.001 40.78C130.941 40.78 127.661 37.5 127.661 33.44C127.661 29.38 130.941 26.1 135.001 26.1C139.061 26.1 142.341 29.38 142.341 33.44C142.341 37.5 139.021 40.78 135.001 40.78ZM134.381 27.58C131.621 27.86 129.441 30.04 129.141 32.8H134.381V27.58ZM135.661 27.58V32.78H140.861C140.561 30.04 138.401 27.88 135.661 27.58ZM135.641 34.06V39.3C138.401 39 140.581 36.82 140.861 34.06H135.641ZM129.141 34.08C129.441 36.82 131.621 39.02 134.361 39.3V34.08H129.141Z';
+  static const String rewardsIconPath = 'M225.009 39.24L217.309 31.54L224.989 23.86L232.689 31.54L225.009 39.24Z';
+  static const String profileIconPath = 'M315.001 39.24C313.948 39.24 312.955 39.04 312.021 38.64C311.088 38.24 310.268 37.6933 309.561 37C308.868 36.2933 308.321 35.4733 307.921 34.54C307.521 33.6067 307.321 32.6133 307.321 31.56C307.321 30.4933 307.521 29.5 307.921 28.58C308.321 27.6467 308.868 26.8267 309.561 26.12C310.268 25.4133 311.088 24.86 312.021 24.46C312.955 24.06 313.948 23.86 315.001 23.86C316.068 23.86 317.061 24.06 317.981 24.46C318.915 24.86 319.728 25.4133 320.421 26.12C321.128 26.8267 321.681 27.6467 322.081 28.58C322.481 29.5 322.681 30.4933 322.681 31.56C322.681 32.6133 322.481 33.6067 322.081 34.54C321.681 35.4733 321.128 36.2933 320.421 37C319.728 37.6933 318.915 38.24 317.981 38.64C317.061 39.04 316.068 39.24 315.001 39.24Z';
+  
   @override
   Widget build(BuildContext context) {
     // List of screens for the bottom nav
@@ -820,22 +827,56 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Vitail'),
       ),
       body: screens[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border(top: BorderSide(color: const Color(0xFFDAD6CD), width: 1)),
+        ),
+        padding: EdgeInsets.only(
+          top: 8.0,
+          bottom: MediaQuery.of(context).padding.bottom > 0 ? 16.0 : 8.0, 
+        ),
+        child: Row(
+          children: [
+            _buildCustomNavItem(0, 'Home', homeIconPath, '38 24 13 16'),
+            _buildCustomNavItem(1, 'Explore', exploreIconPath, '127 26 16 15'),
+            _buildCustomNavItem(2, 'Rewards', rewardsIconPath, '217 23 16 17'),
+            _buildCustomNavItem(3, 'Profile', profileIconPath, '307 23 16 16'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomNavItem(int index, String label, String iconPath, String viewBox) {
+    bool isActive = _currentIndex == index;
+    String hexColor = isActive ? '#0F4C81' : '#6E6A63'; // Your exact Figma colors
+    
+    // Construct the full SVG string dynamically
+    String svgString = '''<svg viewBox="$viewBox" xmlns="http://www.w3.org/2000/svg"><path d="$iconPath" fill="$hexColor"/></svg>''';
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
           setState(() {
             _currentIndex = index;
-            if (index == 0) {
-              _fetchPoints(); // Refresh points when returning to Home
-            }
+            if (index == 0) _fetchPoints(); // Keep the refresh logic!
           });
         },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.directions_walk), label: 'Explore'),
-          NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Rewards'),
-          NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
-        ],
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SvgPicture.string(svgString, height: 24, width: 24),
+            const SizedBox(height: 4),
+            Text(
+              label, 
+              style: TextStyle(
+                color: Color(int.parse(hexColor.replaceFirst('#', 'FF'), radix: 16)), 
+                fontSize: 12
+              )
+            ),
+          ],
+        ),
       ),
     );
   }
