@@ -811,9 +811,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const WalkScreen(),
       // Index 2: Rewards
       const RewardsScreen(),
-      // Index 3: Venues
-      const VenuesScreen(),
-      // Index 4: Profile
+      // Index 3: Profile
       const ProfileScreen(),
     ];
 
@@ -834,9 +832,8 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.directions_walk), label: 'Walk'),
+          NavigationDestination(icon: Icon(Icons.directions_walk), label: 'Explore'),
           NavigationDestination(icon: Icon(Icons.card_giftcard), label: 'Rewards'),
-          NavigationDestination(icon: Icon(Icons.map), label: 'Venues'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
