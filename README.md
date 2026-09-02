@@ -14,19 +14,19 @@
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-- 📍 **Live GPS Walk Tracking:** Accurate, real-time route mapping using Google Maps SDK and the device's Fused Location Provider.
-- 🎁 **Rewards & Perks System:** Earn points for every meter walked and redeem them for partner vouchers and premium perks (e.g., free grooming, council fee waivers).
-- 📊 **Dynamic Weight Tracker:** Log your dog's weight history with a calendar date-picker and visualize their progress on an interactive line chart (MyFitnessPal style!).
-- 🔥 **Gamification & Streaks:** Maintain daily walking streaks and complete weekly quests (e.g., "Walk 1km", "Log Weight") for bonus points.
-- 🏞️ **Pet-Friendly Venues:** Explore a curated list of local dog parks, beaches, and cafes with list/map toggle views.
-- 🐶 **Rich Pet Profiles:** Set up your dog's profile with breed autocomplete, birthday calculation, sex selection, and upload a profile picture via Supabase Storage.
-- 🌗 **Polished UI/UX:** Beautiful, modern interface featuring a dedicated settings hub, light/dark mode toggles, and native splash screens.
+- **Live GPS Walk Tracking:** Accurate, real-time route mapping using Google Maps SDK and the device's Fused Location Provider.
+- **Rewards & Perks System:** Earn points for every meter walked and redeem them for partner vouchers and premium perks (e.g., free grooming, council fee waivers).
+- **Dynamic Weight Tracker:** Log your dog's weight history with a calendar date-picker and visualize their progress on an interactive line chart (MyFitnessPal style!).
+- **Gamification & Streaks:** Maintain daily walking streaks and complete weekly quests (e.g., "Walk 1km", "Log Weight") for bonus points.
+- **Pet-Friendly Venues:** Explore a curated list of local dog parks, beaches, and cafes with list/map toggle views.
+- **Rich Pet Profiles:** Set up your dog's profile with breed autocomplete, birthday calculation, sex selection, and upload a profile picture via Supabase Storage.
+- **Polished UI/UX:** Beautiful, modern interface featuring a dedicated settings hub, light/dark mode toggles, and native splash screens.
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 **Frontend:**
 - **Framework:** Flutter (Dart)
@@ -45,7 +45,7 @@
 
 ---
 
-## 🏗 Architecture
+## Architecture
 
 The app follows a **Client-Server Architecture** utilizing a **Backend-as-a-Service (BaaS)** model. 
 
