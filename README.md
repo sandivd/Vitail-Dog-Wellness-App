@@ -53,10 +53,4 @@ The app follows a **Client-Server Architecture** utilizing a **Backend-as-a-Serv
 - **Security** is enforced at the database level using PostgreSQL Row Level Security (RLS), ensuring users can only access and modify their own dog's data, walks, and photos.
 - **Image Optimization** is handled client-side before upload, downscaling and compressing images to optimize network performance and storage costs.
 
----
 
-<div align="center">
-  
-*Built with ❤️ for COMP30022 IT Project - The University of Melbourne*
-
-</div>
