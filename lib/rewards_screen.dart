@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:math';
-import 'package:flutter/services.dart';
+import 'check_in_screen.dart';
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key});
@@ -49,14 +48,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
   }
 
-  // Helper function to generate a random 6-character code
-  String _generatePromoCode() {
-    const chars = 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
-    Random rnd = Random();
-    return String.fromCharCodes(Iterable.generate(6, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
-  }
-
-  Future<void> _redeemReward(int cost, String title) async {
+  Future<void> _checkIn(int cost, String title, String partnerName) async {
     if (_userPoints < cost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Not enough points!')),
@@ -64,79 +56,20 @@ class _RewardsScreenState extends State<RewardsScreen> {
       return;
     }
 
-    try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      int newPoints = _userPoints - cost;
+    // Navigate to the new Check In Screen!
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckInScreen(
+          cost: cost,
+          title: title,
+          partnerName: partnerName,
+        ),
+      ),
+    );
 
-      // 1. Deduct points from user profile
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': newPoints,
-      }).eq('id', userId);
-
-      // 2. Generate the unique 6-digit code
-      String promoCode = _generatePromoCode();
-
-      // 3. Save the redeemed code to the database
-      await Supabase.instance.client.from('redeemed_rewards').insert({
-        'user_id': userId,
-        'reward_title': title,
-        'promo_code': promoCode,
-      });
-
-      setState(() {
-        _userPoints = newPoints;
-      });
-
-      // 4. Show Success Dialog with the code
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: const Text('Reward Redeemed! 🎉', textAlign: TextAlign.center),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Show this code at $title to claim your reward:', textAlign: TextAlign.center),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.green[100],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.green, width: 2),
-                    ),
-                    child: Text(
-                      promoCode,
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.green),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: promoCode));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Code copied to clipboard!')),
-                    );
-                  },
-                  child: const Text('Copy Code'),
-                ),
-                ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Done'),
-                ),
-              ],
-            );
-          },
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
+    // When we return, refresh the points
+    _fetchData();
   }
 
   @override
@@ -230,13 +163,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: canAfford ? () => _redeemReward(cost, reward['title']) : null,
+              onPressed: canAfford ? () => _checkIn(cost, reward['title'], reward['partner_name']) : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
                 disabledBackgroundColor: Colors.grey[300],
               ),
-              child: const Text('Redeem'),
+              child: const Text('Check in'),
             ),
           ],
         ),
