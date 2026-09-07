@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
-import 'venues_screen.dart';
 import 'walk_history_screen.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';

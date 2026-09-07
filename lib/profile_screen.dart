@@ -22,6 +22,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   double _weightChange = 0.0;
   final _weightInputController = TextEditingController();
   int _totalQuests = 0;
+  int _careScore = 0;
+  int _positiveImpact = 0;
+  int _needsFocus = 0;
+  Map<String, Map<String, dynamic>> _scoreComponents = {};
 
   @override
   void initState() {
@@ -48,7 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       final walksResponse = await Supabase.instance.client
           .from('walks')
-          .select('distance_meters')
+          .select('distance_meters, walk_date')
           .eq('user_id', userId);
 
       final weightResponse = await Supabase.instance.client
@@ -87,11 +91,71 @@ class _ProfileScreenState extends State<ProfileScreen> {
           double previous = (_weightHistory[_weightHistory.length - 2]['weight_kg'] as num).toDouble();
           _weightChange = latest - previous;
         }
+        // Calculate the Care Score
+        _calculateCareScore(List<Map<String, dynamic>>.from(walksResponse), dogResponse);
         _isLoading = false;
       });
     } catch (e) {
       setState(() => _isLoading = false);
     }
+  }
+
+  void _calculateCareScore(List<Map<String, dynamic>> walks, Map<String, dynamic>? dog) {
+    if (dog == null) return;
+
+    // 1. Activity Score (40%) - Based on last 7 days walks
+    DateTime sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+    List recentWalks = walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
+    
+    // We mock daily goal as 30 mins (1800 secs). We currently save duration as 1800 in the DB.
+    // So if they did 4 walks in 7 days, 4 days are 100%, 3 days are 0%. Average = (400)/7 = 57%.
+    int activityScore = ((recentWalks.length * 100) / 7).round().clamp(0, 100);
+
+    // 2. Vaccinations (20%)
+    int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
+
+    // 3. Microchip (15%)
+    int microchipScore = dog['microchip_number'] != null ? 100 : 0;
+
+    // 4. Insurance (15%)
+    int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
+
+    // 5. Vet Check-in (10%) - 100 if within 6 months, else 0
+    int vetScore = 0;
+    if (dog['last_vet_checkup'] != null) {
+      DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
+      if (DateTime.now().difference(lastVet).inDays <= 180) {
+        vetScore = 100;
+      }
+    }
+
+    // Calculate overall score
+    int totalScore = (activityScore * 0.40 + vaccScore * 0.20 + microchipScore * 0.15 + insuranceScore * 0.15 + vetScore * 0.10).round();
+
+    // Classify components
+    int positive = 0;
+    int focus = 0;
+    
+    Map<String, Map<String, dynamic>> components = {
+      'Activity (7 days)': {'score': activityScore, 'status': '${recentWalks.length}/7 days active'},
+      'Vaccinations': {'score': vaccScore, 'status': vaccScore == 100 ? 'Up to date' : 'Unknown'},
+      'Microchip': {'score': microchipScore, 'status': microchipScore == 100 ? 'Linked' : 'Not added'},
+      'Insurance': {'score': insuranceScore, 'status': insuranceScore == 100 ? 'Active' : 'Not added'},
+      'Vet check-in': {'score': vetScore, 'status': vetScore == 100 ? 'Up to date' : 'Book your next visit'},
+    };
+
+    components.forEach((key, value) {
+      int score = value['score'];
+      if (score >= 70) { positive++; }
+      else if (score < 40) { focus++; }
+    });
+
+    setState(() {
+      _careScore = totalScore;
+      _positiveImpact = positive;
+      _needsFocus = focus;
+      _scoreComponents = components;
+    });
   }
 
     Future<void> _changeProfilePicture() async {
@@ -422,28 +486,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Health & Insurance Card
+          // CARE SCORE CARD
           _buildSectionCard(
-            title: 'Health & Insurance',
+            title: 'CARE SCORE',
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Icon(Icons.shield, color: Colors.blue),
-                    const SizedBox(width: 8),
-                    Text('Partner: $insurance', style: const TextStyle(fontWeight: FontWeight.w500)),
+                    // The Score Ring
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: _careScore / 100,
+                            strokeWidth: 8,
+                            color: Colors.green,
+                            backgroundColor: Colors.grey[200],
+                          ),
+                          Text(
+                            '$_careScore',
+                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 24),
+                    // The Stats
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Updates weekly based on the last 7 days', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                              const SizedBox(width: 4),
+                              Text('$_positiveImpact positive impact', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                          Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.orange, size: 16),
+                              const SizedBox(width: 4),
+                              Text('$_needsFocus needs focus', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
-                const Divider(height: 24),
-                Row(
-                  children: [
-                    const Icon(Icons.vaccines, color: Colors.purple),
-                    const SizedBox(width: 8),
-                    const Text('C5 Vaccination Status', style: TextStyle(fontWeight: FontWeight.w500)),
-                    const Spacer(),
-                    Text('Up to date ($vaccDate)', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  ],
+                const SizedBox(height: 16),
+                const Divider(),
+                // The Checklist
+                Column(
+                  children: _scoreComponents.entries.map((entry) {
+                    int score = entry.value['score'];
+                    Color color = score >= 70 ? Colors.green : (score < 40 ? Colors.orange : Colors.grey);
+                    
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(Icons.pets, size: 20, color: color),
+                      title: Text(entry.key, style: const TextStyle(fontSize: 14)),
+                      trailing: Text(entry.value['status'], style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+                    );
+                  }).toList(),
                 ),
               ],
             ),
