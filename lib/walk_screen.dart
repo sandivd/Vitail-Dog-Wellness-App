@@ -4,6 +4,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'choose_dog_profiles.dart';
+
+
 class WalkScreen extends StatefulWidget {
   const WalkScreen({super.key});
 
@@ -77,7 +80,7 @@ class _WalkScreenState extends State<WalkScreen> {
             ],
           ),
           actions: [
-            ElevatedButton(
+            ElevatedButton(   // start or stop walk button
               onPressed: () async {
                 String chip = _microchipController.text.trim();
                 
@@ -88,6 +91,8 @@ class _WalkScreenState extends State<WalkScreen> {
                   );
                   return;
                 }
+
+
 
                 try {
                   final userId = Supabase.instance.client.auth.currentUser!.id;
@@ -253,8 +258,21 @@ class _WalkScreenState extends State<WalkScreen> {
           ],
         ),
       );
-    } else {
-      // Start the walk
+    } 
+    
+    // start walk
+    else {
+      // insert "Ready for walk?"" with dog profile page here
+      // Wait for dog selection or confirmation
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ChooseDogProfiles()),
+      );
+
+      // Cancel if user dismissed without selecting or confirming
+      if (result == null || !mounted) return;
+
+
       bool hasPermission = await _checkPermissions();
       if (!hasPermission) {
         ScaffoldMessenger.of(context).showSnackBar(
