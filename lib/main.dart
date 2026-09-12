@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
 import 'signup_view.dart';
+import 'login_view.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'walk_history_screen.dart';
@@ -146,97 +147,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Login', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black)),
-              const SizedBox(height: 8),
-              const Text('Please sign in to continue.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-              const SizedBox(height: 32),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
-                obscureText: true,
-              ),
-              const SizedBox(height: 32),
-              
-              // Standard Login Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green, 
-                    foregroundColor: Colors.white, 
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                  ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text('LOGIN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              // Divider
-              Row(
-                children: [
-                  const Expanded(child: Divider(thickness: 1)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text('OR', style: TextStyle(color: Colors.grey)),
-                  ),
-                  const Expanded(child: Divider(thickness: 1)),
-                ],
-              ),
-              const SizedBox(height: 16),
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-              // Google Sign In Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
-                  icon: Image.network(
-                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1920px-Google_%22G%22_logo.svg.png',
-                    height: 24,
-                  ),
-                  label: const Text('Continue with Google', style: TextStyle(color: Colors.black54, fontSize: 16)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.grey),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Sign Up Link
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Don't have an account? ", style: TextStyle(color: Colors.grey)),
-                  GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen())),
-                    child: const Text('Sign up', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
-      ),
+  @override
+  Widget build(BuildContext context) {
+    return LoginView(
+      emailController: _emailController,
+      passwordController: _passwordController,
+      isLoading: _isLoading,
+      onEmailLogin: _login,
+      onGoogleLogin: _signInWithGoogle,
+      onSignUp: () => Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const RegisterScreen())),
     );
   }
 }
