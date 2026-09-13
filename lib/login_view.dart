@@ -30,7 +30,7 @@ class LoginView extends StatelessWidget {
     return SizedBox(width: 24, height: 24, child: Center(
       child: SvgPicture.asset('assets/icons/lucide-$name.svg',
         key: ValueKey('lucide-$name'), width: size.width, height: size.height,
-        colorFilter: const ColorFilter.mode(outline, BlendMode.srcIn)),
+        colorFilter: const ColorFilter.mode(Color(0xFF9A8E95), BlendMode.srcIn)),
     ));
   }
 
@@ -38,7 +38,7 @@ class LoginView extends StatelessWidget {
     hintText: label,
     prefixIcon: Padding(padding: const EdgeInsets.only(left: 22, right: 10), child: _lucideIcon(icon)),
     prefixIconConstraints: const BoxConstraints(minWidth: 56),
-    hintStyle: const TextStyle(fontFamily: 'PlusJakartaSans', color: Color(0xFFD3CFD1), fontSize: 15, fontWeight: FontWeight.w400),
+    hintStyle: const TextStyle(fontFamily: 'PlusJakartaSans', color: muted, fontSize: 15, fontWeight: FontWeight.w400),
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(30),
@@ -84,17 +84,20 @@ class LoginView extends StatelessWidget {
                           children: [
                             const Text('Log in', style: TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 32, height: 1.25, fontWeight: FontWeight.w700)),
                             const SizedBox(height: 23),
+                            
                             TextField(controller: emailController, decoration: _decoration('Email', 'mail'),
                               keyboardType: TextInputType.emailAddress, textInputAction: TextInputAction.next,
                               autofillHints: const [AutofillHints.username], autocorrect: false,
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
                             const SizedBox(height: 6),
+                            
                             TextField(controller: passwordController, decoration: _decoration('Password', 'lock-keyhole'),
                               obscureText: true, autocorrect: false, enableSuggestions: false,
                               autofillHints: const [AutofillHints.password], textInputAction: TextInputAction.done,
                               onSubmitted: (_) { if (!isLoading) onEmailLogin(); },
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
                             const SizedBox(height: 24),
+                            
                             ElevatedButton(onPressed: isLoading ? null : onEmailLogin,
                               style: ElevatedButton.styleFrom(backgroundColor: coral, foregroundColor: Colors.white,
                                 elevation: 0, minimumSize: const Size.fromHeight(54),
