@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
+import 'onboarding_view.dart';
+import 'dog_date_picker.dart';
+import 'dog_photo_sheet.dart';
 import 'signup_view.dart';
 import 'login_view.dart';
 import 'rewards_screen.dart';
@@ -308,7 +311,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   
   String? _selectedBreed;
   DateTime? _birthday;
-  String _selectedSex = 'Male';
+  String? _selectedSex;
   XFile? _imageFile;
   bool _isLoading = false;
 
@@ -318,13 +321,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   ];
 
   Future<void> _pickImage() async {
+    FocusScope.of(context).unfocus();
+    final browse = await showDogPhotoSheet(context,
+      photo: _imageFile == null ? null : FileImage(File(_imageFile!.path)));
+    if (browse != true || !mounted) return;
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
       source: ImageSource.gallery,
       maxWidth: 600,       // Downscale to max 600px width
       imageQuality: 70,    // Compress to 70% quality (optimizes JPEG)
     );
-    if (image != null) {
+    if (image != null && mounted) {
       setState(() {
         _imageFile = image;
       });
@@ -332,13 +339,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _pickBirthday() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
+    final picked = await showDogDatePicker(context, initialDate: _birthday);
+    if (picked != null && mounted) {
       setState(() {
         _birthday = picked;
       });
@@ -348,7 +350,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
 
   Future<void> _saveToDatabase() async {
-    if (_dogNameController.text.isEmpty || _selectedBreed == null || _birthday == null) {
+    if (_dogNameController.text.trim().isEmpty || !['Male', 'Female'].contains(_selectedSex)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.red),
       );
@@ -358,7 +360,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isLoading = true);
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-      double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
+      final weightText = _weightController.text.trim();
+      final weight = double.tryParse(weightText);
+      if (weightText.isNotEmpty && (weight == null || !weight.isFinite || weight < 0 || weight > 100)) {
+        throw const FormatException('Please enter a weight from 0 to 100 kg.');
+      }
       String? photoUrl;
 
       // 1. Upload photo to Supabase Storage if user picked one
@@ -374,13 +380,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'dog_name': _dogNameController.text.trim(),
         'breed': _selectedBreed,
         'weight': weight,
-        'birthday': _birthday!.toIso8601String().split('T')[0], // YYYY-MM-DD
+        'birthday': _birthday?.toIso8601String().split('T')[0], // YYYY-MM-DD
         'sex': _selectedSex,
         'photo_url': photoUrl,
       }).select().single();
 
       // 3. Save initial weight to history
-      await Supabase.instance.client.from('weight_history').insert({
+      if (weight != null) await Supabase.instance.client.from('weight_history').insert({
         'dog_id': dogResponse['id'],
         'weight_kg': weight,
         'recorded_date': DateTime.now().toIso8601String(),
@@ -396,123 +402,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Your Dog')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Photo Picker
-            Center(
-              child: GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage: _imageFile != null ? FileImage(File(_imageFile!.path)) : null,
-                  child: _imageFile == null
-                      ? Icon(Icons.camera_alt, size: 40, color: Colors.grey[600])
-                      : null,
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Dog Name
-            TextField(
-              controller: _dogNameController,
-              decoration: const InputDecoration(labelText: 'Your dog\'s name*', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
-
-            // Breed Dropdown (Autocomplete)
-            Autocomplete<String>(
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text.isEmpty) {
-                  return const Iterable<String>.empty();
-                }
-                return dogBreeds.where((String breed) {
-                  return breed.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                });
-              },
-              onSelected: (String selection) {
-                setState(() {
-                  _selectedBreed = selection;
-                });
-              },
-              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: const InputDecoration(labelText: 'Your dog\'s breed*', border: OutlineInputBorder()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Birthday Picker
-            InkWell(
-              onTap: _pickBirthday,
-              child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Your dog\'s birthday*', border: OutlineInputBorder()),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(_birthday == null 
-                      ? 'Select Date' 
-                      : DateFormat('MMM d, yyyy').format(_birthday!)),
-                    const Icon(Icons.calendar_today, size: 20),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Weight
-            TextField(
-              controller: _weightController,
-              decoration: const InputDecoration(labelText: 'Current Weight (kg)*', border: OutlineInputBorder()),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 24),
-
-            // Sex Selector
-            const Text('Is your dog male or female?*', style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Center(child: Text('Male')),
-                    selected: _selectedSex == 'Male',
-                    onSelected: (selected) => setState(() => _selectedSex = 'Male'),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Center(child: Text('Female')),
-                    selected: _selectedSex == 'Female',
-                    onSelected: (selected) => setState(() => _selectedSex = 'Female'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Finish Button
-            ElevatedButton(
-              onPressed: _isLoading ? null : _saveToDatabase,
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
-              child: _isLoading ? const CircularProgressIndicator() : const Text('Finish', style: TextStyle(fontSize: 18)),
-            ),
-          ],
-        ),
-      ),
-    );
+  void dispose() {
+    _dogNameController.dispose();
+    _weightController.dispose();
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => OnboardingView(
+    nameController: _dogNameController,
+    weightController: _weightController,
+    sex: _selectedSex,
+    onSex: (sex) => setState(() => _selectedSex = sex),
+    hasBirthday: _birthday != null,
+    birthdayLabel: _birthday == null ? 'Select date of birth' : DateFormat('MMM d, yyyy').format(_birthday!),
+    onBirthday: _pickBirthday,
+    breeds: dogBreeds,
+    onBreed: (breed) => _selectedBreed = breed,
+    onPhoto: _pickImage,
+    photo: _imageFile == null ? null : FileImage(File(_imageFile!.path)),
+    onNext: _saveToDatabase,
+    loading: _isLoading,
+  );
 }
 
 // ---------------- HOME SCREEN ----------------
