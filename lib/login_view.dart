@@ -15,7 +15,7 @@ class LoginView extends StatelessWidget {
   final VoidCallback onGoogleLogin;
   final VoidCallback onSignUp;
 
-  static const cream = Color(0xFFFBF5EA);
+  static const cream = Color(0xFFF4F0E9);
   static const coral = Color(0xFFDC755C);
   static const ink = Color(0xFF241C24);
   static const muted = Color(0xFF6B5F66);
@@ -36,6 +36,8 @@ class LoginView extends StatelessWidget {
 
   InputDecoration _decoration(String label, String icon) => InputDecoration(
     hintText: label,
+    filled: true,
+    fillColor: Colors.white,
     prefixIcon: Padding(padding: const EdgeInsets.only(left: 22, right: 10), child: _lucideIcon(icon)),
     prefixIconConstraints: const BoxConstraints(minWidth: 56),
     hintStyle: const TextStyle(fontFamily: 'PlusJakartaSans', color: muted, fontSize: 15, fontWeight: FontWeight.w400),
@@ -54,7 +56,7 @@ class LoginView extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: coral),
         textTheme: ThemeData.light().textTheme.apply(fontFamily: 'PlusJakartaSans', bodyColor: ink, displayColor: ink)),
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: cream,
         body: LayoutBuilder(builder: (context, constraints) {
           return SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -65,12 +67,12 @@ class LoginView extends StatelessWidget {
                   children: [
                     Container(
                       color: cream,
-                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 34, bottom: 43),
+                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 28, bottom: 28),
                       child: Column(children: [
                         Semantics(label: 'Vitail', image: true,
-                          child: SizedBox(width: 188, height: 180,
+                          child: SizedBox(width: 210, height: 201,
                             child: ClipRect(child: Stack(children: [
-                              Positioned(left: -7, top: -54, width: 270, height: 270,
+                              Positioned(left: -5, top: -60.3, width: 301.5, height: 301.5,
                                 child: Image.asset('assets/brand/vitail-logo.png', excludeFromSemantics: true)),
                             ])),
                           ),
@@ -114,7 +116,7 @@ class LoginView extends StatelessWidget {
                             ]),
                             const SizedBox(height: 16),
                             OutlinedButton(onPressed: isLoading ? null : onGoogleLogin,
-                              style: OutlinedButton.styleFrom(foregroundColor: ink,
+                              style: OutlinedButton.styleFrom(foregroundColor: ink, backgroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 24),
                                 side: const BorderSide(color: outline), minimumSize: const Size.fromHeight(54),
                                 shape: const StadiumBorder(), textStyle: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 15, fontWeight: FontWeight.w600)),

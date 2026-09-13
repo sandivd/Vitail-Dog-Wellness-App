@@ -16,7 +16,7 @@ class SignupView extends StatelessWidget {
   final VoidCallback onGoogleLogin;
   final VoidCallback onSignIn;
 
-  static const cream = Color(0xFFFBF5EA);
+  static const cream = Color(0xFFF4F0E9);
   static const coral = Color(0xFFDC755C);
   static const ink = Color(0xFF241C24);
   static const muted = Color(0xFF6B5F66);
@@ -37,6 +37,8 @@ class SignupView extends StatelessWidget {
 
   InputDecoration _decoration(String label, String icon) => InputDecoration(
     hintText: label,
+    filled: true,
+    fillColor: Colors.white,
     prefixIcon: Padding(padding: const EdgeInsets.only(left: 22, right: 10), child: _lucideIcon(icon)),
     prefixIconConstraints: const BoxConstraints(minWidth: 56),
     hintStyle: const TextStyle(fontFamily: 'PlusJakartaSans', color: muted, fontSize: 15, fontWeight: FontWeight.w400),
@@ -55,7 +57,7 @@ class SignupView extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: coral),
         textTheme: ThemeData.light().textTheme.apply(fontFamily: 'PlusJakartaSans', bodyColor: ink, displayColor: ink)),
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: cream,
         body: LayoutBuilder(builder: (context, constraints) {
           return SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -108,7 +110,7 @@ class SignupView extends StatelessWidget {
                             ]),
                             const SizedBox(height: 16),
                             OutlinedButton(onPressed: isLoading ? null : onGoogleLogin,
-                              style: OutlinedButton.styleFrom(foregroundColor: ink,
+                              style: OutlinedButton.styleFrom(foregroundColor: ink, backgroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 24),
                                 side: const BorderSide(color: outline), minimumSize: const Size.fromHeight(54),
                                 shape: const StadiumBorder(), textStyle: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 15, fontWeight: FontWeight.w600)),
