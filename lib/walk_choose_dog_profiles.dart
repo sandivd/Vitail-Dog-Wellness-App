@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// file imports
+import 'walk_in_progress.dart';
+import 'exercise_data.dart';
+
 class ChooseDogProfiles extends StatefulWidget {
   const ChooseDogProfiles({super.key});
 
@@ -12,6 +16,18 @@ class _ChooseDogProfilesState extends State<ChooseDogProfiles> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _dogs = [];
   final Set<String> _selectedDogIds = {};
+
+    int get _goalMinutes {
+    if (_dogs.isEmpty) return 30; // fallback if somehow no dogs were passed in
+
+    final recommended = _dogs.map((dog) {
+      final breed = (dog['breed'] ?? '').toString();
+      final age = (dog['age'] as num?)?.toDouble() ?? 2.0; // assume adult if age is missing
+      return ExerciseData.getRecommendedMinutes(breed, age);
+    });
+
+    return recommended.reduce((a, b) => a > b ? a : b);
+  }
 
   @override
   void initState() {
@@ -188,9 +204,8 @@ class _ChooseDogProfilesState extends State<ChooseDogProfiles> {
                                   }).toList(),
                                 ),
                                 const SizedBox(height: 32),
-                                const Text(
-                                  
-                                  'Walk goal for today: 30 min',  // to be changed so 30 min is taken from database
+                                Text(
+                                  'Walk goal for today: $_goalMinutes min', 
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Color(0xFF7C776E),
@@ -215,7 +230,12 @@ class _ChooseDogProfilesState extends State<ChooseDogProfiles> {
                             final selected = _dogs
                                 .where((d) => _selectedDogIds.contains(d['id'].toString()))
                                 .toList();
-                            Navigator.pop(context, selected);
+                            Navigator.pushReplacement(  // navigate to Walk In Progress page
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => WalkInProgress(selectedDogs: selected),
+                              ),  
+                            );
                           },
                     icon: const Icon(Icons.play_arrow, size: 24),
                     label: const Text(
