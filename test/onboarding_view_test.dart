@@ -20,6 +20,8 @@ void main() {
     });
     await tester.pumpWidget(MaterialApp(home: StatefulBuilder(builder: (context, setState) => OnboardingView(
       nameController: name, weightController: weight, sex: sex,
+      ownerActivityLevel: 'moderate',
+      onOwnerActivityChanged: (val) {},
       onSex: (value) => setState(() => sex = value), birthdayLabel: 'Select date of birth',
       onBirthday: () => dates++, breeds: const ['Beagle', 'Poodle'], onBreed: (value) => breed = value,
       onPhoto: () => photos++, onNext: () => next++, loading: false))));
