@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
+import 'onboarding_view.dart';
+import 'dog_date_picker.dart';
+import 'dog_photo_sheet.dart';
+import 'signup_view.dart';
+import 'login_view.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'walk_history_screen.dart';
@@ -9,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'exercise_data.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -145,97 +151,22 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('Login', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black)),
-              const SizedBox(height: 8),
-              const Text('Please sign in to continue.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-              const SizedBox(height: 32),
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
-                obscureText: true,
-              ),
-              const SizedBox(height: 32),
-              
-              // Standard Login Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green, 
-                    foregroundColor: Colors.white, 
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                  ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text('LOGIN', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              // Divider
-              Row(
-                children: [
-                  const Expanded(child: Divider(thickness: 1)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text('OR', style: TextStyle(color: Colors.grey)),
-                  ),
-                  const Expanded(child: Divider(thickness: 1)),
-                ],
-              ),
-              const SizedBox(height: 16),
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
-              // Google Sign In Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle,
-                  icon: Image.network(
-                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1920px-Google_%22G%22_logo.svg.png',
-                    height: 24,
-                  ),
-                  label: const Text('Continue with Google', style: TextStyle(color: Colors.black54, fontSize: 16)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.grey),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Sign Up Link
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Don't have an account? ", style: TextStyle(color: Colors.grey)),
-                  GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const RegisterScreen())),
-                    child: const Text('Sign up', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              )
-            ],
-          ),
-        ),
-      ),
+  @override
+  Widget build(BuildContext context) {
+    return LoginView(
+      emailController: _emailController,
+      passwordController: _passwordController,
+      isLoading: _isLoading,
+      onEmailLogin: _login,
+      onGoogleLogin: _signInWithGoogle,
+      onSignUp: () => Navigator.push(context,
+        MaterialPageRoute(builder: (context) => const RegisterScreen())),
     );
   }
 }
@@ -348,113 +279,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Create Account', style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black)),
-              const SizedBox(height: 8),
-              const Text('Start your journey with us today.', style: TextStyle(color: Colors.grey, fontSize: 16)),
-              const SizedBox(height: 32),
-              
-              // Email Field
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(), prefixIcon: Icon(Icons.email_outlined)),
-              ),
-              const SizedBox(height: 16),
-              
-              // Password Field
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
-                obscureText: true,
-              ),
-              const SizedBox(height: 16),
-              
-              // Confirm Password Field
-              TextField(
-                controller: _confirmPasswordController,
-                decoration: const InputDecoration(labelText: 'Confirm Password', border: OutlineInputBorder(), prefixIcon: Icon(Icons.lock_outline)),
-                obscureText: true,
-              ),
-              const SizedBox(height: 32),
-              
-              // Sign Up Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _signUp,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                  child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text('SIGN UP', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(height: 20),
-              
-              // Divider
-              Row(
-                children: [
-                  const Expanded(child: Divider(thickness: 1)),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 8.0),
-                    child: Text('OR', style: TextStyle(color: Colors.grey)),
-                  ),
-                  const Expanded(child: Divider(thickness: 1)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              
-              // Google Sign In Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: OutlinedButton.icon(
-                  onPressed: _isLoading ? null : _signInWithGoogle, // Make sure you have this function in RegisterScreen too!
-                  icon: Image.network(
-                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_%22G%22_logo.svg/1920px-Google_%22G%22_logo.svg.png',
-                    height: 24,
-                  ),
-                  label: const Text('Continue with Google', style: TextStyle(color: Colors.black54, fontSize: 16)),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.grey),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              
-              // Back to Login Link
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Already have an account? ", style: TextStyle(color: Colors.grey)),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Text('Sign in', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 40), // Bottom padding
-            ],
-          ),
-        ),
-      ),
-    );
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => SignupView(
+    emailController: _emailController,
+    passwordController: _passwordController,
+    confirmPasswordController: _confirmPasswordController,
+    isLoading: _isLoading,
+    onSignUp: _signUp,
+    onGoogleLogin: _signInWithGoogle,
+    onSignIn: () => Navigator.pop(context),
+  );
 }
 
 // ---------------- ONBOARDING SCREEN ----------------
@@ -471,23 +312,27 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   
   String? _selectedBreed;
   DateTime? _birthday;
-  String _selectedSex = 'Male';
+  String? _selectedSex;
   XFile? _imageFile;
   bool _isLoading = false;
 
   // The massive list of breeds
   static const List<String> dogBreeds = [
-    'Affenpinscher', 'Afghan Hound', 'Airedale Terrier', 'Akita', 'Alaskan Malamute', 'American Bulldog', 'American Eskimo', 'American Foxhound', 'Australian Cattle Dog', 'Australian Shepherd', 'Australian Terrier', 'Basenji', 'Basset Hound', 'Beagle', 'Bearded Collie', 'Bernese Mountain Dog', 'Bichon Frise', 'Black Russian Terrier', 'Bloodhound', 'Border Collie', 'Border Terrier', 'Borzoi', 'Boston Terrier', 'Bouvier des Flandres', 'Boxer', 'Briard', 'Brittany', 'Brussels Griffon', 'Bull Terrier', 'Bullmastiff', 'Cairn Terrier', 'Canaan Dog', 'Cane Corso', 'Cardigan Welsh Corgi', 'Cavalier King Charles Spaniel', 'Chesapeake Bay Retriever', 'Chihuahua', 'Chinese Crested', 'Chinese Shar-Pei', 'Chow Chow', 'Clumber Spaniel', 'Cocker Spaniel', 'Collie', 'Curly-Coated Retriever', 'Dachshund', 'Dalmatian', 'Dandie Dinmont Terrier', 'Doberman Pinscher', 'English Bulldog', 'English Cocker Spaniel', 'English Foxhound', 'English Setter', 'English Springer Spaniel', 'English Toy Spaniel', 'Entlebucher Mountain Dog', 'Field Spaniel', 'Finnish Lapphund', 'Finnish Spitz', 'Flat-Coated Retriever', 'French Bulldog', 'German Pinscher', 'German Shepherd', 'German Shorthaired Pointer', 'German Wirehaired Pointer', 'Giant Schnauzer', 'Golden Retriever', 'Gordon Setter', 'Great Dane', 'Great Pyrenees', 'Greater Swiss Mountain Dog', 'Greyhound', 'Harrier', 'Havanese', 'Ibizan Hound', 'Icelandic Sheepdog', 'Irish Red and White Setter', 'Irish Setter', 'Irish Terrier', 'Irish Water Spaniel', 'Irish Wolfhound', 'Italian Greyhound', 'Japanese Chin', 'Japanese Spitz', 'Keeshond', 'Kerry Blue Terrier', 'Komondor', 'Kuvasz', 'Labrador Retriever', 'Lakeland Terrier', 'Leonberger', 'Lhasa Apso', 'Lowchen', 'Maltese', 'Manchester Terrier', 'Mastiff', 'Miniature Pinscher', 'Miniature Schnauzer', 'Neapolitan Mastiff', 'Newfoundland', 'Norfolk Terrier', 'Norwegian Buhund', 'Norwegian Elkhound', 'Norwegian Lundehund', 'Old English Sheepdog', 'Otterhound', 'Papillon', 'Pekingese', 'Pembroke Welsh Corgi', 'Petit Basset Griffon Vendeen', 'Pharaoh Hound', 'Pointer', 'Pomeranian', 'Poodle (Miniature)', 'Poodle (Standard)', 'Poodle (Toy)', 'Portuguese Podengo', 'Portuguese Water Dog', 'Pudelpointer', 'Pug', 'Pyrenean Mountain Dog', 'Rat Terrier', 'Redbone Coonhound', 'Rhodesian Ridgeback', 'Rottweiler', 'Saint Bernard', 'Saluki', 'Samoyed', 'Schipperke', 'Scottish Deerhound', 'Scottish Terrier', 'Shetland Sheepdog', 'Shiba Inu', 'Shih Tzu', 'Siberian Husky', 'Silky Terrier', 'Skye Terrier', 'Sloughi', 'Smooth Fox Terrier', 'Soft-Coated Wheaten Terrier', 'Spanish Water Dog', 'Spinone Italiano', 'Staffordshire Bull Terrier', 'Standard Poodle', 'Standard Schnauzer', 'Sussex Spaniel', 'Swedish Vallhund', 'Thai Ridgeback', 'Tibetan Mastiff', 'Toy Fox Terrier', 'Treeing Walker Coonhound', 'Welsh Springer Spaniel', 'Welsh Terrier', 'West Highland White Terrier', 'Whippet', 'Wire Fox Terrier', 'Wirehaired Dachshund', 'Wirehaired Pointing Griffon', 'Xoloitzcuintli', 'Yorkshire Terrier'
+    'Affenpinscher', 'Afghan Hound', 'Airedale Terrier', 'Akita', 'Alaskan Malamute', 'American Bulldog', 'American Eskimo', 'American Foxhound', 'Australian Cattle Dog', 'Australian Shepherd', 'Australian Terrier', 'Basenji', 'Basset Hound', 'Beagle', 'Bearded Collie', 'Bernese Mountain Dog', 'Bichon Frise', 'Black Russian Terrier', 'Bloodhound', 'Border Collie', 'Border Terrier', 'Borzoi', 'Boston Terrier', 'Bouvier des Flandres', 'Boxer', 'Briard', 'Brittany', 'Brussels Griffon', 'Bull Terrier', 'Bullmastiff', 'Cairn Terrier', 'Canaan Dog', 'Cane Corso', 'Cardigan Welsh Corgi', 'Cavalier King Charles Spaniel', 'Chesapeake Bay Retriever', 'Chihuahua', 'Chinese Crested', 'Chinese Shar-Pei', 'Chow Chow', 'Clumber Spaniel', 'Cocker Spaniel', 'Collie', 'Curly-Coated Retriever', 'Dachshund', 'Dalmatian', 'Dandie Dinmont Terrier', 'Doberman Pinscher', 'English Bulldog', 'English Cocker Spaniel', 'English Foxhound', 'English Setter', 'English Springer Spaniel', 'English Toy Spaniel', 'Entlebucher Mountain Dog', 'Field Spaniel', 'Finnish Lapphund', 'Finnish Spitz', 'Flat-Coated Retriever', 'French Bulldog', 'German Pinscher', 'German Shepherd', 'German Shorthaired Pointer', 'German Wirehaired Pointer', 'Giant Schnauzer', 'Golden Retriever', 'Gordon Setter', 'Great Dane', 'Great Pyrenees', 'Greater Swiss Mountain Dog', 'Greyhound', 'Harrier', 'Havanese', 'Ibizan Hound', 'Icelandic Sheepdog', 'Irish Red and White Setter', 'Irish Setter', 'Irish Terrier', 'Irish Water Spaniel', 'Irish Wolfhound', 'Italian Greyhound', 'Japanese Chin', 'Japanese Spitz', 'Keeshond', 'Kerry Blue Terrier', 'Komondor', 'Kuvasz', 'Labrador Retriever', 'Lakeland Terrier', 'Leonberger', 'Lhasa Apso', 'Lowchen', 'Maltese', 'Manchester Terrier', 'Mastiff', 'Miniature Pinscher', 'Miniature Schnauzer', 'Neapolitan Mastiff', 'Newfoundland', 'Norfolk Terrier', 'Norwegian Buhund', 'Norwegian Elkhound', 'Norwegian Lundehund', 'Old English Sheepdog', 'Otterhound', 'Papillon', 'Pekingese', 'Pembroke Welsh Corgi', 'Petit Basset Griffon Vendeen', 'Pharaoh Hound', 'Pointer', 'Pomeranian', 'Poodle (Miniature)', 'Poodle (Standard)', 'Poodle (Toy)', 'Portuguese Podengo', 'Portuguese Water Dog', 'Pudelpointer', 'Pug', 'Pyrenean Mountain Dog', 'Rat Terrier', 'Redbone Coonhound', 'Rhodesian Ridgeback', 'Rottweiler', 'Saint Bernard', 'Saluki', 'Samoyed', 'Schipperke', 'Scottish Deerhound', 'Scottish Terrier', 'Shetland Sheepdog', 'Shiba Inu', 'Shih Tzu', 'Siberian Husky', 'Silky Terrier', 'Skye Terrier', 'Sloughi', 'Smooth Fox Terrier', 'Soft-Coated Wheaten Terrier', 'Spanish Water Dog', 'Spinone Italiano', 'Staffordshire Bull Terrier', 'Standard Schnauzer', 'Sussex Spaniel', 'Swedish Vallhund', 'Thai Ridgeback', 'Tibetan Mastiff', 'Toy Fox Terrier', 'Treeing Walker Coonhound', 'Welsh Springer Spaniel', 'Welsh Terrier', 'West Highland White Terrier', 'Whippet', 'Wire Fox Terrier', 'Wirehaired Dachshund', 'Wirehaired Pointing Griffon', 'Xoloitzcuintli', 'Yorkshire Terrier'
   ];
 
   Future<void> _pickImage() async {
+    FocusScope.of(context).unfocus();
+    final browse = await showDogPhotoSheet(context,
+      photo: _imageFile == null ? null : FileImage(File(_imageFile!.path)));
+    if (browse != true || !mounted) return;
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(
       source: ImageSource.gallery,
       maxWidth: 600,       // Downscale to max 600px width
       imageQuality: 70,    // Compress to 70% quality (optimizes JPEG)
     );
-    if (image != null) {
+    if (image != null && mounted) {
       setState(() {
         _imageFile = image;
       });
@@ -495,13 +340,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _pickBirthday() async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
+    final picked = await showDogDatePicker(context, initialDate: _birthday);
+    if (picked != null && mounted) {
       setState(() {
         _birthday = picked;
       });
@@ -511,7 +351,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
 
   Future<void> _saveToDatabase() async {
-    if (_dogNameController.text.isEmpty || _selectedBreed == null || _birthday == null) {
+    if (_dogNameController.text.trim().isEmpty || !['Male', 'Female'].contains(_selectedSex)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.red),
       );
@@ -521,28 +361,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     setState(() => _isLoading = true);
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
+      
+      // 1. Calculate Age dynamically from birthday
+      double age = 0.0;
+      final today = DateTime.now();
+      int years = today.year - _birthday!.year;
+      int months = today.month - _birthday!.month;
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+      age = years + (months / 12);
+
       double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
       String? photoUrl;
 
-      // 1. Upload photo to Supabase Storage if user picked one
+      // 2. Upload photo to Supabase Storage if user picked one
       if (_imageFile != null) {
         final fileName = '${userId}_dog_${DateTime.now().millisecondsSinceEpoch}.jpg';
         await Supabase.instance.client.storage.from('dog_photos').upload(fileName, File(_imageFile!.path));
         photoUrl = Supabase.instance.client.storage.from('dog_photos').getPublicUrl(fileName);
       }
 
-      // 2. Insert Dog details
+      // 3. Calculate Exercise Goal!
+      int dailyGoal = ExerciseData.getRecommendedMinutes(_selectedBreed!, age);
+
+      // 4. Insert Dog details
       final dogResponse = await Supabase.instance.client.from('dogs').insert({
         'owner_id': userId,
         'dog_name': _dogNameController.text.trim(),
         'breed': _selectedBreed,
         'weight': weight,
-        'birthday': _birthday!.toIso8601String().split('T')[0], // YYYY-MM-DD
+        'birthday': _birthday!.toIso8601String().split('T')[0],
         'sex': _selectedSex,
         'photo_url': photoUrl,
+        'daily_goal_minutes': dailyGoal, // Save the goal!
       }).select().single();
 
-      // 3. Save initial weight to history
+      // 5. Save initial weight to history
       await Supabase.instance.client.from('weight_history').insert({
         'dog_id': dogResponse['id'],
         'weight_kg': weight,
@@ -550,7 +406,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       });
 
       if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
+      
+      // 6. Go to the High Paw screen!
+      Navigator.pushReplacement(
+        context, 
+        MaterialPageRoute(
+          builder: (context) => HighPawScreen(
+            dogName: _dogNameController.text.trim(),
+            dailyGoal: dailyGoal,
+          ),
+        ),
+      );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Database Error: $e')));
     } finally {
@@ -559,123 +425,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Your Dog')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Photo Picker
-            Center(
-              child: GestureDetector(
-                onTap: _pickImage,
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.grey[200],
-                  backgroundImage: _imageFile != null ? FileImage(File(_imageFile!.path)) : null,
-                  child: _imageFile == null
-                      ? Icon(Icons.camera_alt, size: 40, color: Colors.grey[600])
-                      : null,
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Dog Name
-            TextField(
-              controller: _dogNameController,
-              decoration: const InputDecoration(labelText: 'Your dog\'s name*', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 16),
-
-            // Breed Dropdown (Autocomplete)
-            Autocomplete<String>(
-              optionsBuilder: (TextEditingValue textEditingValue) {
-                if (textEditingValue.text.isEmpty) {
-                  return const Iterable<String>.empty();
-                }
-                return dogBreeds.where((String breed) {
-                  return breed.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                });
-              },
-              onSelected: (String selection) {
-                setState(() {
-                  _selectedBreed = selection;
-                });
-              },
-              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  decoration: const InputDecoration(labelText: 'Your dog\'s breed*', border: OutlineInputBorder()),
-                );
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Birthday Picker
-            InkWell(
-              onTap: _pickBirthday,
-              child: InputDecorator(
-                decoration: const InputDecoration(labelText: 'Your dog\'s birthday*', border: OutlineInputBorder()),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(_birthday == null 
-                      ? 'Select Date' 
-                      : DateFormat('MMM d, yyyy').format(_birthday!)),
-                    const Icon(Icons.calendar_today, size: 20),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Weight
-            TextField(
-              controller: _weightController,
-              decoration: const InputDecoration(labelText: 'Current Weight (kg)*', border: OutlineInputBorder()),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 24),
-
-            // Sex Selector
-            const Text('Is your dog male or female?*', style: TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Center(child: Text('Male')),
-                    selected: _selectedSex == 'Male',
-                    onSelected: (selected) => setState(() => _selectedSex = 'Male'),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ChoiceChip(
-                    label: const Center(child: Text('Female')),
-                    selected: _selectedSex == 'Female',
-                    onSelected: (selected) => setState(() => _selectedSex = 'Female'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Finish Button
-            ElevatedButton(
-              onPressed: _isLoading ? null : _saveToDatabase,
-              style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
-              child: _isLoading ? const CircularProgressIndicator() : const Text('Finish', style: TextStyle(fontSize: 18)),
-            ),
-          ],
-        ),
-      ),
-    );
+  void dispose() {
+    _dogNameController.dispose();
+    _weightController.dispose();
+    super.dispose();
   }
+
+  @override
+  Widget build(BuildContext context) => OnboardingView(
+    nameController: _dogNameController,
+    weightController: _weightController,
+    sex: _selectedSex,
+    onSex: (sex) => setState(() => _selectedSex = sex),
+    hasBirthday: _birthday != null,
+    birthdayLabel: _birthday == null ? 'Select date of birth' : DateFormat('MMM d, yyyy').format(_birthday!),
+    onBirthday: _pickBirthday,
+    breeds: dogBreeds,
+    onBreed: (breed) => _selectedBreed = breed,
+    onPhoto: _pickImage,
+    photo: _imageFile == null ? null : FileImage(File(_imageFile!.path)),
+    onNext: _saveToDatabase,
+    loading: _isLoading,
+  );
 }
 
 // ---------------- HOME SCREEN ----------------
@@ -894,6 +665,98 @@ class _HomeScreenState extends State<HomeScreen> {
           const Spacer(),
           Icon(isDone ? Icons.check_circle : Icons.radio_button_unchecked, color: isDone ? Colors.green : Colors.grey),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------- HIGH PAW SCREEN ----------------
+class HighPawScreen extends StatelessWidget {
+  final String dogName;
+  final int dailyGoal;
+
+  const HighPawScreen({
+    super.key,
+    required this.dogName,
+    required this.dailyGoal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.green[50], // Light green background
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Dog Illustration
+                Container(
+                  width: 150,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    color: Colors.green[100],
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.pets, size: 80, color: Colors.green),
+                ),
+                const SizedBox(height: 32),
+                
+                const Text(
+                  'High paw!',
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Based on $dogName\'s breed and age, we recommend:',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                
+                // Big Number
+                Text(
+                  '$dailyGoal minutes',
+                  style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.black),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'a day', 
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$dogName\'s daily goal', 
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                const SizedBox(height: 48),
+                
+                // Continue Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context, 
+                        MaterialPageRoute(builder: (context) => const HomeScreen())
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    ),
+                    child: const Text('Continue', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
