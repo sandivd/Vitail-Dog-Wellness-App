@@ -315,6 +315,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _selectedSex;
   XFile? _imageFile;
   bool _isLoading = false;
+  String _ownerActivityLevel = 'moderate'; // Default value
 
   // The massive list of breeds
   static const List<String> dogBreeds = [
@@ -383,8 +384,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         photoUrl = Supabase.instance.client.storage.from('dog_photos').getPublicUrl(fileName);
       }
 
-      // 3. Calculate Exercise Goal!
-      int dailyGoal = ExerciseData.getRecommendedMinutes(_selectedBreed!, age);
+      // 3. Calculate Exercise Goal using new Engine!
+      var target = ExerciseCalculator.calculate(
+        breed: _selectedBreed!,
+        weightKg: weight,
+        ageYears: age,
+        ownerActivityLevel: _ownerActivityLevel,
+      );
+
+      int dailyGoalMins = target['targetMinutes'];
+      double dailyGoalKm = target['kmTarget'];
 
       // 4. Insert Dog details
       final dogResponse = await Supabase.instance.client.from('dogs').insert({
@@ -395,7 +404,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         'birthday': _birthday!.toIso8601String().split('T')[0],
         'sex': _selectedSex,
         'photo_url': photoUrl,
-        'daily_goal_minutes': dailyGoal, // Save the goal!
+        'daily_goal_minutes': dailyGoalMins,
+        'daily_goal_km': dailyGoalKm,
+        'owner_activity_level': _ownerActivityLevel,
       }).select().single();
 
       // 5. Save initial weight to history
@@ -407,13 +418,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       if (!mounted) return;
       
-      // 6. Go to the High Paw screen!
+      // 6. Go to the High Paw screen! (Pass both mins and km)
       Navigator.pushReplacement(
         context, 
         MaterialPageRoute(
           builder: (context) => HighPawScreen(
             dogName: _dogNameController.text.trim(),
-            dailyGoal: dailyGoal,
+            dailyGoalMins: dailyGoalMins,
+            dailyGoalKm: dailyGoalKm,
           ),
         ),
       );
@@ -444,6 +456,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     onBreed: (breed) => _selectedBreed = breed,
     onPhoto: _pickImage,
     photo: _imageFile == null ? null : FileImage(File(_imageFile!.path)),
+    // ADD THESE TWO LINES:
+    ownerActivityLevel: _ownerActivityLevel,
+    onOwnerActivityChanged: (level) => setState(() => _ownerActivityLevel = level),
     onNext: _saveToDatabase,
     loading: _isLoading,
   );
@@ -673,18 +688,20 @@ class _HomeScreenState extends State<HomeScreen> {
 // ---------------- HIGH PAW SCREEN ----------------
 class HighPawScreen extends StatelessWidget {
   final String dogName;
-  final int dailyGoal;
+  final int dailyGoalMins;
+  final double dailyGoalKm;
 
   const HighPawScreen({
     super.key,
     required this.dogName,
-    required this.dailyGoal,
+    required this.dailyGoalMins,
+    required this.dailyGoalKm,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.green[50], // Light green background
+      backgroundColor: Colors.green[50],
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -693,7 +710,6 @@ class HighPawScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Dog Illustration
                 Container(
                   width: 150,
                   height: 150,
@@ -711,30 +727,34 @@ class HighPawScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Based on $dogName\'s breed and age, we recommend:',
+                  'Based on $dogName\'s breed, weight, and your activity level, we recommend:',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 16, color: Colors.grey),
                 ),
                 const SizedBox(height: 24),
                 
-                // Big Number
+                // Minutes
                 Text(
-                  '$dailyGoal minutes',
-                  style: const TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.black),
+                  '$dailyGoalMins minutes',
+                  style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'a day', 
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500, color: Colors.grey),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$dogName\'s daily goal', 
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                const Text('a day', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                const SizedBox(height: 16),
+                
+                // Distance
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.green[100],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    'Target Distance: ${dailyGoalKm.toStringAsFixed(1)} km',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green[800]),
+                  ),
                 ),
                 const SizedBox(height: 48),
                 
-                // Continue Button
                 SizedBox(
                   width: double.infinity,
                   height: 50,

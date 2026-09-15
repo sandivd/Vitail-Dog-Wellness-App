@@ -7,7 +7,9 @@ class OnboardingView extends StatelessWidget {
     required this.weightController, required this.sex, required this.onSex,
     required this.birthdayLabel, this.hasBirthday = false, required this.onBirthday, required this.breeds,
     required this.onBreed, required this.onPhoto, required this.onNext,
+    required this.ownerActivityLevel, required this.onOwnerActivityChanged,
     required this.loading, this.photo});
+  
   final TextEditingController nameController, weightController;
   final String? sex;
   final String birthdayLabel;
@@ -16,8 +18,11 @@ class OnboardingView extends StatelessWidget {
   final ValueChanged<String?> onBreed;
   final List<String> breeds;
   final VoidCallback onBirthday, onPhoto, onNext;
+  final String ownerActivityLevel; // 'low', 'moderate', 'high'
+  final ValueChanged<String> onOwnerActivityChanged;
   final bool loading;
   final ImageProvider? photo;
+  
   static const background = Color(0xFFF4F0E9);
   static const ink = Color(0xFF211F1D);
   static const border = Color(0xFFDAD6CD);
@@ -123,6 +128,19 @@ class OnboardingView extends StatelessWidget {
                   onChanged: (value) => onBreed(breeds.contains(value) ? value : null),
                   decoration: decoration('Select breed', suffix: icon('chevron'))),
               ))),
+              const SizedBox(height: 16),
+              // NEW: Owner Activity Level Selector
+              field('Your activity level *', Row(children: [for (final value in ['Low', 'Moderate', 'High']) ...[
+                if (value != 'Low') const SizedBox(width: 10),
+                Expanded(child: Semantics(selected: ownerActivityLevel == value.toLowerCase(),
+                  child: OutlinedButton(onPressed: loading ? null : () => onOwnerActivityChanged(value.toLowerCase()),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52),
+                      backgroundColor: ownerActivityLevel == value.toLowerCase() ? green : Colors.white,
+                      foregroundColor: ownerActivityLevel == value.toLowerCase() ? Colors.white : ink,
+                      side: BorderSide(color: ownerActivityLevel == value.toLowerCase() ? green : border),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+                    child: FittedBox(child: Text(value.toUpperCase(), style: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 14, fontWeight: FontWeight.w600)))))),
+              ]])),
               const SizedBox(height: 32),
               ElevatedButton(onPressed: loading ? null : onNext,
                 style: ElevatedButton.styleFrom(backgroundColor: coral, foregroundColor: Colors.white,

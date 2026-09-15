@@ -1,201 +1,243 @@
-class ExerciseData {
-  // Map of Breed -> [Puppy (Placeholder), Prime Adult, Early Senior, Mid-Senior, Late Senior]
-  // Note: Index 0 is just a placeholder. Puppy time is calculated dynamically below.
-  static const Map<String, List<int>> breedMinutes = {
-    'Affenpinscher': [60, 90, 68, 45, 23],
-    'Afghan Hound': [60, 120, 81, 54, 27],
-    'Airedale Terrier': [60, 120, 90, 60, 30],
-    'Akita': [60, 120, 72, 48, 24],
-    'Alaskan Malamute': [60, 180, 122, 81, 41],
-    'American Bulldog': [60, 120, 81, 54, 27],
-    'American Eskimo': [60, 120, 90, 60, 30],
-    'American Foxhound': [60, 150, 113, 75, 38],
-    'Australian Cattle Dog': [60, 150, 113, 75, 38],
-    'Australian Shepherd': [60, 150, 101, 68, 34],
-    'Australian Terrier': [60, 90, 68, 45, 23],
-    'Basenji': [60, 120, 90, 60, 30],
-    'Basset Hound': [60, 60, 36, 24, 12],
-    'Beagle': [60, 120, 81, 54, 27],
-    'Bearded Collie': [60, 120, 90, 60, 30],
-    'Bernese Mountain Dog': [60, 90, 54, 36, 18],
-    'Bichon Frise': [60, 60, 45, 30, 15],
-    'Black Russian Terrier': [60, 120, 81, 54, 27],
-    'Bloodhound': [60, 120, 72, 48, 24],
-    'Border Collie': [60, 180, 135, 90, 45],
-    'Border Terrier': [60, 90, 68, 45, 23],
-    'Borzoi': [60, 120, 90, 60, 30],
-    'Boston Terrier': [60, 90, 61, 41, 20],
-    'Bouvier des Flandres': [60, 120, 81, 54, 27],
-    'Boxer': [60, 120, 81, 54, 27],
-    'Briard': [60, 120, 90, 60, 30],
-    'Brittany': [60, 150, 113, 75, 38],
-    'Brussels Griffon': [60, 90, 61, 41, 20],
-    'Bull Terrier': [60, 120, 81, 54, 27],
-    'Bullmastiff': [60, 90, 54, 36, 18],
-    'Cairn Terrier': [60, 90, 68, 45, 23],
-    'Canaan Dog': [60, 120, 90, 60, 30],
-    'Cane Corso': [60, 120, 81, 54, 27],
-    'Cardigan Welsh Corgi': [60, 120, 81, 54, 27],
-    'Cavalier King Charles Spaniel': [60, 60, 36, 24, 12],
-    'Chesapeake Bay Retriever': [60, 150, 113, 75, 38],
-    'Chihuahua': [60, 60, 41, 27, 14],
-    'Chinese Crested': [60, 60, 45, 30, 15],
-    'Chinese Shar-Pei': [60, 90, 54, 36, 18],
-    'Chow Chow': [60, 90, 54, 36, 18],
-    'Clumber Spaniel': [60, 90, 61, 41, 20],
-    'Cocker Spaniel': [60, 90, 61, 41, 20],
-    'Collie': [60, 120, 81, 54, 27],
-    'Curly-Coated Retriever': [60, 120, 90, 60, 30],
-    'Dachshund': [60, 90, 54, 36, 18],
-    'Dalmatian': [60, 150, 90, 60, 30],
-    'Dandie Dinmont Terrier': [60, 90, 68, 45, 23],
-    'Doberman Pinscher': [60, 150, 101, 68, 34],
-    'English Bulldog': [60, 60, 36, 24, 12],
-    'English Cocker Spaniel': [60, 90, 61, 41, 20],
-    'English Foxhound': [60, 150, 113, 75, 38],
-    'English Setter': [60, 120, 81, 54, 27],
-    'English Springer Spaniel': [60, 120, 81, 54, 27],
-    'English Toy Spaniel': [60, 60, 41, 27, 14],
-    'Entlebucher Mountain Dog': [60, 150, 113, 75, 38],
-    'Field Spaniel': [60, 120, 90, 60, 30],
-    'Finnish Lapphund': [60, 120, 90, 60, 30],
-    'Finnish Spitz': [60, 120, 90, 60, 30],
-    'Flat-Coated Retriever': [60, 150, 101, 68, 34],
-    'French Bulldog': [60, 60, 36, 24, 12],
-    'German Pinscher': [60, 120, 90, 60, 30],
-    'German Shepherd': [60, 150, 101, 68, 34],
-    'German Shorthaired Pointer': [60, 150, 113, 75, 38],
-    'German Wirehaired Pointer': [60, 150, 113, 75, 38],
-    'Giant Schnauzer': [60, 120, 81, 54, 27],
-    'Golden Retriever': [60, 120, 81, 54, 27],
-    'Gordon Setter': [60, 120, 81, 54, 27],
-    'Great Dane': [60, 120, 72, 48, 24],
-    'Great Pyrenees': [60, 90, 61, 41, 20],
-    'Greater Swiss Mountain Dog': [60, 120, 81, 54, 27],
-    'Greyhound': [60, 120, 90, 60, 30],
-    'Harrier': [60, 120, 90, 60, 30],
-    'Havanese': [60, 90, 68, 45, 23],
-    'Ibizan Hound': [60, 120, 90, 60, 30],
-    'Icelandic Sheepdog': [60, 120, 90, 60, 30],
-    'Irish Red and White Setter': [60, 150, 101, 68, 34],
-    'Irish Setter': [60, 150, 101, 68, 34],
-    'Irish Terrier': [60, 90, 68, 45, 23],
-    'Irish Water Spaniel': [60, 120, 90, 60, 30],
-    'Irish Wolfhound': [60, 120, 72, 48, 24],
-    'Italian Greyhound': [60, 90, 61, 41, 20],
-    'Japanese Chin': [60, 60, 45, 30, 15],
-    'Japanese Spitz': [60, 90, 68, 45, 23],
-    'Keeshond': [60, 90, 68, 45, 23],
-    'Kerry Blue Terrier': [60, 90, 68, 45, 23],
-    'Komondor': [60, 120, 90, 60, 30],
-    'Kuvasz': [60, 120, 81, 54, 27],
-    'Labrador Retriever': [60, 120, 81, 54, 27],
-    'Lakeland Terrier': [60, 90, 68, 45, 23],
-    'Leonberger': [60, 120, 72, 48, 24],
-    'Lhasa Apso': [60, 60, 45, 30, 15],
-    'Lowchen': [60, 90, 68, 45, 23],
-    'Maltese': [60, 60, 45, 30, 15],
-    'Manchester Terrier': [60, 90, 68, 45, 23],
-    'Mastiff': [60, 90, 54, 36, 18],
-    'Miniature Pinscher': [60, 90, 68, 45, 23],
-    'Miniature Schnauzer': [60, 90, 68, 45, 23],
-    'Neapolitan Mastiff': [60, 60, 36, 24, 12],
-    'Newfoundland': [60, 120, 81, 54, 27],
-    'Norfolk Terrier': [60, 90, 68, 45, 23],
-    'Norwegian Buhund': [60, 120, 90, 60, 30],
-    'Norwegian Elkhound': [60, 120, 81, 54, 27],
-    'Norwegian Lundehund': [60, 120, 72, 48, 24],
-    'Old English Sheepdog': [60, 120, 81, 54, 27],
-    'Otterhound': [60, 150, 101, 68, 34],
-    'Papillon': [60, 60, 45, 30, 15],
-    'Pekingese': [60, 60, 36, 24, 12],
-    'Pembroke Welsh Corgi': [60, 120, 81, 54, 27],
-    'Petit Basset Griffon Vendeen': [60, 120, 81, 54, 27],
-    'Pharaoh Hound': [60, 120, 90, 60, 30],
-    'Pointer': [60, 150, 101, 68, 34],
-    'Pomeranian': [60, 60, 41, 27, 14],
-    'Poodle (Miniature)': [60, 90, 68, 45, 23],
-    'Poodle (Standard)': [60, 120, 81, 54, 27],
-    'Poodle (Toy)': [60, 60, 45, 30, 15],
-    'Portuguese Podengo': [60, 120, 90, 60, 30],
-    'Portuguese Water Dog': [60, 120, 81, 54, 27],
-    'Pudelpointer': [60, 150, 113, 75, 38],
-    'Pug': [60, 60, 36, 24, 12],
-    'Pyrenean Mountain Dog': [60, 120, 72, 48, 24],
-    'Rat Terrier': [60, 120, 81, 54, 27],
-    'Redbone Coonhound': [60, 120, 90, 60, 30],
-    'Rhodesian Ridgeback': [60, 150, 101, 68, 34],
-    'Rottweiler': [60, 120, 72, 48, 24],
-    'Saint Bernard': [60, 120, 81, 54, 27],
-    'Saluki': [60, 150, 101, 68, 34],
-    'Samoyed': [60, 120, 81, 54, 27],
-    'Schipperke': [60, 120, 81, 54, 27],
-    'Scottish Deerhound': [60, 120, 81, 54, 27],
-    'Scottish Terrier': [60, 90, 54, 36, 18],
-    'Shetland Sheepdog': [60, 120, 81, 54, 27],
-    'Shiba Inu': [60, 120, 81, 54, 27],
-    'Shih Tzu': [60, 60, 41, 27, 14],
-    'Siberian Husky': [60, 150, 101, 68, 34],
-    'Silky Terrier': [60, 90, 68, 45, 23],
-    'Skye Terrier': [60, 90, 61, 41, 20],
-    'Sloughi': [60, 150, 101, 68, 34],
-    'Smooth Fox Terrier': [60, 120, 81, 54, 27],
-    'Soft-Coated Wheaten Terrier': [60, 120, 81, 54, 27],
-    'Spanish Water Dog': [60, 120, 81, 54, 27],
-    'Spinone Italiano': [60, 120, 81, 54, 27],
-    'Staffordshire Bull Terrier': [60, 120, 72, 48, 24],
-    'Standard Schnauzer': [60, 120, 81, 54, 27],
-    'Sussex Spaniel': [60, 90, 61, 41, 20],
-    'Swedish Vallhund': [60, 120, 90, 60, 30],
-    'Thai Ridgeback': [60, 120, 81, 54, 27],
-    'Tibetan Mastiff': [60, 120, 81, 54, 27],
-    'Toy Fox Terrier': [60, 90, 68, 45, 23],
-    'Treeing Walker Coonhound': [60, 120, 81, 54, 27],
-    'Welsh Springer Spaniel': [60, 120, 81, 54, 27],
-    'Welsh Terrier': [60, 90, 61, 41, 20],
-    'West Highland White Terrier': [60, 90, 61, 41, 20],
-    'Whippet': [60, 120, 90, 60, 30],
-    'Wire Fox Terrier': [60, 120, 81, 54, 27],
-    'Wirehaired Dachshund': [60, 90, 54, 36, 18],
-    'Wirehaired Pointing Griffon': [60, 120, 81, 54, 27],
-    'Xoloitzcuintli': [60, 120, 81, 54, 27],
-    'Yorkshire Terrier': [60, 60, 41, 27, 14],
+class ExerciseCalculator {
+  static const Map<String, dynamic> constants = {
+    "size_rules": {
+      "small": {"max_weight_kg": 9.99, "multiplier": 0.8, "pace_kmh": 3.0},
+      "medium": {"max_weight_kg": 24.99, "multiplier": 1.0, "pace_kmh": 4.0},
+      "large": {"min_weight_kg": 25.0, "multiplier": 1.2, "pace_kmh": 5.0}
+    },
+    "brachycephalic_rules": {"factor_multiplier": 0.75, "pace_cap_kmh": 3.0},
+    "age_factors": {"puppy": 0.7, "adult": 1.0, "senior": 0.6},
+    "owner_activity_multipliers": {"low": 0.8, "moderate": 1.0, "high": 1.2}
   };
 
-  // Calculate the index based on the age rules provided
-  static int getAgeIndex(double age) {
-    // We skip index 0 (Puppy) because it is handled dynamically in getRecommendedMinutes
-    if (age < 8.0) return 1; // Prime Adult
-    if (age < 10.0) return 2; // Early Senior
-    if (age < 12.0) return 3; // Mid-Senior
-    return 4; // Late Senior
-  }
+  static const Map<String, Map<String, dynamic>> breedData = {
+    "Affenpinscher": {"is_brachycephalic": true, "breed_energy": 65},
+    "Afghan Hound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Airedale Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Akita": {"is_brachycephalic": false, "breed_energy": 80},
+    "Alaskan Malamute": {"is_brachycephalic": false, "breed_energy": 110},
+    "American Bulldog": {"is_brachycephalic": true, "breed_energy": 80},
+    "American Eskimo": {"is_brachycephalic": false, "breed_energy": 80},
+    "American Foxhound": {"is_brachycephalic": false, "breed_energy": 95},
+    "Australian Cattle Dog": {"is_brachycephalic": false, "breed_energy": 95},
+    "Australian Shepherd": {"is_brachycephalic": false, "breed_energy": 95},
+    "Australian Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Basenji": {"is_brachycephalic": false, "breed_energy": 80},
+    "Basset Hound": {"is_brachycephalic": false, "breed_energy": 50},
+    "Beagle": {"is_brachycephalic": false, "breed_energy": 80},
+    "Bearded Collie": {"is_brachycephalic": false, "breed_energy": 80},
+    "Bernese Mountain Dog": {"is_brachycephalic": false, "breed_energy": 65},
+    "Bichon Frise": {"is_brachycephalic": false, "breed_energy": 50},
+    "Black Russian Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Bloodhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Border Collie": {"is_brachycephalic": false, "breed_energy": 110},
+    "Border Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Borzoi": {"is_brachycephalic": false, "breed_energy": 80},
+    "Boston Terrier": {"is_brachycephalic": true, "breed_energy": 65},
+    "Bouvier des Flandres": {"is_brachycephalic": false, "breed_energy": 80},
+    "Boxer": {"is_brachycephalic": true, "breed_energy": 80},
+    "Briard": {"is_brachycephalic": false, "breed_energy": 80},
+    "Brittany": {"is_brachycephalic": false, "breed_energy": 95},
+    "Brussels Griffon": {"is_brachycephalic": true, "breed_energy": 65},
+    "Bull Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Bullmastiff": {"is_brachycephalic": true, "breed_energy": 65},
+    "Cairn Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Canaan Dog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Cane Corso": {"is_brachycephalic": true, "breed_energy": 80},
+    "Cardigan Welsh Corgi": {"is_brachycephalic": false, "breed_energy": 80},
+    "Cavalier King Charles Spaniel": {"is_brachycephalic": true, "breed_energy": 50},
+    "Chesapeake Bay Retriever": {"is_brachycephalic": false, "breed_energy": 95},
+    "Chihuahua": {"is_brachycephalic": false, "breed_energy": 50},
+    "Chinese Crested": {"is_brachycephalic": false, "breed_energy": 50},
+    "Chinese Shar-Pei": {"is_brachycephalic": true, "breed_energy": 65},
+    "Chow Chow": {"is_brachycephalic": true, "breed_energy": 65},
+    "Clumber Spaniel": {"is_brachycephalic": false, "breed_energy": 65},
+    "Cocker Spaniel": {"is_brachycephalic": false, "breed_energy": 65},
+    "Collie": {"is_brachycephalic": false, "breed_energy": 80},
+    "Curly-Coated Retriever": {"is_brachycephalic": false, "breed_energy": 80},
+    "Dachshund": {"is_brachycephalic": false, "breed_energy": 65},
+    "Dalmatian": {"is_brachycephalic": false, "breed_energy": 95},
+    "Dandie Dinmont Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Doberman Pinscher": {"is_brachycephalic": false, "breed_energy": 95},
+    "English Bulldog": {"is_brachycephalic": true, "breed_energy": 50},
+    "English Cocker Spaniel": {"is_brachycephalic": false, "breed_energy": 65},
+    "English Foxhound": {"is_brachycephalic": false, "breed_energy": 95},
+    "English Setter": {"is_brachycephalic": false, "breed_energy": 80},
+    "English Springer Spaniel": {"is_brachycephalic": false, "breed_energy": 80},
+    "English Toy Spaniel": {"is_brachycephalic": true, "breed_energy": 50},
+    "Entlebucher Mountain Dog": {"is_brachycephalic": false, "breed_energy": 95},
+    "Field Spaniel": {"is_brachycephalic": false, "breed_energy": 80},
+    "Finnish Lapphund": {"is_brachycephalic": false, "breed_energy": 80},
+    "Finnish Spitz": {"is_brachycephalic": false, "breed_energy": 80},
+    "Flat-Coated Retriever": {"is_brachycephalic": false, "breed_energy": 95},
+    "French Bulldog": {"is_brachycephalic": true, "breed_energy": 50},
+    "German Pinscher": {"is_brachycephalic": false, "breed_energy": 80},
+    "German Shepherd": {"is_brachycephalic": false, "breed_energy": 95},
+    "German Shorthaired Pointer": {"is_brachycephalic": false, "breed_energy": 95},
+    "German Wirehaired Pointer": {"is_brachycephalic": false, "breed_energy": 95},
+    "Giant Schnauzer": {"is_brachycephalic": false, "breed_energy": 80},
+    "Golden Retriever": {"is_brachycephalic": false, "breed_energy": 80},
+    "Gordon Setter": {"is_brachycephalic": false, "breed_energy": 80},
+    "Great Dane": {"is_brachycephalic": false, "breed_energy": 80},
+    "Great Pyrenees": {"is_brachycephalic": false, "breed_energy": 65},
+    "Greater Swiss Mountain Dog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Greyhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Harrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Havanese": {"is_brachycephalic": false, "breed_energy": 65},
+    "Ibizan Hound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Icelandic Sheepdog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Irish Red and White Setter": {"is_brachycephalic": false, "breed_energy": 95},
+    "Irish Setter": {"is_brachycephalic": false, "breed_energy": 95},
+    "Irish Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Irish Water Spaniel": {"is_brachycephalic": false, "breed_energy": 80},
+    "Irish Wolfhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Italian Greyhound": {"is_brachycephalic": false, "breed_energy": 65},
+    "Japanese Chin": {"is_brachycephalic": true, "breed_energy": 50},
+    "Japanese Spitz": {"is_brachycephalic": false, "breed_energy": 65},
+    "Keeshond": {"is_brachycephalic": false, "breed_energy": 65},
+    "Kerry Blue Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Komondor": {"is_brachycephalic": false, "breed_energy": 80},
+    "Kuvasz": {"is_brachycephalic": false, "breed_energy": 80},
+    "Labrador Retriever": {"is_brachycephalic": false, "breed_energy": 80},
+    "Lakeland Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Leonberger": {"is_brachycephalic": false, "breed_energy": 80},
+    "Lhasa Apso": {"is_brachycephalic": true, "breed_energy": 50},
+    "Lowchen": {"is_brachycephalic": false, "breed_energy": 65},
+    "Maltese": {"is_brachycephalic": false, "breed_energy": 50},
+    "Manchester Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Mastiff": {"is_brachycephalic": true, "breed_energy": 65},
+    "Miniature Pinscher": {"is_brachycephalic": false, "breed_energy": 65},
+    "Miniature Schnauzer": {"is_brachycephalic": false, "breed_energy": 65},
+    "Neapolitan Mastiff": {"is_brachycephalic": true, "breed_energy": 50},
+    "Newfoundland": {"is_brachycephalic": false, "breed_energy": 80},
+    "Norfolk Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Norwegian Buhund": {"is_brachycephalic": false, "breed_energy": 80},
+    "Norwegian Elkhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Norwegian Lundehund": {"is_brachycephalic": false, "breed_energy": 80},
+    "Old English Sheepdog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Otterhound": {"is_brachycephalic": false, "breed_energy": 95},
+    "Papillon": {"is_brachycephalic": false, "breed_energy": 50},
+    "Pekingese": {"is_brachycephalic": true, "breed_energy": 50},
+    "Pembroke Welsh Corgi": {"is_brachycephalic": false, "breed_energy": 80},
+    "Petit Basset Griffon Vendeen": {"is_brachycephalic": false, "breed_energy": 80},
+    "Pharaoh Hound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Pointer": {"is_brachycephalic": false, "breed_energy": 95},
+    "Pomeranian": {"is_brachycephalic": false, "breed_energy": 50},
+    "Poodle (Miniature)": {"is_brachycephalic": false, "breed_energy": 65},
+    "Poodle (Standard)": {"is_brachycephalic": false, "breed_energy": 80},
+    "Poodle (Toy)": {"is_brachycephalic": false, "breed_energy": 50},
+    "Portuguese Podengo": {"is_brachycephalic": false, "breed_energy": 80},
+    "Portuguese Water Dog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Pudelpointer": {"is_brachycephalic": false, "breed_energy": 95},
+    "Pug": {"is_brachycephalic": true, "breed_energy": 50},
+    "Pyrenean Mountain Dog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Rat Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Redbone Coonhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Rhodesian Ridgeback": {"is_brachycephalic": false, "breed_energy": 95},
+    "Rottweiler": {"is_brachycephalic": false, "breed_energy": 80},
+    "Saint Bernard": {"is_brachycephalic": false, "breed_energy": 80},
+    "Saluki": {"is_brachycephalic": false, "breed_energy": 95},
+    "Samoyed": {"is_brachycephalic": false, "breed_energy": 80},
+    "Schipperke": {"is_brachycephalic": false, "breed_energy": 80},
+    "Scottish Deerhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Scottish Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Shetland Sheepdog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Shiba Inu": {"is_brachycephalic": false, "breed_energy": 80},
+    "Shih Tzu": {"is_brachycephalic": true, "breed_energy": 50},
+    "Siberian Husky": {"is_brachycephalic": false, "breed_energy": 95},
+    "Silky Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Skye Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Sloughi": {"is_brachycephalic": false, "breed_energy": 95},
+    "Smooth Fox Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Soft-Coated Wheaten Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Spanish Water Dog": {"is_brachycephalic": false, "breed_energy": 80},
+    "Spinone Italiano": {"is_brachycephalic": false, "breed_energy": 80},
+    "Staffordshire Bull Terrier": {"is_brachycephalic": true, "breed_energy": 80},
+    "Standard Poodle": {"is_brachycephalic": false, "breed_energy": 80},
+    "Standard Schnauzer": {"is_brachycephalic": false, "breed_energy": 80},
+    "Sussex Spaniel": {"is_brachycephalic": false, "breed_energy": 65},
+    "Swedish Vallhund": {"is_brachycephalic": false, "breed_energy": 80},
+    "Thai Ridgeback": {"is_brachycephalic": false, "breed_energy": 80},
+    "Tibetan Mastiff": {"is_brachycephalic": false, "breed_energy": 80},
+    "Toy Fox Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Treeing Walker Coonhound": {"is_brachycephalic": false, "breed_energy": 80},
+    "Welsh Springer Spaniel": {"is_brachycephalic": false, "breed_energy": 80},
+    "Welsh Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "West Highland White Terrier": {"is_brachycephalic": false, "breed_energy": 65},
+    "Whippet": {"is_brachycephalic": false, "breed_energy": 80},
+    "Wire Fox Terrier": {"is_brachycephalic": false, "breed_energy": 80},
+    "Wirehaired Dachshund": {"is_brachycephalic": false, "breed_energy": 65},
+    "Wirehaired Pointing Griffon": {"is_brachycephalic": false, "breed_energy": 80},
+    "Xoloitzcuintli": {"is_brachycephalic": false, "breed_energy": 80},
+    "Yorkshire Terrier": {"is_brachycephalic": false, "breed_energy": 50}
+  };
 
-  static int getRecommendedMinutes(String breed, double ageInYears) {
-    // Default fallback if breed is not found
-    if (!breedMinutes.containsKey(breed)) return 30; 
-    
-    List<int> minutesArray = breedMinutes[breed]!;
-    int primeAdultMax = minutesArray[1]; // The max exercise this breed should ever do
-
-    // 1. DYNAMIC PUPPY CALCULATION (Under 1.5 years)
-    if (ageInYears < 1.5) {
-      // Convert years to months
-      int ageInMonths = (ageInYears * 12).round();
-      
-      // 5-minute rule: 5 mins * age in months * 2 walks a day
-      int calculatedPuppyMins = ageInMonths * 5 * 2;
-
-      // Cap the puppy minutes so they don't exceed the Prime Adult maximum
-      // (e.g., A 14-month-old Pug shouldn't walk 140 mins if its adult max is 60 mins)
-      if (calculatedPuppyMins > primeAdultMax) {
-        return primeAdultMax;
-      }
-      return calculatedPuppyMins;
+  static Map<String, dynamic> calculate({
+    required String breed,
+    required double weightKg,
+    required double ageYears,
+    required String ownerActivityLevel, // 'low', 'moderate', 'high'
+  }) {
+    // 1. Determine Age Stage
+    String ageStage = 'adult';
+    if (ageYears < 1.5) {
+      ageStage = 'puppy';
+    } else if (ageYears >= 8.0) {
+      ageStage = 'senior';
     }
 
-    // 2. ADULT & SENIOR CALCULATION (1.5 years and older)
-    int index = getAgeIndex(ageInYears);
-    return minutesArray[index];
+    // 2. Get Breed Data
+    final breedInfo = breedData[breed] ?? {"is_brachycephalic": false, "breed_energy": 70};
+    bool isBrachy = breedInfo['is_brachycephalic'];
+    double breedEnergy = (breedInfo['breed_energy'] as num).toDouble();
+
+    // 3. Determine Size Class & Pace
+    String sizeClass = 'medium';
+    double sizeMultiplier = 1.0;
+    double paceKmh = 4.0;
+
+    if (weightKg < 10.0) {
+      sizeClass = 'small';
+      sizeMultiplier = constants['size_rules']['small']['multiplier'];
+      paceKmh = constants['size_rules']['small']['pace_kmh'];
+    } else if (weightKg >= 25.0) {
+      sizeClass = 'large';
+      sizeMultiplier = constants['size_rules']['large']['multiplier'];
+      paceKmh = constants['size_rules']['large']['pace_kmh'];
+    } else {
+      sizeClass = 'medium';
+      sizeMultiplier = constants['size_rules']['medium']['multiplier'];
+      paceKmh = constants['size_rules']['medium']['pace_kmh'];
+    }
+
+    // 4. Apply Brachycephalic Overrides
+    double brachyFactor = 1.0;
+    if (isBrachy) {
+      brachyFactor = constants['brachycephalic_rules']['factor_multiplier'];
+      paceKmh = constants['brachycephalic_rules']['pace_cap_kmh']; // CRITICAL OVERRIDE
+    }
+
+    // 5. Get Age & Owner Activity Multipliers
+    double ageFactor = constants['age_factors'][ageStage];
+    double ownerFactor = constants['owner_activity_multipliers'][ownerActivityLevel] ?? 1.0;
+
+    // 6. Calculate Target Minutes
+    // target_minutes = size_multiplier * breed_energy * age_factor * brachycephalic_factor * owner_activity_multiplier
+    double targetMinutes = sizeMultiplier * breedEnergy * ageFactor * brachyFactor * ownerFactor;
+
+    // 7. Calculate Target Distance (km)
+    // km_target = (target_minutes / 60) * pace_kmh
+    double kmTarget = (targetMinutes / 60.0) * paceKmh;
+
+    // 8. Round km_target to nearest 0.5 km
+    kmTarget = (kmTarget * 2).round() / 2;
+
+    return {
+      'targetMinutes': targetMinutes.round(),
+      'kmTarget': kmTarget,
+      'paceKmh': paceKmh,
+      'sizeClass': sizeClass,
+      'ageStage': ageStage,
+    };
   }
 }
