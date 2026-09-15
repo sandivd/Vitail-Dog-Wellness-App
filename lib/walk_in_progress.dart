@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'exercise_data.dart';
+import 'walk_summary.dart';
 
 class WalkInProgress extends StatefulWidget {
   const WalkInProgress({super.key, this.selectedDogs});
@@ -198,6 +199,20 @@ class _WalkInProgressState extends State<WalkInProgress> {
             child: const Text('Nice!'),
           ),
         ],
+      ),
+    );
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WalkSummary(
+          distanceMeters: _totalDistance,
+          elapsedSeconds: _elapsedSeconds,
+          goalMinutes: _goalMinutes,
+          dogs: _dogs,
+          hygiene: _hygiene,
+          routePoints: List<LatLng>.from(_polylinePoints),
+        ),
       ),
     );
   }
