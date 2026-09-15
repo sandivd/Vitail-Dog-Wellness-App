@@ -57,16 +57,31 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   String get _formattedDistance => (_totalDistance / 1000).toStringAsFixed(2);
 
-  // Recommended walk length, derived from each dog's breed + age.
-  // For a group walk we use the highest need among the selected dogs, so
-  // every dog in the group gets at least their recommended amount of exercise.
+  // Recommended walk length, derived from each dog's breed + age + weight.
+  // For a group walk, use the highest recommendation among the selected dogs.
   int get _goalMinutes {
-    if (_dogs.isEmpty) return 30; // fallback if somehow no dogs were passed in
+    if (_dogs.isEmpty) return 30;
 
     final recommended = _dogs.map((dog) {
       final breed = (dog['breed'] ?? '').toString();
-      final age = (dog['age'] as num?)?.toDouble() ?? 2.0; // assume adult if age is missing
-      return ExerciseData.getRecommendedMinutes(breed, age);
+
+      final age = (dog['age'] as num?)?.toDouble() ?? 2.0;
+
+      final weight = (dog['weight'] as num?)?.toDouble() ?? 2.0;
+
+      // Must be 'low', 'moderate', or 'high'.
+      // Change this key if your database uses a different field name.
+      final activity =
+          (dog['activity_level'] ?? 'moderate').toString().toLowerCase();
+
+      final result = ExerciseCalculator.calculate(
+        breed: breed,
+        weightKg: weight,
+        ageYears: age,
+        ownerActivityLevel: activity,
+      );
+
+      return (result['targetMinutes'] as num).toInt();
     });
 
     return recommended.reduce((a, b) => a > b ? a : b);
