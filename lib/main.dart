@@ -1,3 +1,4 @@
+import 'password_field.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'walk_screen.dart';
@@ -186,6 +187,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
 
   Future<void> _signUp() async {
+    if (!PasswordField.isValid(_passwordController.text) || !PasswordField.isValid(_confirmPasswordController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password must be 6–64 characters.')));
+      return;
+    }
     if (_passwordController.text.trim() != _confirmPasswordController.text.trim()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match!'), backgroundColor: Colors.red));
       return;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'password_field.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 /// Signup presentation, independent of the existing authentication handlers.
@@ -83,13 +84,11 @@ class SignupView extends StatelessWidget {
                               autofillHints: const [AutofillHints.username], autocorrect: false,
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
                             const SizedBox(height: 6),
-                            TextField(controller: passwordController, decoration: _decoration('Password', 'lock-keyhole'),
-                              obscureText: true, autocorrect: false, enableSuggestions: false,
+                            PasswordField(controller: passwordController, decoration: _decoration('Password', 'lock-keyhole'),
                               autofillHints: const [AutofillHints.newPassword], textInputAction: TextInputAction.next,
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
                             const SizedBox(height: 6),
-                            TextField(controller: confirmPasswordController, decoration: _decoration('Confirm Password', 'lock-keyhole'),
-                              obscureText: true, autocorrect: false, enableSuggestions: false,
+                            PasswordField(controller: confirmPasswordController, decoration: _decoration('Confirm Password', 'lock-keyhole'),
                               autofillHints: const [AutofillHints.newPassword], textInputAction: TextInputAction.done,
                               onSubmitted: (_) { if (!isLoading) onSignUp(); },
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
