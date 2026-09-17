@@ -84,7 +84,7 @@ class SignupView extends StatelessWidget {
                               autofillHints: const [AutofillHints.username], autocorrect: false,
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
                             const SizedBox(height: 6),
-                            PasswordField(controller: passwordController, decoration: _decoration('Password', 'lock-keyhole'),
+                            PasswordField(controller: passwordController, decoration: _decoration('Password (min 6 chars)', 'lock-keyhole'),
                               autofillHints: const [AutofillHints.newPassword], textInputAction: TextInputAction.next,
                               style: const TextStyle(fontFamily: 'PlusJakartaSans', color: ink)),
                             const SizedBox(height: 6),

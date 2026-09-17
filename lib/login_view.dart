@@ -68,12 +68,12 @@ class LoginView extends StatelessWidget {
                   children: [
                     Container(
                       color: cream,
-                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 28, bottom: 28),
+                      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 18, bottom: 18),
                       child: Column(children: [
                         Semantics(label: 'Vitail', image: true,
-                          child: SizedBox(width: 210, height: 201,
+                          child: SizedBox(width: 231, height: 221,
                             child: ClipRect(child: Stack(children: [
-                              Positioned(left: -5, top: -60.3, width: 301.5, height: 301.5,
+                              Positioned(left: -7, top: -66.3, width: 331.7, height: 331.7,
                                 child: Image.asset('assets/brand/vitail-logo.png', excludeFromSemantics: true)),
                             ])),
                           ),
