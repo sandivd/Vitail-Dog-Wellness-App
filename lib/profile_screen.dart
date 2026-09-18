@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'settings_screen.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -394,15 +395,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Stack(
                 children: [
                   CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.green[100],
-                    backgroundImage: _dogData?['photo_url'] != null 
-                        ? NetworkImage(_dogData!['photo_url']) 
-                        : null,
-                    child: _dogData?['photo_url'] == null
-                        ? const Icon(Icons.pets, size: 50, color: Colors.green)
-                        : null,
-                  ),
+                  radius: 50,
+                  backgroundColor: Colors.green[100],
+                  backgroundImage: _dogData?['photo_url'] != null 
+                      ? CachedNetworkImageProvider(_dogData!['photo_url']) 
+                      : null,
+                  child: _dogData?['photo_url'] == null
+                      ? const Icon(Icons.pets, size: 50, color: Colors.green)
+                      : null,
+                ),
                   // Camera icon overlay
                   Positioned(
                     bottom: 0,
