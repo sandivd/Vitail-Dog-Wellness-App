@@ -54,26 +54,34 @@ class _CheckInScreenState extends State<CheckInScreen> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       
-      // 1. Fetch current points
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points')
-          .eq('id', userId)
-          .single();
-      
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int newPoints = currentPoints - widget.cost;
-
-      // 2. Deduct points
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': newPoints,
-      }).eq('id', userId);
-
-      // 3. Show success screen
-      setState(() {
-        _isCollected = true;
-        _isProcessing = false;
+      // 1. Call the secure Supabase RPC function!
+      final success = await Supabase.instance.client.rpc('redeem_reward', params: {
+        'p_cost': widget.cost,
+        'p_reward_title': widget.title,
       });
+
+      if (success == true) {
+        // 2. Fetch the newly updated points to show on the UI
+        final profileRes = await Supabase.instance.client
+            .from('profiles')
+            .select('total_points')
+            .eq('id', userId)
+            .single();
+        
+        int newPoints = profileRes['total_points'] ?? 0;
+
+        // 3. Show success screen
+        setState(() {
+          _isCollected = true;
+          _isProcessing = false;
+        });
+      } else {
+        // The database rejected it because they didn't have enough points
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not enough points!'), backgroundColor: Colors.red),
+        );
+        setState(() => _isProcessing = false);
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),

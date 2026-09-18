@@ -313,16 +313,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                         // 2. If NOT done yet, give 50 points!
                         if (taskCheck?['weight_done'] != true) {
-                          final profileRes = await Supabase.instance.client
-                              .from('profiles')
-                              .select('total_points')
-                              .eq('id', userId)
-                              .single();
-                          
-                          int currentPoints = profileRes['total_points'] ?? 0;
-                          await Supabase.instance.client.from('profiles').update({
-                            'total_points': currentPoints + 50,
-                          }).eq('id', userId);
+                          await Supabase.instance.client.rpc('add_points', params: {'p_amount': 50});
                         }
 
                         // 3. Mark task as done
