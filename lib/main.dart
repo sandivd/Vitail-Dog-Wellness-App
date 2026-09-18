@@ -16,6 +16,7 @@ import 'package:intl/intl.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'exercise_data.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -557,6 +558,17 @@ class _HomeScreenState extends State<HomeScreen> {
   
   @override
   Widget build(BuildContext context) {
+    // 1. Show a clean loading screen while fetching data!
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF4F0E9),
+        body: const Center(
+          child: CircularProgressIndicator(color: Color(0xFFDC755C)), // Coral spinner
+        ),
+      );
+    }
+
+    // 2. Once loaded, build the actual UI
     // List of screens for the bottom nav
     final screens = [
       // Index 0: Home
@@ -573,7 +585,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   CircleAvatar(
                     radius: 24,
                     backgroundColor: Colors.grey[300],
-                    backgroundImage: _dogPhotoUrl != null ? NetworkImage(_dogPhotoUrl!) : null,
+                    // Use CachedNetworkImageProvider instead of NetworkImage!
+                    backgroundImage: _dogPhotoUrl != null 
+                        ? CachedNetworkImageProvider(_dogPhotoUrl!) 
+                        : null,
                     child: _dogPhotoUrl == null ? const Icon(Icons.pets, color: Colors.grey) : null,
                   ),
                   const SizedBox(width: 16),
