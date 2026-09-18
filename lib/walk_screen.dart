@@ -567,19 +567,6 @@ class _RouteLink extends StatelessWidget {
 }
 
 
-class _Dot extends StatelessWidget {
-  const _Dot({required this.color});
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
 
 /// A single nearby-venue row: placeholder thumbnail, name/subtitle, tag pill,
 /// and a chevron. Backed by placeholder data for now (see _nearbyVenues).

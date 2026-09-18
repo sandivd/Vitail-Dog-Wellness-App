@@ -197,26 +197,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Walk Finished!'),
-        content: Text('You walked ${_totalDistance.toStringAsFixed(0)} meters!'),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await _saveWalk();
-              if (dialogContext.mounted) {
-                Navigator.popUntil(dialogContext, (route) => route.isFirst);
-              }
-            },
-            child: const Text('Nice!'),
-          ),
-        ],
-      ),
-    );
-
+    // We removed the showDialog and _saveWalk() from here!
+    // The WalkSummary screen will handle saving the data when the user clicks 'Done'.
+    
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -231,107 +214,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
       ),
     );
   }
-
-  Future<void> _saveWalk() async {
-    int pointsEarned = (_totalDistance / 100).floor();
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    final today = DateTime.now();
-    final todayDateOnly = DateTime(today.year, today.month, today.day);
-    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
-
-    try {
-      // 1. Save the walk
-      // NOTE: 'walk_date' is required here — profile_screen.dart and
-      // walk_history_screen.dart both read/filter on it, and omitting it
-      // was causing every insert to fail (surfacing as "network error").
-      await Supabase.instance.client.from('walks').insert({
-        'user_id': userId,
-        'walk_date': todayStr,
-        'distance_meters': _totalDistance,
-        'duration_seconds': _elapsedSeconds,
-        'points_earned': pointsEarned,
-      });
-
-      // 2. Fetch current points, streak, and last walk date
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points, daily_streak, last_walk_date')
-          .eq('id', userId)
-          .single();
-
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int currentStreak = profileRes['daily_streak'] ?? 0;
-      String? lastWalkStr = profileRes['last_walk_date'];
-
-      // 3. Calculate new streak
-      int newStreak = 1;
-
-      if (lastWalkStr != null) {
-        final lastWalk = DateTime.parse(lastWalkStr);
-        final lastWalkDateOnly =
-            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
-        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
-
-        if (diffInDays == 1) {
-          newStreak = currentStreak + 1;
-        } else if (diffInDays == 0) {
-          newStreak = currentStreak;
-        }
-      }
-
-      // 4. Complete walk quest & give bonus points
-      if (_totalDistance >= 1000) {
-        final taskCheck = await Supabase.instance.client
-            .from('daily_tasks')
-            .select('walk_done')
-            .eq('user_id', userId)
-            .eq('task_date', todayStr)
-            .maybeSingle();
-
-        if (taskCheck?['walk_done'] != true) {
-          pointsEarned += 50;
-
-          await Supabase.instance.client.from('daily_tasks').upsert({
-            'user_id': userId,
-            'task_date': todayStr,
-            'walk_done': true,
-          }, onConflict: 'user_id, task_date');
-        }
-      }
-
-      // 5. Update profile with new points, streak, and date
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': currentPoints + pointsEarned,
-        'daily_streak': newStreak,
-        'last_walk_date': todayStr,
-      }).eq('id', userId);
-    } on PostgrestException catch (e) {
-      // Database/query errors (bad column, RLS denial, constraint violation, etc.)
-      // Surface the real message instead of mislabeling this as a network issue.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save walk: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // Genuine connectivity/other errors.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Network error: Could not save walk. Check your connection.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
