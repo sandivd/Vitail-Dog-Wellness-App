@@ -10,64 +10,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _nameController = TextEditingController();
-  final _breedController = TextEditingController();
-  final _ageController = TextEditingController();
-  final _weightController = TextEditingController();
-  
   bool _notificationsEnabled = true;
-  bool _isLoading = false;
-  Map<String, dynamic>? _dogData;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchDogData();
-  }
-
-  Future<void> _fetchDogData() async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    final response = await Supabase.instance.client
-        .from('dogs')
-        .select()
-        .eq('owner_id', userId)
-        .limit(1)
-        .maybeSingle();
-
-    if (response != null) {
-      setState(() {
-        _dogData = response;
-        _nameController.text = response['dog_name'] ?? '';
-        _breedController.text = response['breed'] ?? '';
-        _ageController.text = (response['age'] ?? 0).toString();
-        _weightController.text = (response['weight'] ?? 0).toString();
-      });
-    }
-  }
-
-  Future<void> _saveDogDetails() async {
-    setState(() => _isLoading = true);
-    try {
-      await Supabase.instance.client.from('dogs').update({
-        'dog_name': _nameController.text.trim(),
-        'breed': _breedController.text.trim(),
-        'age': double.tryParse(_ageController.text) ?? 0.0,
-        'weight': double.tryParse(_weightController.text) ?? 0.0,
-      }).eq('id', _dogData?['id']);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Details updated successfully!'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,38 +20,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
-          // --- ACCOUNT SECTION ---
-          _buildSectionHeader('PET DETAILS'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Dog Name')),
-                    TextField(controller: _breedController, decoration: const InputDecoration(labelText: 'Breed')),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: _ageController, decoration: const InputDecoration(labelText: 'Age'), keyboardType: TextInputType.number)),
-                        const SizedBox(width: 16),
-                        Expanded(child: TextField(controller: _weightController, decoration: const InputDecoration(labelText: 'Weight (kg)'), keyboardType: TextInputType.number)),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _saveDogDetails,
-                        child: _isLoading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save Changes'),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           // --- PREFERENCES SECTION ---
           _buildSectionHeader('PREFERENCES'),
           Card(
