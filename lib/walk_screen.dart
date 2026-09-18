@@ -18,7 +18,6 @@ class WalkScreen extends StatefulWidget {
 class _WalkScreenState extends State<WalkScreen> {
   static const Color pageBg = Color(0xFFEFECE6);
   static const Color coral = Color(0xFFBA5A3A);
-  static const Color ink = Color(0xFF1E1E1E);
   static const Color muted = Color(0xFF7C776E);
   static const Color linkBlue = Color(0xFF3E6FB0);
 
@@ -103,9 +102,6 @@ class _WalkScreenState extends State<WalkScreen> {
         return;
       }
 
-
-
-      // BUG: current position off rn
       final position = await Geolocator.getCurrentPosition();
       if (!mounted) return;
       setState(() {
@@ -159,9 +155,6 @@ class _WalkScreenState extends State<WalkScreen> {
     _mapController?.animateCamera(CameraUpdate.newLatLng(point));
   }
 
-
-
-// search bar currently buggy
   void _onSearchSubmitted(String query) {
     // Placeholder search: matches against the local venue list so the field
     // is interactive today. A real Google-Maps-style search bar needs a
@@ -223,9 +216,19 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   void _startWalk() {
+    // Carry the dropped-pin route forward if the user set one up — it'll
+    // show on the map once tracking begins in WalkInProgress.
+    final hasPlannedRoute = _currentPosition != null && _droppedPin != null;
+
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ChooseDogProfiles()),
+      MaterialPageRoute(
+        builder: (context) => ChooseDogProfiles(
+          plannedRoute: hasPlannedRoute
+              ? [_currentPosition!, _droppedPin!]
+              : null,
+        ),
+      ),
     );
   }
 
@@ -567,19 +570,6 @@ class _RouteLink extends StatelessWidget {
 }
 
 
-class _Dot extends StatelessWidget {
-  const _Dot({required this.color});
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-}
 
 /// A single nearby-venue row: placeholder thumbnail, name/subtitle, tag pill,
 /// and a chevron. Backed by placeholder data for now (see _nearbyVenues).

@@ -8,9 +8,13 @@ import 'exercise_data.dart';
 import 'walk_summary.dart';
 
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.selectedDogs});
+  const WalkInProgress({super.key, this.selectedDogs, this.plannedRoute});
 
   final List<Map<String, dynamic>>? selectedDogs;
+
+  // Route the user planned on WalkScreen by dropping a pin, shown on the
+  // map as a reference alongside the live-tracked route.
+  final List<LatLng>? plannedRoute;
 
   @override
   State<WalkInProgress> createState() => _WalkInProgressState();
@@ -25,7 +29,6 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   GoogleMapController? _mapController;
 
-  bool _isWalking = false;
   bool _isPaused = false;
   double _totalDistance = 0.0; // meters
   int _elapsedSeconds = 0;
@@ -57,8 +60,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   String get _formattedDistance => (_totalDistance / 1000).toStringAsFixed(2);
 
-  // Recommended walk length, derived from each dog's breed + age + weight.
-  // For a group walk, use the highest recommendation among the selected dogs.
+  // Recommended walk length, derived from each dog's breed + age.
+  // For a group walk we use the highest need among the selected dogs, so
+  // every dog in the group gets at least their recommended amount of exercise.
   int get _goalMinutes {
     if (_dogs.isEmpty) return 30;
 
@@ -135,7 +139,6 @@ class _WalkInProgressState extends State<WalkInProgress> {
     }
 
     setState(() {
-      _isWalking = true;
       _isPaused = false;
     });
 
@@ -191,7 +194,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
     });
   }
 
-  Future<void> _finishWalk() async {
+  void _finishWalk() {
     _timer?.cancel();
     _positionStream?.cancel();
 
@@ -229,6 +232,64 @@ class _WalkInProgressState extends State<WalkInProgress> {
           routePoints: List<LatLng>.from(_polylinePoints),
         ),
       ),
+    );
+  }
+
+  Set<Polyline> get _polylines {
+    final polylines = <Polyline>{
+      Polyline(
+        polylineId: const PolylineId('walk_route'),
+        points: _polylinePoints,
+        color: buttonColor,
+        width: 6,
+      ),
+    };
+
+    // Route the user planned on WalkScreen before starting — shown as a
+    // dashed reference line so they can see it while actually walking.
+    if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('planned_route'),
+          points: widget.plannedRoute!,
+          color: Colors.black45,
+          width: 4,
+          patterns: [PatternItem.dash(14), PatternItem.gap(10)],
+        ),
+      );
+    }
+
+    return polylines;
+  }
+
+  Set<Marker> get _markers {
+    if (widget.plannedRoute == null || widget.plannedRoute!.isEmpty) {
+      return {};
+    }
+    return {
+      Marker(
+        markerId: const MarkerId('planned_destination'),
+        position: widget.plannedRoute!.last,
+      ),
+    };
+  }
+
+  LatLngBounds _boundsFor(List<LatLng> points) {
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final point in points) {
+      minLat = point.latitude < minLat ? point.latitude : minLat;
+      maxLat = point.latitude > maxLat ? point.latitude : maxLat;
+      minLng = point.longitude < minLng ? point.longitude : minLng;
+      maxLng = point.longitude > maxLng ? point.longitude : maxLng;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
     );
   }
 
@@ -341,19 +402,25 @@ class _WalkInProgressState extends State<WalkInProgress> {
           // Map fills the whole screen; the sheet slides over it.
           Positioned.fill(
             child: GoogleMap(
-              onMapCreated: (c) => _mapController = c,
+              onMapCreated: (c) {
+                _mapController = c;
+                if (widget.plannedRoute != null &&
+                    widget.plannedRoute!.length >= 2) {
+                  final bounds = _boundsFor(widget.plannedRoute!);
+                  // Give the map a beat to lay out before fitting bounds.
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    _mapController?.animateCamera(
+                      CameraUpdate.newLatLngBounds(bounds, 60),
+                    );
+                  });
+                }
+              },
               initialCameraPosition:
                   const CameraPosition(target: _melbourne, zoom: 16.0),
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
-              polylines: {
-                Polyline(
-                  polylineId: const PolylineId('walk_route'),
-                  points: _polylinePoints,
-                  color: buttonColor,
-                  width: 6,
-                ),
-              },
+              polylines: _polylines,
+              markers: _markers,
             ),
           ),
 
