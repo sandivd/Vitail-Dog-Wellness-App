@@ -106,18 +106,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: const Color(0xFFF4F0E9),
-        body: const Center(
-          child: CircularProgressIndicator(color: Color(0xFFDC755C)),
+        backgroundColor: colorScheme.surface,
+        body: Center(
+          child: CircularProgressIndicator(color: colorScheme.primary),
         ),
       );
     }
 
     final screens = [
+      // Index 0: Home
       Container(
-        color: const Color(0xFFF4F0E9),
+        color: colorScheme.surface,
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
           child: Column(
@@ -127,16 +131,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: Colors.grey[300],
+                    backgroundColor: colorScheme.onSurfaceVariant.withOpacity(0.2),
                     backgroundImage: _dogPhotoUrl != null 
                         ? CachedNetworkImageProvider(_dogPhotoUrl!) 
                         : null,
-                    child: _dogPhotoUrl == null ? const Icon(Icons.pets, color: Colors.grey) : null,
+                    child: _dogPhotoUrl == null ? Icon(Icons.pets, color: colorScheme.onSurfaceVariant) : null,
                   ),
                   const SizedBox(width: 16),
                   Text(
                     'Hi $_dogName!',
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF241C24)),
+                    style: TextStyle(
+                      fontSize: 24, 
+                      fontWeight: FontWeight.bold, 
+                      color: colorScheme.onSurface,
+                      fontFamily: 'PlusJakartaSans',
+                    ),
                   ),
                 ],
               ),
@@ -155,8 +164,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: CircularProgressIndicator(
                           value: (_currentKm / _dailyGoalKm).clamp(0.0, 1.0),
                           strokeWidth: 14,
-                          color: const Color(0xFF5F98BD),
-                          backgroundColor: const Color(0xFF5F98BD).withOpacity(0.2),
+                          color: colorScheme.secondary,
+                          backgroundColor: colorScheme.secondary.withOpacity(0.2),
                         ),
                       ),
                       SizedBox(
@@ -165,8 +174,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: CircularProgressIndicator(
                           value: (_currentMins / _dailyGoalMins).clamp(0.0, 1.0),
                           strokeWidth: 10,
-                          color: const Color(0xFFAEC568),
-                          backgroundColor: const Color(0xFFAEC568).withOpacity(0.2),
+                          color: colorScheme.tertiary,
+                          backgroundColor: colorScheme.tertiary.withOpacity(0.2),
                         ),
                       ),
                       Column(
@@ -175,20 +184,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         children: [
                           Text(
                             '${_currentKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24, 
                               fontWeight: FontWeight.w800, 
-                              color: Color(0xFF5F98BD), 
+                              color: colorScheme.secondary, 
                               fontFamily: 'PlusJakartaSans',
                               height: 1.0, 
                             ),
                           ),
-                          const Text(
+                          Text(
                             'KM',
                             style: TextStyle(
                               fontSize: 14, 
                               fontWeight: FontWeight.w800, 
-                              color: Color(0xFF6B5F66), 
+                              color: colorScheme.onSurfaceVariant, 
                               fontFamily: 'PlusJakartaSans',
                               height: 1.0, 
                             ),
@@ -197,20 +206,20 @@ class _HomeScreenState extends State<HomeScreen> {
                           
                           Text(
                             '$_currentMins/$_dailyGoalMins',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 24, 
                               fontWeight: FontWeight.w800, 
-                              color: Color(0xFFAEC568), 
+                              color: colorScheme.tertiary, 
                               fontFamily: 'PlusJakartaSans',
                               height: 1.0, 
                             ),
                           ),
-                          const Text(
+                          Text(
                             'MINS',
                             style: TextStyle(
                               fontSize: 14, 
                               fontWeight: FontWeight.w800, 
-                              color: Color(0xFF6B5F66), 
+                              color: colorScheme.onSurfaceVariant, 
                               fontFamily: 'PlusJakartaSans',
                               height: 1.0, 
                             ),
@@ -226,11 +235,11 @@ class _HomeScreenState extends State<HomeScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildFigmaStatCard('Points earned', '$_totalPoints pts', Icons.star),
+                    child: _buildFigmaStatCard('Points earned', '$_totalPoints pts', Icons.star, context),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildFigmaStatCard('Streaks', '$_dailyStreak days', Icons.local_fire_department),
+                    child: _buildFigmaStatCard('Streaks', '$_dailyStreak days', Icons.local_fire_department, context),
                   ),
                 ],
               ),
@@ -248,8 +257,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: const Icon(Icons.play_arrow, size: 24),
                   label: const Text('Start walk', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFDC755C),
-                    foregroundColor: Colors.white,
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                     elevation: 0,
                   ),
@@ -262,7 +271,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   onPressed: () {
                     Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
                   },
-                  child: const Text('View Walk History', style: TextStyle(color: Color(0xFF6B5F66))),
+                  child: Text(
+                    'View Walk History', 
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
                 ),
               ),
             ],
@@ -281,8 +293,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: const Color(0xFFDAD6CD), width: 1)),
+          color: colorScheme.surface,
+          border: Border(top: BorderSide(color: colorScheme.onSurfaceVariant.withOpacity(0.2), width: 1)),
         ),
         padding: EdgeInsets.only(
           top: 8.0,
@@ -290,22 +302,24 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Row(
           children: [
-            _buildCustomNavItem(0, 'Home', homeIconSvg),
-            _buildCustomNavItem(1, 'Explore', exploreIconSvg),
-            _buildCustomNavItem(2, 'Rewards', rewardsIconSvg),
-            _buildCustomNavItem(3, 'Profile', profileIconSvg),
+            _buildCustomNavItem(0, 'Home', homeIconSvg, context),
+            _buildCustomNavItem(1, 'Explore', exploreIconSvg, context),
+            _buildCustomNavItem(2, 'Rewards', rewardsIconSvg, context),
+            _buildCustomNavItem(3, 'Profile', profileIconSvg, context),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildFigmaStatCard(String title, String value, IconData icon) {
+  Widget _buildFigmaStatCard(String title, String value, IconData icon, BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: colorScheme.onSurfaceVariant.withOpacity(0.1)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -317,19 +331,37 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: const Color(0xFF6B5F66)),
+          Icon(icon, color: colorScheme.onSurfaceVariant),
           const SizedBox(height: 8),
-          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF241C24))),
+          Text(
+            value, 
+            style: TextStyle(
+              fontSize: 20, 
+              fontWeight: FontWeight.bold, 
+              color: colorScheme.onSurface,
+              fontFamily: 'PlusJakartaSans',
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(title, style: const TextStyle(fontSize: 12, color: Color(0xFF6B5F66))),
+          Text(
+            title, 
+            style: TextStyle(
+              fontSize: 12, 
+              color: colorScheme.onSurfaceVariant,
+              fontFamily: 'PlusJakartaSans',
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCustomNavItem(int index, String label, String svgString) {
+  Widget _buildCustomNavItem(int index, String label, String svgString, BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     bool isActive = _currentIndex == index;
-    String hexColor = isActive ? '#4E6B45' : '#6E6A63'; 
+    
+    // Active is primary, inactive is muted grey
+    String hexColor = isActive ? '#${colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}' : '#${colorScheme.onSurfaceVariant.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'; 
     
     String coloredSvg = svgString.replaceAll('[[COLOR]]', hexColor);
 
@@ -350,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               label, 
               style: TextStyle(
-                color: Color(int.parse(hexColor.replaceFirst('#', 'FF'), radix: 16)), 
+                color: isActive ? colorScheme.primary : colorScheme.onSurfaceVariant, 
                 fontSize: 12,
                 fontFamily: 'PlusJakartaSans',
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,

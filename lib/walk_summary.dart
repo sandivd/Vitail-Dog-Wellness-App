@@ -31,13 +31,6 @@ class WalkSummary extends StatefulWidget {
 }
 
 class _WalkSummaryState extends State<WalkSummary> {
-  static const Color pageBg = Color(0xFFEFECE6);
-  static const Color coral = Color(0xFFBA5A3A);
-  static const Color ink = Color(0xFF1E1E1E);
-  static const Color muted = Color(0xFF7C776E);
-  static const Color goalGreen = Color(0xFFD9E4B0);
-  static const Color goalGreenText = Color(0xFF5C6B3F);
-
   static const List<String> _moods = [
     'Active',
     'Playful',
@@ -289,20 +282,22 @@ class _WalkSummaryState extends State<WalkSummary> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: pageBg,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           children: [
-            const Center(
+            Center(
               child: Text(
                 'WALK SUMMARY',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.0,
-                  color: muted,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -312,11 +307,11 @@ class _WalkSummaryState extends State<WalkSummary> {
               child: Container(
                 width: 64,
                 height: 64,
-                decoration: const BoxDecoration(
-                  color: goalGreen,
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.star_rounded, color: goalGreenText, size: 30),
+                child: Icon(Icons.star_rounded, color: colorScheme.onSecondaryContainer, size: 30),
               ),
             ),
             const SizedBox(height: 16),
@@ -324,10 +319,10 @@ class _WalkSummaryState extends State<WalkSummary> {
             Text(
               _headline,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: ink,
+                color: colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 24),
@@ -351,7 +346,7 @@ class _WalkSummaryState extends State<WalkSummary> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: goalGreen,
+                color: colorScheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Center(
@@ -359,8 +354,8 @@ class _WalkSummaryState extends State<WalkSummary> {
                   _pointsPreview == null
                       ? 'Calculating points…'
                       : '+$_pointsPreview points earned',
-                  style: const TextStyle(
-                    color: goalGreenText,
+                  style: TextStyle(
+                    color: colorScheme.onSecondaryContainer,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -369,13 +364,13 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 28),
 
-            const Text(
+            Text(
               'HOW WAS THE WALK?',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: muted,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
@@ -395,13 +390,13 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 28),
 
-            const Text(
+            Text(
               'ROUTE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: muted,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
@@ -410,7 +405,7 @@ class _WalkSummaryState extends State<WalkSummary> {
 
             if (widget.dogs.isNotEmpty) ...[
               Row(
-                children: const [
+                children: [
                   Expanded(
                     child: Text(
                       'HYGIENE',
@@ -418,7 +413,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: muted,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -431,7 +426,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: muted,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -444,7 +439,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: muted,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -462,15 +457,15 @@ class _WalkSummaryState extends State<WalkSummary> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE7E2D8)),
+                    border: Border.all(color: colorScheme.outline),
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: const Color(0xFFDDD8CC),
+                        backgroundColor: colorScheme.surfaceContainerHighest,
                         backgroundImage:
                             photoUrl != null && photoUrl.toString().isNotEmpty
                                 ? NetworkImage(photoUrl)
@@ -485,12 +480,12 @@ class _WalkSummaryState extends State<WalkSummary> {
                               name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 15),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 15, color: colorScheme.onSurface),
                             ),
                             Text(
                               _hygieneStatus(dogId),
-                              style: const TextStyle(fontSize: 12, color: muted),
+                              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -519,13 +514,13 @@ class _WalkSummaryState extends State<WalkSummary> {
               const SizedBox(height: 20),
             ],
 
-            const Text(
+            Text(
               'NOTE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: muted,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -534,20 +529,20 @@ class _WalkSummaryState extends State<WalkSummary> {
               decoration: InputDecoration(
                 hintText: 'Add a walk note...',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: colorScheme.surface,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE0DCD3)),
+                  borderSide: BorderSide(color: colorScheme.outline),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE0DCD3)),
+                  borderSide: BorderSide(color: colorScheme.outline),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: coral),
+                  borderSide: BorderSide(color: colorScheme.primary),
                 ),
               ),
             ),
@@ -563,9 +558,9 @@ class _WalkSummaryState extends State<WalkSummary> {
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _finishAndSave,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: coral,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: coral.withValues(alpha: 0.6),
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  disabledBackgroundColor: colorScheme.primary.withValues(alpha: 0.6),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
@@ -601,11 +596,13 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outline),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -618,20 +615,20 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF7C776E),
+              color: colorScheme.onSurfaceVariant,
               letterSpacing: 0.6,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E1E1E),
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -651,27 +648,25 @@ class _MoodChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  static const Color _selectedBg = Color(0xFF6D8CA3);
-  static const Color _ink = Color(0xFF1E1E1E);
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? _selectedBg : Colors.white,
+          color: selected ? colorScheme.secondary : colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? _selectedBg : const Color(0xFFE0DCD3),
+            color: selected ? colorScheme.secondary : colorScheme.outline,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : _ink,
+            color: selected ? colorScheme.onSecondary : colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -692,22 +687,19 @@ class _HygieneButton extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  static const Color _activeBg = Color(0xFFD9E4B0);
-  static const Color _activeText = Color(0xFF5C6B3F);
-  static const Color _ink = Color(0xFF1E1E1E);
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? _activeBg : Colors.white,
+          color: active ? colorScheme.secondaryContainer : colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: active ? _activeBg : const Color(0xFFE0DCD3),
+            color: active ? colorScheme.secondaryContainer : colorScheme.outline,
           ),
         ),
         child: Text(
@@ -716,7 +708,7 @@ class _HygieneButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: active ? _activeText : _ink,
+            color: active ? colorScheme.onSecondaryContainer : colorScheme.onSurface,
           ),
         ),
       ),
@@ -759,8 +751,10 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    
     if (widget.points.length < 2) {
-      return _placeholder();
+      return _placeholder(context);
     }
 
     return ClipRRect(
@@ -773,7 +767,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
             Polyline(
               polylineId: const PolylineId('summary_route'),
               points: widget.points,
-              color: const Color(0xFFBA5A3A),
+              color: colorScheme.primary,
               width: 5,
             ),
           },
@@ -797,12 +791,13 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
     );
   }
 
-  Widget _placeholder() {
+  Widget _placeholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       height: 180,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFD3E3DA),
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Stack(
@@ -816,7 +811,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
                   width: 32,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -825,18 +820,18 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
                   width: 20,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ],
             ),
           ),
-          const Center(
+          Center(
             child: Text(
               'Route map',
               style: TextStyle(
-                color: Color(0xFF5C6B58),
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -860,6 +855,7 @@ class _PhotoPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (photo == null) {
       return InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -868,13 +864,13 @@ class _PhotoPicker extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F0EA),
+            color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Center(
+          child: Center(
             child: Text(
               '+ Add photo',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E1E1E)),
+              style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.onSurface),
             ),
           ),
         ),
