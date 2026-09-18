@@ -42,12 +42,14 @@ class VitailApp extends StatelessWidget {
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.light),
             useMaterial3: true,
+            fontFamily: 'PlusJakartaSans', // Add this line!
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.green, brightness: Brightness.dark),
             useMaterial3: true,
+            fontFamily: 'PlusJakartaSans', // Add this line!
           ),
-          themeMode: currentMode, // This switches the theme!
+          themeMode: currentMode, 
           home: const LoginScreen(),
         );
       },
@@ -478,59 +480,72 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _currentIndex = 0;
   int _totalPoints = 0;
   int _dailyStreak = 0;
   bool _isLoading = true;
-  bool _walkTaskDone = false;
-  bool _weightTaskDone = false;
+    int _currentIndex = 0;
+  
+  // New variables for the Figma UI
+  String _dogName = 'Dog';
+  String? _dogPhotoUrl;
+  double _dailyGoalKm = 3.0;
+  int _dailyGoalMins = 60;
+  double _currentKm = 0.0;
+  int _currentMins = 0;
 
   @override
   void initState() {
     super.initState();
-    _fetchPoints();
+    _fetchHomeData();
   }
 
-  Future<void> _fetchPoints() async {
+  Future<void> _fetchHomeData() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-      final response = await Supabase.instance.client
+      
+      // 1. Fetch points & streak
+      final profileRes = await Supabase.instance.client
           .from('profiles')
           .select('total_points, daily_streak') 
           .eq('id', userId)
           .single();
       
-      setState(() {
-        _totalPoints = response['total_points'] ?? 0;
-        _dailyStreak = response['daily_streak'] ?? 0; // Now it will grab the real number!
-        _isLoading = false;
-      });
-      _fetchTasks();
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _fetchTasks() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      final today = DateTime.now().toIso8601String().split('T')[0];
-      
-      final response = await Supabase.instance.client
-          .from('daily_tasks')
-          .select()
-          .eq('user_id', userId)
-          .eq('task_date', today)
+      // 2. Fetch dog details (name, photo, goals)
+      final dogRes = await Supabase.instance.client
+          .from('dogs')
+          .select('dog_name, photo_url, daily_goal_km, daily_goal_minutes')
+          .eq('owner_id', userId)
+          .limit(1)
           .maybeSingle();
 
+      // 3. Fetch today's walks to calculate current progress
+      final today = DateTime.now().toIso8601String().split('T')[0];
+      final walksRes = await Supabase.instance.client
+          .from('walks')
+          .select('distance_meters, duration_seconds')
+          .eq('user_id', userId)
+          .gte('walk_date', today);
+
+      double kmToday = 0;
+      int minsToday = 0;
+      for (var walk in walksRes) {
+        kmToday += (walk['distance_meters'] as num).toDouble() / 1000;
+        minsToday += (walk['duration_seconds'] as num).toInt() ~/ 60;
+      }
+
       setState(() {
-        _walkTaskDone = response?['walk_done'] ?? false;
-        _weightTaskDone = response?['weight_done'] ?? false;
+        _totalPoints = profileRes['total_points'] ?? 0;
+        _dailyStreak = profileRes['daily_streak'] ?? 0;
+        _dogName = dogRes?['dog_name'] ?? 'Dog';
+        _dogPhotoUrl = dogRes?['photo_url'];
+        _dailyGoalKm = (dogRes?['daily_goal_km'] ?? 3.0).toDouble();
+        _dailyGoalMins = (dogRes?['daily_goal_minutes'] ?? 60).toInt();
+        _currentKm = kmToday;
+        _currentMins = minsToday;
+        _isLoading = false;
       });
     } catch (e) {
-      // Silently fail
+      setState(() => _isLoading = false);
     }
   }
 
@@ -545,60 +560,162 @@ class _HomeScreenState extends State<HomeScreen> {
     // List of screens for the bottom nav
     final screens = [
       // Index 0: Home
-      Center(
-        child: SingleChildScrollView( // Wrap in SingleChildScrollView to prevent overflow
+      Container(
+        color: const Color(0xFFF4F0E9), // Figma background color
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.pets, size: 80, color: Colors.green),
-              const SizedBox(height: 16),
-              const Text('Welcome to Vitail!', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              _isLoading 
-                ? const CircularProgressIndicator()
-                : Text('Points: $_totalPoints', style: const TextStyle(fontSize: 28, color: Colors.green, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text('🔥 $_dailyStreak Day Streak!', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-              const SizedBox(height: 24),
+              // Header (Avatar + Hi Dog Name)
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: Colors.grey[300],
+                    backgroundImage: _dogPhotoUrl != null ? NetworkImage(_dogPhotoUrl!) : null,
+                    child: _dogPhotoUrl == null ? const Icon(Icons.pets, color: Colors.grey) : null,
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    'Hi $_dogName!',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF241C24)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
               
-              // Weekly Quests Card
-              Card(
-                margin: const EdgeInsets.symmetric(horizontal: 32),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              // Progress Rings
+              Center(
+                child: SizedBox(
+                  width: 200,
+                  height: 200,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      const Text('Weekly Quests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // <-- Changed to Weekly
-                      const SizedBox(height: 12),
-                      _buildQuestTile('Walk 1km this week', _walkTaskDone, Icons.directions_walk), // <-- Updated text
-                      _buildQuestTile('Log dog\'s weight (Bonus)', _weightTaskDone, Icons.scale),
+                      // Outer Ring (KM Progress) - Blue #5F98BD
+                      SizedBox(
+                        width: 186,
+                        height: 186,
+                        child: CircularProgressIndicator(
+                          value: (_currentKm / _dailyGoalKm).clamp(0.0, 1.0),
+                          strokeWidth: 14,
+                          color: const Color(0xFF5F98BD),
+                          backgroundColor: const Color(0xFF5F98BD).withOpacity(0.2),
+                        ),
+                      ),
+                      // Inner Ring (Minutes Progress) - Green #AEC568
+                      SizedBox(
+                        width: 150,
+                        height: 150,
+                        child: CircularProgressIndicator(
+                          value: (_currentMins / _dailyGoalMins).clamp(0.0, 1.0),
+                          strokeWidth: 10,
+                          color: const Color(0xFFAEC568),
+                          backgroundColor: const Color(0xFFAEC568).withOpacity(0.2),
+                        ),
+                      ),
+                      // Center Text
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // KM Section
+                          Text(
+                            '${_currentKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
+                            style: const TextStyle(
+                              fontSize: 24, 
+                              fontWeight: FontWeight.w800, // Changed to w800
+                              color: Color(0xFF5F98BD), 
+                              fontFamily: 'PlusJakartaSans',
+                              height: 1.0, 
+                            ),
+                          ),
+                          const Text(
+                            'KM',
+                            style: TextStyle(
+                              fontSize: 14, 
+                              fontWeight: FontWeight.w800, // Changed to w800
+                              color: Color(0xFF6B5F66), 
+                              fontFamily: 'PlusJakartaSans',
+                              height: 1.0, 
+                            ),
+                          ),
+                          const SizedBox(height: 4), 
+                          
+                          // Mins Section
+                          Text(
+                            '$_currentMins/$_dailyGoalMins',
+                            style: const TextStyle(
+                              fontSize: 24, 
+                              fontWeight: FontWeight.w800, // Changed to w800
+                              color: Color(0xFFAEC568), 
+                              fontFamily: 'PlusJakartaSans',
+                              height: 1.0, 
+                            ),
+                          ),
+                          const Text(
+                            'MINS',
+                            style: TextStyle(
+                              fontSize: 14, 
+                              fontWeight: FontWeight.w800, // Changed to w800
+                              color: Color(0xFF6B5F66), 
+                              fontFamily: 'PlusJakartaSans',
+                              height: 1.0, 
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-
-              ElevatedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    _currentIndex = 1; // Switch to Walk tab
-                  });
-                },
-                icon: const Icon(Icons.directions_walk),
-                label: const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text('Start Walk', style: TextStyle(fontSize: 18)),
-                ),
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+              const SizedBox(height: 32),
+              
+              // Stats Cards (Points & Streak)
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildFigmaStatCard('Points earned', '$_totalPoints pts', Icons.star),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildFigmaStatCard('Streaks', '$_dailyStreak days', Icons.local_fire_department),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              
+              // Start Walk Button (Coral #DC755C)
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _currentIndex = 1; // Switch to Walk tab
+                    });
+                  },
+                  icon: const Icon(Icons.play_arrow, size: 24),
+                  label: const Text('Start walk', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFDC755C),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    elevation: 0,
+                  ),
                 ),
               ),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
-                },
-                child: const Text('View Walk History'),
+              const SizedBox(height: 16),
+              
+              // View Walk History Text Button (Kept for functionality)
+              Center(
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
+                  },
+                  child: const Text('View Walk History', style: TextStyle(color: Color(0xFF6B5F66))),
+                ),
               ),
             ],
           ),
@@ -613,9 +730,6 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Vitail'),
-      ),
       body: IndexedStack(
         index: _currentIndex,
         children: screens,
@@ -641,6 +755,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildFigmaStatCard(String title, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xFF6B5F66)),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF241C24))),
+          const SizedBox(height: 4),
+          Text(title, style: const TextStyle(fontSize: 12, color: Color(0xFF6B5F66))),
+        ],
+      ),
+    );
+  }
+
   Widget _buildCustomNavItem(int index, String label, String iconPath, String viewBox) {
     bool isActive = _currentIndex == index;
     String hexColor = isActive ? '#0F4C81' : '#6E6A63'; // Your exact Figma colors
@@ -653,7 +794,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: () {
           setState(() {
             _currentIndex = index;
-            if (index == 0) _fetchPoints(); // Keep the refresh logic!
+            if (index == 0) _fetchHomeData();
           });
         },
         child: Column(
