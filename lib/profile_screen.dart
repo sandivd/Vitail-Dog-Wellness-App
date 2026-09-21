@@ -6,6 +6,7 @@ import 'settings_screen.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -159,54 +160,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-    Future<void> _changeProfilePicture() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 600,       // Client-side compression
-      imageQuality: 70,
-    );
-
-    if (image == null) return; // User cancelled
-
-    try {
-      final dogId = _dogData?['id'];
-      if (dogId == null) return;
-
-      // 1. Generate a completely unique filename every time
-      final fileName = 'dog_${dogId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      
-      // 2. Upload to Supabase Storage (removed upsert: true because filename is unique now)
-      await Supabase.instance.client.storage.from('dog_photos').upload(
-        fileName,
-        File(image.path),
-      );
-
-      // 3. Get the new public URL
-      final photoUrl = Supabase.instance.client.storage.from('dog_photos').getPublicUrl(fileName);
-
-      // 4. Update the URL in the database
-      await Supabase.instance.client.from('dogs').update({
-        'photo_url': photoUrl,
-      }).eq('id', dogId);
-
-      // 5. Refresh the UI
-      _fetchProfile();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile picture updated!'), backgroundColor: Colors.green),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating photo: $e'), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
 
   DateTime _selectedDate = DateTime.now();
 
@@ -343,20 +296,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Dog Header
           Center(
             child: GestureDetector(
-              onTap: _changeProfilePicture,
+              onTap: () async {
+                final changed = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditProfileScreen(dog: _dogData),
+                  ),
+                );
+                if (changed == true) _fetchProfile(); // Refresh with new data
+              },
               child: Stack(
                 children: [
                   CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.green[100],
-                  backgroundImage: _dogData?['photo_url'] != null 
-                      ? CachedNetworkImageProvider(_dogData!['photo_url']) 
-                      : null,
-                  child: _dogData?['photo_url'] == null
-                      ? const Icon(Icons.pets, size: 50, color: Colors.green)
-                      : null,
-                ),
-                  // Camera icon overlay
+                    radius: 50,
+                    backgroundColor: Colors.green[100],
+                    backgroundImage: _dogData?['photo_url'] != null
+                        ? CachedNetworkImageProvider(_dogData!['photo_url'])
+                        : null,
+                    child: _dogData?['photo_url'] == null
+                        ? const Icon(Icons.pets, size: 50, color: Colors.green)
+                        : null,
+                  ),
+                  // Pencil badge — opens the Edit Profile screen
                   Positioned(
                     bottom: 0,
                     right: 0,
@@ -367,7 +328,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
-                      child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                      child: const Icon(Icons.edit, color: Colors.white, size: 20),
                     ),
                   ),
                 ],
