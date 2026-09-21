@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vitail/onboarding_view.dart';
 import 'package:vitail/main.dart';
+import 'package:vitail/onboarding_screen.dart'; 
 
 void main() {
   testWidgets('onboarding layout and optional field actions', (tester) async {

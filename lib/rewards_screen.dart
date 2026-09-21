@@ -23,18 +23,17 @@ class _RewardsScreenState extends State<RewardsScreen> {
   Future<void> _fetchData() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-      
+
       // Fetch user points
       final profileResponse = await Supabase.instance.client
           .from('profiles')
           .select('total_points')
           .eq('id', userId)
           .single();
-      
+
       // Fetch all rewards
-      final rewardsResponse = await Supabase.instance.client
-          .from('rewards')
-          .select();
+      final rewardsResponse =
+          await Supabase.instance.client.from('rewards').select();
 
       setState(() {
         _userPoints = profileResponse['total_points'] ?? 0;
@@ -48,7 +47,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
   }
 
-  Future<void> _checkIn(int cost, String title, String partnerName) async {
+  Future<void> _checkIn(Map<String, dynamic> reward) async {
+    final cost = (reward['points_cost'] as num).toInt();
     if (_userPoints < cost) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Not enough points!')),
@@ -56,18 +56,21 @@ class _RewardsScreenState extends State<RewardsScreen> {
       return;
     }
 
-    // Navigate to the new Check In Screen!
+    // Only the reward's id is passed through — the DB looks up the cost
+    // and title itself inside redeem_reward, so the client can't redeem
+    // at a discounted price.
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => CheckInScreen(
-          cost: cost,
-          title: title,
-          partnerName: partnerName,
+          rewardId: reward['id'] as String,
+          title: reward['title'] as String,
+          partnerName: reward['partner_name'] as String,
         ),
       ),
     );
 
+    if (!mounted) return;
     // When we return, refresh the points
     _fetchData();
   }
@@ -79,8 +82,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
 
     // Group rewards by category
-    final vouchers = _rewards.where((r) => r['category'] == 'Partner Vouchers').toList();
-    final perks = _rewards.where((r) => r['category'] == 'Premium Perks').toList();
+    final vouchers =
+        _rewards.where((r) => r['category'] == 'Partner Vouchers').toList();
+    final perks =
+        _rewards.where((r) => r['category'] == 'Premium Perks').toList();
 
     // Calculate tier progress (Mock: 2000 pts for Gold Tier)
     int goldTierTarget = 2000;
@@ -104,11 +109,20 @@ class _RewardsScreenState extends State<RewardsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('YOUR WALLET', style: TextStyle(color: Colors.white70, fontSize: 12, letterSpacing: 1.5)),
+                const Text('YOUR WALLET',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        letterSpacing: 1.5)),
                 const SizedBox(height: 8),
-                Text('$_userPoints pts', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                Text('$_userPoints pts',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 16),
-                const Text('Active Adventurer', style: TextStyle(color: Colors.white, fontSize: 16)),
+                const Text('Active Adventurer',
+                    style: TextStyle(color: Colors.white, fontSize: 16)),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: progress,
@@ -118,20 +132,24 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 const SizedBox(height: 4),
-                Text('${goldTierTarget - _userPoints} pts to Gold Tier', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                Text('${goldTierTarget - _userPoints} pts to Gold Tier',
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ),
           ),
           const SizedBox(height: 24),
 
           // Partner Vouchers Section
-          const Text('Partner Vouchers', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('Partner Vouchers',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           ...vouchers.map((r) => _buildRewardCard(r)),
           const SizedBox(height: 24),
 
           // Premium Perks Section
-          const Text('Premium Perks', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('Premium Perks',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           ...perks.map((r) => _buildRewardCard(r)),
         ],
@@ -140,7 +158,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   }
 
   Widget _buildRewardCard(Map<String, dynamic> reward) {
-    int cost = reward['points_cost'];
+    int cost = (reward['points_cost'] as num).toInt();
     bool canAfford = _userPoints >= cost;
 
     return Card(
@@ -154,16 +172,23 @@ class _RewardsScreenState extends State<RewardsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(reward['partner_name'], style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                  Text(reward['partner_name'],
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, color: Colors.grey)),
                   const SizedBox(height: 4),
-                  Text(reward['title'], style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(reward['title'],
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
-                  Text('$cost pts', style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold)),
+                  Text('$cost pts',
+                      style: TextStyle(
+                          color: Colors.green[700],
+                          fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
             ElevatedButton(
-              onPressed: canAfford ? () => _checkIn(cost, reward['title'], reward['partner_name']) : null,
+              onPressed: canAfford ? () => _checkIn(reward) : null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
                 foregroundColor: Colors.white,
