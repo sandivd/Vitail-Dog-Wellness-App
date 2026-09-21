@@ -4,7 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'exercise_data.dart';
 import 'walk_summary.dart';
 
 class WalkInProgress extends StatefulWidget {
@@ -17,10 +16,6 @@ class WalkInProgress extends StatefulWidget {
 }
 
 class _WalkInProgressState extends State<WalkInProgress> {
-  static const Color pageBg = Color(0xFFEFECE6);
-  static const Color cardBg = Color(0xFFF3F0EA);
-  static const Color buttonColor = Color(0xFFBA5A3A);
-
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
 
   GoogleMapController? _mapController;
@@ -57,34 +52,14 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   String get _formattedDistance => (_totalDistance / 1000).toStringAsFixed(2);
 
-  // Recommended walk length, derived from each dog's breed + age + weight.
-  // For a group walk, use the highest recommendation among the selected dogs.
+  /// Goal from the dogs' stored daily_goal_minutes (set at onboarding),
+  /// so the progress bar matches the Home screen rings. Group walks use
+  /// the highest goal among the selected dogs.
   int get _goalMinutes {
     if (_dogs.isEmpty) return 30;
-
-    final recommended = _dogs.map((dog) {
-      final breed = (dog['breed'] ?? '').toString();
-
-      final age = (dog['age'] as num?)?.toDouble() ?? 2.0;
-
-      final weight = (dog['weight'] as num?)?.toDouble() ?? 2.0;
-
-      // Must be 'low', 'moderate', or 'high'.
-      // Change this key if your database uses a different field name.
-      final activity =
-          (dog['activity_level'] ?? 'moderate').toString().toLowerCase();
-
-      final result = ExerciseCalculator.calculate(
-        breed: breed,
-        weightKg: weight,
-        ageYears: age,
-        ownerActivityLevel: activity,
-      );
-
-      return (result['targetMinutes'] as num).toInt();
-    });
-
-    return recommended.reduce((a, b) => a > b ? a : b);
+    final goals = _dogs
+        .map((dog) => (dog['daily_goal_minutes'] as num?)?.toInt() ?? 30);
+    return goals.reduce((a, b) => a > b ? a : b);
   }
 
   double get _progress =>
@@ -196,27 +171,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
     _positionStream?.cancel();
 
     if (!mounted) return;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Walk Finished!'),
-        content: Text('You walked ${_totalDistance.toStringAsFixed(0)} meters!'),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await _saveWalk();
-              if (dialogContext.mounted) {
-                Navigator.popUntil(dialogContext, (route) => route.isFirst);
-              }
-            },
-            child: const Text('Nice!'),
-          ),
-        ],
-      ),
-    );
-
+    
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -231,109 +186,14 @@ class _WalkInProgressState extends State<WalkInProgress> {
       ),
     );
   }
-
-  Future<void> _saveWalk() async {
-    int pointsEarned = (_totalDistance / 100).floor();
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    final today = DateTime.now();
-    final todayDateOnly = DateTime(today.year, today.month, today.day);
-    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
-
-    try {
-      // 1. Save the walk
-      // NOTE: 'walk_date' is required here — profile_screen.dart and
-      // walk_history_screen.dart both read/filter on it, and omitting it
-      // was causing every insert to fail (surfacing as "network error").
-      await Supabase.instance.client.from('walks').insert({
-        'user_id': userId,
-        'walk_date': todayStr,
-        'distance_meters': _totalDistance,
-        'duration_seconds': _elapsedSeconds,
-        'points_earned': pointsEarned,
-      });
-
-      // 2. Fetch current points, streak, and last walk date
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points, daily_streak, last_walk_date')
-          .eq('id', userId)
-          .single();
-
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int currentStreak = profileRes['daily_streak'] ?? 0;
-      String? lastWalkStr = profileRes['last_walk_date'];
-
-      // 3. Calculate new streak
-      int newStreak = 1;
-
-      if (lastWalkStr != null) {
-        final lastWalk = DateTime.parse(lastWalkStr);
-        final lastWalkDateOnly =
-            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
-        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
-
-        if (diffInDays == 1) {
-          newStreak = currentStreak + 1;
-        } else if (diffInDays == 0) {
-          newStreak = currentStreak;
-        }
-      }
-
-      // 4. Complete walk quest & give bonus points
-      if (_totalDistance >= 1000) {
-        final taskCheck = await Supabase.instance.client
-            .from('daily_tasks')
-            .select('walk_done')
-            .eq('user_id', userId)
-            .eq('task_date', todayStr)
-            .maybeSingle();
-
-        if (taskCheck?['walk_done'] != true) {
-          pointsEarned += 50;
-
-          await Supabase.instance.client.from('daily_tasks').upsert({
-            'user_id': userId,
-            'task_date': todayStr,
-            'walk_done': true,
-          }, onConflict: 'user_id, task_date');
-        }
-      }
-
-      // 5. Update profile with new points, streak, and date
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': currentPoints + pointsEarned,
-        'daily_streak': newStreak,
-        'last_walk_date': todayStr,
-      }).eq('id', userId);
-    } on PostgrestException catch (e) {
-      // Database/query errors (bad column, RLS denial, constraint violation, etc.)
-      // Surface the real message instead of mislabeling this as a network issue.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save walk: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // Genuine connectivity/other errors.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Network error: Could not save walk. Check your connection.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
+  
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final pageBg = colorScheme.surface;
+    final cardBg = colorScheme.surfaceVariant;
+    final buttonColor = colorScheme.primary;
+
     return Scaffold(
       backgroundColor: pageBg,
       body: Stack(
@@ -364,18 +224,18 @@ class _WalkInProgressState extends State<WalkInProgress> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_left,
-                        size: 28, color: Colors.black87),
+                    icon: Icon(Icons.chevron_left,
+                        size: 28, color: colorScheme.onSurface),
                     onPressed: () => Navigator.pop(context),
                   ),
                   Expanded(
                     child: Text(
                       _title,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -395,10 +255,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
             snapSizes: const [0.28, 0.62, 0.92],
             builder: (context, scrollController) {
               return Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   color: pageBg,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-                  boxShadow: [
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: const [
                     BoxShadow(
                       color: Colors.black26,
                       blurRadius: 16,
@@ -417,7 +277,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         height: 5,
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: Colors.black26,
+                          color: colorScheme.onSurfaceVariant.withOpacity(0.4),
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
@@ -433,10 +293,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             curve: Curves.easeOut,
                           );
                         },
-                        child: const Text(
+                        child: Text(
                           'LIVE MAP',
                           style: TextStyle(
-                            color: Color(0xFF6B8CAE),
+                            color: colorScheme.secondary,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
                           ),
@@ -475,10 +335,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         children: [
                           Text(
                             '${_elapsedSeconds ~/ 60} / $_goalMinutes min',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E1E1E),
+                              color: colorScheme.onSurface,
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -487,9 +347,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             child: LinearProgressIndicator(
                               value: _progress,
                               minHeight: 6,
-                              backgroundColor: Colors.black12,
+                              backgroundColor: colorScheme.surfaceVariant,
                               valueColor:
-                                  const AlwaysStoppedAnimation<Color>(buttonColor),
+                                  AlwaysStoppedAnimation<Color>(buttonColor),
                             ),
                           ),
                         ],
@@ -500,14 +360,14 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Hygiene log per dog
                     if (_dogs.isNotEmpty) ...[
                       Row(
-                        children: const [
+                        children: [
                           Expanded(
                             child: Text(
                               'HYGIENE',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF7C776E),
+                                color: colorScheme.onSurfaceVariant,
                                 letterSpacing: 0.6,
                               ),
                             ),
@@ -520,7 +380,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF7C776E),
+                                color: colorScheme.onSurfaceVariant,
                                 letterSpacing: 0.6,
                               ),
                             ),
@@ -533,7 +393,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF7C776E),
+                                color: colorScheme.onSurfaceVariant,
                                 letterSpacing: 0.6,
                               ),
                             ),
@@ -561,7 +421,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             children: [
                               CircleAvatar(
                                 radius: 20,
-                                backgroundColor: const Color(0xFFDDD8CC),
+                                backgroundColor: colorScheme.surfaceVariant,
                                 backgroundImage: photoUrl != null &&
                                         photoUrl.toString().isNotEmpty
                                     ? NetworkImage(photoUrl)
@@ -576,18 +436,19 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                       name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 15,
+                                        color: colorScheme.onSurface,
                                       ),
                                     ),
                                     Text(
                                       breed,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 12,
-                                        color: Color(0xFF7C776E),
+                                        color: colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                   ],
@@ -632,12 +493,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
                           color: cardBg,
                           borderRadius: BorderRadius.circular(18),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
                             '+ Add photo',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF1E1E1E),
+                              color: colorScheme.onSurface,
                             ),
                           ),
                         ),
@@ -648,10 +509,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Note
                     Text(
                       _dogs.length > 1 ? 'GROUP NOTE' : 'NOTE',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: Color(0xFF7C776E),
+                        color: colorScheme.onSurfaceVariant,
                         letterSpacing: 0.6,
                       ),
                     ),
@@ -661,20 +522,20 @@ class _WalkInProgressState extends State<WalkInProgress> {
                       decoration: InputDecoration(
                         hintText: 'Walk note...',
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: colorScheme.surface,
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFE0DCD3)),
+                          borderSide: BorderSide(color: colorScheme.outline),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Color(0xFFE0DCD3)),
+                          borderSide: BorderSide(color: colorScheme.outline),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: buttonColor),
+                          borderSide: BorderSide(color: buttonColor),
                         ),
                       ),
                     ),
@@ -697,10 +558,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               ),
                               child: Text(
                                 _isPaused ? 'Resume' : 'Pause',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: Color(0xFF1E1E1E),
+                                  color: colorScheme.onSurface,
                                 ),
                               ),
                             ),
@@ -714,7 +575,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               onPressed: _finishWalk,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: buttonColor,
-                                foregroundColor: Colors.white,
+                                foregroundColor: colorScheme.onPrimary,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(26),
@@ -751,30 +612,31 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F0EA),
+        color: colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF7C776E),
+              color: colorScheme.onSurfaceVariant,
               letterSpacing: 0.6,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E1E1E),
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -796,17 +658,18 @@ class _HygieneButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const buttonColor = Color(0xFFBA5A3A);
+    final colorScheme = Theme.of(context).colorScheme;
+    final buttonColor = colorScheme.primary;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? buttonColor : Colors.white,
+          color: active ? buttonColor : colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: active ? buttonColor : const Color(0xFFE0DCD3),
+            color: active ? buttonColor : colorScheme.outline,
           ),
         ),
         child: Text(
@@ -815,7 +678,7 @@ class _HygieneButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: active ? Colors.white : const Color(0xFF1E1E1E),
+            color: active ? colorScheme.onPrimary : colorScheme.onSurface,
           ),
         ),
       ),

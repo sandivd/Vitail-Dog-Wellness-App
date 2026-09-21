@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CheckInScreen extends StatefulWidget {
-  final int cost;
+  final String rewardId;
   final String title;
   final String partnerName;
 
   const CheckInScreen({
     super.key,
-    required this.cost,
+    required this.rewardId,
     required this.title,
     required this.partnerName,
   });
@@ -37,11 +37,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
           .select('dog_name')
           .eq('owner_id', userId)
           .limit(1)
-          .single();
-      
+          .maybeSingle();
+
       if (mounted) {
         setState(() {
-          _dogName = response['dog_name'] ?? "your dog";
+          _dogName = response?['dog_name'] ?? "your dog";
         });
       }
     } catch (e) {
@@ -52,33 +52,39 @@ class _CheckInScreenState extends State<CheckInScreen> {
   Future<void> _collectReward() async {
     setState(() => _isProcessing = true);
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      // 1. Fetch current points
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points')
-          .eq('id', userId)
-          .single();
-      
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int newPoints = currentPoints - widget.cost;
+      // The database reads the cost + title from the rewards table itself,
+      // so the client can't redeem at a discounted price.
+      final success = await Supabase.instance.client.rpc(
+        'redeem_reward',
+        params: {'p_reward_id': widget.rewardId},
+      );
 
-      // 2. Deduct points
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': newPoints,
-      }).eq('id', userId);
+      if (!mounted) return;
 
-      // 3. Show success screen
-      setState(() {
-        _isCollected = true;
-        _isProcessing = false;
-      });
+      if (success == true) {
+        setState(() {
+          _isCollected = true;
+          _isProcessing = false;
+        });
+      } else {
+        // The database rejected it because they didn't have enough points
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Not enough points!'), backgroundColor: Colors.red),
+        );
+        setState(() {
+          _isProcessing = false;
+          _swipeValue = 0.0; // Snap the button back so they can retry
+        });
+      }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
-      setState(() => _isProcessing = false);
+      setState(() {
+        _isProcessing = false;
+        _swipeValue = 0.0;
+      });
     }
   }
 
@@ -115,13 +121,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: const Icon(Icons.pets, size: 50, color: Colors.orange),
               ),
               const SizedBox(height: 32),
-              
+
               const Text(
                 'Show this at the counter',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
               ),
               const SizedBox(height: 16),
-              
+
               Text(
                 'Swipe to collect ${widget.title} for $_dogName at ${widget.partnerName}',
                 textAlign: TextAlign.center,
@@ -185,8 +191,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   ),
                                 ],
                               ),
-                              child: _isProcessing 
-                                  ? const CircularProgressIndicator(color: Colors.white) 
+                              child: _isProcessing
+                                  ? const CircularProgressIndicator(color: Colors.white)
                                   : const Icon(Icons.pets, color: Colors.white, size: 30),
                             ),
                           ),
@@ -226,13 +232,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            
+
             const Text(
               'Collected',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black),
             ),
             const SizedBox(height: 12),
-            
+
             Text(
               'One ${widget.title} for $_dogName',
               style: const TextStyle(fontSize: 16, color: Colors.grey),
@@ -242,7 +248,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
             const SizedBox(height: 48),
-            
+
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
