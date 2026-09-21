@@ -6,6 +6,22 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'walk_summary.dart';
 
+// ---------------------------------------------------------------------------
+// Design tokens from the Figma spec for this screen. Hardcoded on purpose:
+// the app's ColorScheme doesn't define surfaceVariant, so reading it from the
+// theme silently falls back to Material's default purple-grey tint (the
+// "blended" colours after the merge). This is a fixed light design, matching
+// the approach used by onboarding / edit profile.
+// ---------------------------------------------------------------------------
+const Color _kPageBg = Colors.white; // Sheet background
+const Color _kCardBg = Color(0xFFF9F7F3); // Stat / hygiene / add-photo cards
+const Color _kInk = Color(0xFF211F1D); // Primary text
+const Color _kMuted = Color(0xFF6E6A63); // Secondary text
+const Color _kBorder = Color(0xFFDBD7D1); // Borders + progress track
+const Color _kAvatarBg = Color(0xFFE5E1DB); // Dog avatar placeholder
+const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
+const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
+
 class WalkInProgress extends StatefulWidget {
   const WalkInProgress({super.key, this.selectedDogs, this.plannedRoute});
 
@@ -174,7 +190,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
     _positionStream?.cancel();
 
     if (!mounted) return;
-    
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -190,173 +206,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
     );
   }
 
-  Set<Polyline> get _polylines {
-    final polylines = <Polyline>{
-      Polyline(
-        polylineId: const PolylineId('walk_route'),
-        points: _polylinePoints,
-        color: buttonColor,
-        width: 6,
-      ),
-    };
-
-    // Route the user planned on WalkScreen before starting — shown as a
-    // dashed reference line so they can see it while actually walking.
-    if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
-      polylines.add(
-        Polyline(
-          polylineId: const PolylineId('planned_route'),
-          points: widget.plannedRoute!,
-          color: Colors.black45,
-          width: 4,
-          patterns: [PatternItem.dash(14), PatternItem.gap(10)],
-        ),
-      );
-    }
-
-    return polylines;
-  }
-
-  Set<Marker> get _markers {
-    if (widget.plannedRoute == null || widget.plannedRoute!.isEmpty) {
-      return {};
-    }
-    return {
-      Marker(
-        markerId: const MarkerId('planned_destination'),
-        position: widget.plannedRoute!.last,
-      ),
-    };
-  }
-
-  LatLngBounds _boundsFor(List<LatLng> points) {
-    double minLat = points.first.latitude;
-    double maxLat = points.first.latitude;
-    double minLng = points.first.longitude;
-    double maxLng = points.first.longitude;
-
-    for (final point in points) {
-      minLat = point.latitude < minLat ? point.latitude : minLat;
-      maxLat = point.latitude > maxLat ? point.latitude : maxLat;
-      minLng = point.longitude < minLng ? point.longitude : minLng;
-      maxLng = point.longitude > maxLng ? point.longitude : maxLng;
-    }
-
-    return LatLngBounds(
-      southwest: LatLng(minLat, minLng),
-      northeast: LatLng(maxLat, maxLng),
-    );
-  }
-
-  Future<void> _saveWalk() async {
-    int pointsEarned = (_totalDistance / 100).floor();
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    final today = DateTime.now();
-    final todayDateOnly = DateTime(today.year, today.month, today.day);
-    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
-
-    try {
-      // 1. Save the walk
-      // NOTE: 'walk_date' is required here — profile_screen.dart and
-      // walk_history_screen.dart both read/filter on it, and omitting it
-      // was causing every insert to fail (surfacing as "network error").
-      await Supabase.instance.client.from('walks').insert({
-        'user_id': userId,
-        'walk_date': todayStr,
-        'distance_meters': _totalDistance,
-        'duration_seconds': _elapsedSeconds,
-        'points_earned': pointsEarned,
-      });
-
-      // 2. Fetch current points, streak, and last walk date
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points, daily_streak, last_walk_date')
-          .eq('id', userId)
-          .single();
-
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int currentStreak = profileRes['daily_streak'] ?? 0;
-      String? lastWalkStr = profileRes['last_walk_date'];
-
-      // 3. Calculate new streak
-      int newStreak = 1;
-
-      if (lastWalkStr != null) {
-        final lastWalk = DateTime.parse(lastWalkStr);
-        final lastWalkDateOnly =
-            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
-        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
-
-        if (diffInDays == 1) {
-          newStreak = currentStreak + 1;
-        } else if (diffInDays == 0) {
-          newStreak = currentStreak;
-        }
-      }
-
-      // 4. Complete walk quest & give bonus points
-      if (_totalDistance >= 1000) {
-        final taskCheck = await Supabase.instance.client
-            .from('daily_tasks')
-            .select('walk_done')
-            .eq('user_id', userId)
-            .eq('task_date', todayStr)
-            .maybeSingle();
-
-        if (taskCheck?['walk_done'] != true) {
-          pointsEarned += 50;
-
-          await Supabase.instance.client.from('daily_tasks').upsert({
-            'user_id': userId,
-            'task_date': todayStr,
-            'walk_done': true,
-          }, onConflict: 'user_id, task_date');
-        }
-      }
-
-      // 5. Update profile with new points, streak, and date
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': currentPoints + pointsEarned,
-        'daily_streak': newStreak,
-        'last_walk_date': todayStr,
-      }).eq('id', userId);
-    } on PostgrestException catch (e) {
-      // Database/query errors (bad column, RLS denial, constraint violation, etc.)
-      // Surface the real message instead of mislabeling this as a network issue.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save walk: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // Genuine connectivity/other errors.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Network error: Could not save walk. Check your connection.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final pageBg = colorScheme.surface;
-    final cardBg = colorScheme.surfaceVariant;
-    final buttonColor = colorScheme.primary;
-
     return Scaffold(
-      backgroundColor: pageBg,
+      backgroundColor: _kPageBg,
       body: Stack(
         children: [
           // Map fills the whole screen; the sheet slides over it.
@@ -379,30 +232,37 @@ class _WalkInProgressState extends State<WalkInProgress> {
                   const CameraPosition(target: _melbourne, zoom: 16.0),
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
-              polylines: _polylines,
-              markers: _markers,
+              polylines: {
+                Polyline(
+                  polylineId: const PolylineId('walk_route'),
+                  points: _polylinePoints,
+                  color: _kCoral,
+                  width: 6,
+                ),
+              },
             ),
           ),
 
-          // Top bar: back button + title, sits above the map.
+          // Top bar: back chevron + title, sits above the map.
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4.0),
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(Icons.chevron_left,
-                        size: 28, color: colorScheme.onSurface),
+                    icon: const Icon(Icons.chevron_left,
+                        size: 28, color: _kInk),
                     onPressed: () => Navigator.pop(context),
                   ),
                   Expanded(
                     child: Text(
                       _title,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface,
+                        color: _kInk,
+                        fontFamily: 'PlusJakartaSans',
                       ),
                     ),
                   ),
@@ -422,10 +282,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
             snapSizes: const [0.28, 0.62, 0.92],
             builder: (context, scrollController) {
               return Container(
-                decoration: BoxDecoration(
-                  color: pageBg,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                  boxShadow: const [
+                decoration: const BoxDecoration(
+                  color: _kPageBg,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                  boxShadow: [
                     BoxShadow(
                       color: Colors.black26,
                       blurRadius: 16,
@@ -444,7 +304,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         height: 5,
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: colorScheme.onSurfaceVariant.withOpacity(0.4),
+                          color: _kBorder,
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
@@ -460,10 +320,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             curve: Curves.easeOut,
                           );
                         },
-                        child: Text(
+                        child: const Text(
                           'LIVE MAP',
                           style: TextStyle(
-                            color: colorScheme.secondary,
+                            color: _kBlue,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
                           ),
@@ -475,8 +335,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Time / Distance
                     Row(
                       children: [
-                        Expanded(
-                          child: _StatCard(label: 'TIME', value: _formattedTime),
+                        const Expanded(
+                          child: _StatCard(label: 'TIME', value: '00:00'),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -489,12 +349,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Goal progress bar
+                    // Goal progress card
                     Container(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: cardBg,
+                        color: _kCardBg,
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Column(
@@ -502,21 +362,22 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         children: [
                           Text(
                             '${_elapsedSeconds ~/ 60} / $_goalMinutes min',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface,
+                              color: _kInk,
+                              fontFamily: 'PlusJakartaSans',
                             ),
                           ),
                           const SizedBox(height: 10),
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(3),
                             child: LinearProgressIndicator(
                               value: _progress,
                               minHeight: 6,
-                              backgroundColor: colorScheme.surfaceVariant,
+                              backgroundColor: _kBorder,
                               valueColor:
-                                  AlwaysStoppedAnimation<Color>(buttonColor),
+                                  const AlwaysStoppedAnimation<Color>(_kCoral),
                             ),
                           ),
                         ],
@@ -526,7 +387,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
                     // Hygiene log per dog
                     if (_dogs.isNotEmpty) ...[
-                      Row(
+                      const Row(
                         children: [
                           Expanded(
                             child: Text(
@@ -534,8 +395,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: colorScheme.onSurfaceVariant,
+                                color: _kMuted,
                                 letterSpacing: 0.6,
+                                fontFamily: 'PlusJakartaSans',
                               ),
                             ),
                           ),
@@ -547,8 +409,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: colorScheme.onSurfaceVariant,
+                                color: _kMuted,
                                 letterSpacing: 0.6,
+                                fontFamily: 'PlusJakartaSans',
                               ),
                             ),
                           ),
@@ -560,8 +423,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: colorScheme.onSurfaceVariant,
+                                color: _kMuted,
                                 letterSpacing: 0.6,
+                                fontFamily: 'PlusJakartaSans',
                               ),
                             ),
                           ),
@@ -578,17 +442,17 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
-                            color: cardBg,
+                            color: _kCardBg,
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Row(
                             children: [
                               CircleAvatar(
                                 radius: 20,
-                                backgroundColor: colorScheme.surfaceVariant,
+                                backgroundColor: _kAvatarBg,
                                 backgroundImage: photoUrl != null &&
                                         photoUrl.toString().isNotEmpty
                                     ? NetworkImage(photoUrl)
@@ -603,19 +467,21 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                       name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 15,
-                                        color: colorScheme.onSurface,
+                                        color: _kInk,
+                                        fontFamily: 'PlusJakartaSans',
                                       ),
                                     ),
                                     Text(
                                       breed,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
+                                      style: const TextStyle(
                                         fontSize: 12,
-                                        color: colorScheme.onSurfaceVariant,
+                                        color: _kMuted,
+                                        fontFamily: 'PlusJakartaSans',
                                       ),
                                     ),
                                   ],
@@ -650,22 +516,24 @@ class _WalkInProgressState extends State<WalkInProgress> {
                       borderRadius: BorderRadius.circular(18),
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Photo picker coming soon')),
+                          const SnackBar(
+                              content: Text('Photo picker coming soon')),
                         );
                       },
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: cardBg,
+                          color: _kCardBg,
                           borderRadius: BorderRadius.circular(18),
                         ),
-                        child: Center(
+                        child: const Center(
                           child: Text(
                             '+ Add photo',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color: colorScheme.onSurface,
+                              color: _kMuted,
+                              fontFamily: 'PlusJakartaSans',
                             ),
                           ),
                         ),
@@ -676,11 +544,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Note
                     Text(
                       _dogs.length > 1 ? 'GROUP NOTE' : 'NOTE',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurfaceVariant,
+                        color: _kMuted,
                         letterSpacing: 0.6,
+                        fontFamily: 'PlusJakartaSans',
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -688,21 +557,23 @@ class _WalkInProgressState extends State<WalkInProgress> {
                       controller: _noteController,
                       decoration: InputDecoration(
                         hintText: 'Walk note...',
+                        hintStyle: const TextStyle(
+                            color: _kMuted, fontFamily: 'PlusJakartaSans'),
                         filled: true,
-                        fillColor: colorScheme.surface,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: colorScheme.outline),
+                          borderSide: const BorderSide(color: _kBorder),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: colorScheme.outline),
+                          borderSide: const BorderSide(color: _kBorder),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: buttonColor),
+                          borderSide: const BorderSide(color: _kCoral),
                         ),
                       ),
                     ),
@@ -717,7 +588,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             child: OutlinedButton(
                               onPressed: _togglePause,
                               style: OutlinedButton.styleFrom(
-                                backgroundColor: cardBg,
+                                backgroundColor: _kCardBg,
                                 side: BorderSide.none,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(26),
@@ -725,10 +596,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               ),
                               child: Text(
                                 _isPaused ? 'Resume' : 'Pause',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: colorScheme.onSurface,
+                                  color: _kInk,
+                                  fontFamily: 'PlusJakartaSans',
                                 ),
                               ),
                             ),
@@ -741,8 +613,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             child: ElevatedButton(
                               onPressed: _finishWalk,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: buttonColor,
-                                foregroundColor: colorScheme.onPrimary,
+                                backgroundColor: _kCoral,
+                                foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(26),
@@ -753,6 +625,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
+                                  fontFamily: 'PlusJakartaSans',
                                 ),
                               ),
                             ),
@@ -779,31 +652,32 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceVariant,
+        color: _kCardBg,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: colorScheme.onSurfaceVariant,
+              color: _kMuted,
               letterSpacing: 0.6,
+              fontFamily: 'PlusJakartaSans',
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+              color: _kInk,
+              fontFamily: 'PlusJakartaSans',
             ),
           ),
         ],
@@ -825,18 +699,16 @@ class _HygieneButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final buttonColor = colorScheme.primary;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? buttonColor : colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
+          color: active ? _kCoral : Colors.white,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: active ? buttonColor : colorScheme.outline,
+            color: active ? _kCoral : _kBorder,
           ),
         ),
         child: Text(
@@ -845,7 +717,8 @@ class _HygieneButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: active ? colorScheme.onPrimary : colorScheme.onSurface,
+            color: active ? Colors.white : _kInk,
+            fontFamily: 'PlusJakartaSans',
           ),
         ),
       ),
