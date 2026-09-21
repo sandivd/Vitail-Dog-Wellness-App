@@ -72,7 +72,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
     try {
       final GoogleSignInAccount? googleUser = await GoogleSignIn(
-        serverClientId: '919287771219-4r09c1mtjrruriu921rvpntqukjv0uji.apps.googleusercontent.com',
+        serverClientId: '919287771219-6ftvqq0rpgas0ooe00ceofnnr4495iu6.apps.googleusercontent.com',
       ).signIn();
       if (googleUser == null) {
         setState(() => _isLoading = false);
