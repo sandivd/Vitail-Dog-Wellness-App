@@ -5,6 +5,34 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// ---------------------------------------------------------------------------
+// Design tokens from the Figma spec for this screen. Hardcoded because the
+// app's ColorScheme doesn't define secondaryContainer / surfaceContainerHighest,
+// so reading them from the theme silently falls back to Material's default
+// purple tints (the "blended" colours after the merge). Fixed light design,
+// matching walk_in_progress / onboarding / edit profile.
+// ---------------------------------------------------------------------------
+const Color _kPageBg = Color(0xFFF4F0E9); // Page background
+const Color _kCard = Colors.white; // Stat cards + hygiene rows (with shadow)
+const Color _kSoftCard = Color(0xFFF9F7F3); // "+ Add photo" button
+const Color _kInk = Color(0xFF211F1D); // Primary text
+const Color _kMuted = Color(0xFF6E6A63); // Secondary text
+const Color _kBorder = Color(0xFFDBD7D1); // Field/chip borders
+const Color _kAvatarBg = Color(0xFFE5E1DB); // Dog avatar placeholder
+const Color _kRoutePlaceholder = Color(0xFFD1E8E1); // "Route map" placeholder
+const Color _kGreenPale = Color(0xFFEAF0D8); // Points pill, star circle, active hygiene
+const Color _kGreen = Color(0xFFAEC568); // Star icon, pill text, active hygiene text
+const Color _kBlue = Color(0xFF5F98BD); // Selected mood chip
+const Color _kCoral = Color(0xFFDC755C); // Done button, focus border, polyline
+
+const List<BoxShadow> _kCardShadow = [
+  BoxShadow(
+    color: Color(0x0F000000), // 6% black, matches the Figma drop shadow
+    blurRadius: 10,
+    offset: Offset(0, 3),
+  ),
+];
+
 class WalkSummary extends StatefulWidget {
   const WalkSummary({
     super.key,
@@ -228,22 +256,21 @@ class _WalkSummaryState extends State<WalkSummary> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: _kPageBg,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           children: [
-            Center(
+            const Center(
               child: Text(
                 'WALK SUMMARY',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.0,
-                  color: colorScheme.onSurfaceVariant,
+                  color: _kMuted,
+                  fontFamily: 'PlusJakartaSans',
                 ),
               ),
             ),
@@ -253,11 +280,11 @@ class _WalkSummaryState extends State<WalkSummary> {
               child: Container(
                 width: 64,
                 height: 64,
-                decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer,
+                decoration: const BoxDecoration(
+                  color: _kGreenPale,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.star_rounded, color: colorScheme.onSecondaryContainer, size: 30),
+                child: const Icon(Icons.star_rounded, color: _kGreen, size: 30),
               ),
             ),
             const SizedBox(height: 16),
@@ -265,10 +292,11 @@ class _WalkSummaryState extends State<WalkSummary> {
             Text(
               _headline,
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: colorScheme.onSurface,
+                color: _kInk,
+                fontFamily: 'PlusJakartaSans',
               ),
             ),
             const SizedBox(height: 24),
@@ -292,31 +320,33 @@ class _WalkSummaryState extends State<WalkSummary> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(24),
+                color: _kGreenPale,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Center(
                 child: Text(
                   _pointsPreview == null
                       ? 'Calculating points…'
                       : '+$_pointsPreview points earned',
-                  style: TextStyle(
-                    color: colorScheme.onSecondaryContainer,
+                  style: const TextStyle(
+                    color: _kGreen,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
+                    fontFamily: 'PlusJakartaSans',
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 28),
 
-            Text(
+            const Text(
               'HOW WAS THE WALK?',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: colorScheme.onSurfaceVariant,
+                color: _kMuted,
+                fontFamily: 'PlusJakartaSans',
               ),
             ),
             const SizedBox(height: 12),
@@ -336,13 +366,14 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 28),
 
-            Text(
+            const Text(
               'ROUTE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: colorScheme.onSurfaceVariant,
+                color: _kMuted,
+                fontFamily: 'PlusJakartaSans',
               ),
             ),
             const SizedBox(height: 12),
@@ -350,7 +381,7 @@ class _WalkSummaryState extends State<WalkSummary> {
             const SizedBox(height: 28),
 
             if (widget.dogs.isNotEmpty) ...[
-              Row(
+              const Row(
                 children: [
                   Expanded(
                     child: Text(
@@ -359,7 +390,8 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: colorScheme.onSurfaceVariant,
+                        color: _kMuted,
+                        fontFamily: 'PlusJakartaSans',
                       ),
                     ),
                   ),
@@ -372,7 +404,8 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: colorScheme.onSurfaceVariant,
+                        color: _kMuted,
+                        fontFamily: 'PlusJakartaSans',
                       ),
                     ),
                   ),
@@ -385,7 +418,8 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: colorScheme.onSurfaceVariant,
+                        color: _kMuted,
+                        fontFamily: 'PlusJakartaSans',
                       ),
                     ),
                   ),
@@ -403,15 +437,15 @@ class _WalkSummaryState extends State<WalkSummary> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: colorScheme.surface,
+                    color: _kCard,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: colorScheme.outline),
+                    boxShadow: _kCardShadow,
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: colorScheme.surfaceContainerHighest,
+                        backgroundColor: _kAvatarBg,
                         backgroundImage:
                             photoUrl != null && photoUrl.toString().isNotEmpty
                                 ? NetworkImage(photoUrl)
@@ -426,12 +460,18 @@ class _WalkSummaryState extends State<WalkSummary> {
                               name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 15, color: colorScheme.onSurface),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  color: _kInk,
+                                  fontFamily: 'PlusJakartaSans'),
                             ),
                             Text(
                               _hygieneStatus(dogId),
-                              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: _kMuted,
+                                  fontFamily: 'PlusJakartaSans'),
                             ),
                           ],
                         ),
@@ -460,13 +500,14 @@ class _WalkSummaryState extends State<WalkSummary> {
               const SizedBox(height: 20),
             ],
 
-            Text(
+            const Text(
               'NOTE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: colorScheme.onSurfaceVariant,
+                color: _kMuted,
+                fontFamily: 'PlusJakartaSans',
               ),
             ),
             const SizedBox(height: 8),
@@ -474,21 +515,23 @@ class _WalkSummaryState extends State<WalkSummary> {
               controller: _noteController,
               decoration: InputDecoration(
                 hintText: 'Add a walk note...',
+                hintStyle: const TextStyle(
+                    color: _kMuted, fontFamily: 'PlusJakartaSans'),
                 filled: true,
-                fillColor: colorScheme.surface,
+                fillColor: Colors.white,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: colorScheme.outline),
+                  borderSide: const BorderSide(color: _kBorder),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: colorScheme.outline),
+                  borderSide: const BorderSide(color: _kBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide(color: colorScheme.primary),
+                  borderSide: const BorderSide(color: _kCoral),
                 ),
               ),
             ),
@@ -500,15 +543,15 @@ class _WalkSummaryState extends State<WalkSummary> {
             const SizedBox(height: 24),
 
             SizedBox(
-              height: 56,
+              height: 54,
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _finishAndSave,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  disabledBackgroundColor: colorScheme.primary.withValues(alpha: 0.6),
+                  backgroundColor: _kCoral,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _kCoral.withValues(alpha: 0.6),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(27),
                   ),
                   elevation: 0,
                 ),
@@ -523,7 +566,10 @@ class _WalkSummaryState extends State<WalkSummary> {
                       )
                     : const Text(
                         'Done',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'PlusJakartaSans'),
                       ),
               ),
             ),
@@ -542,39 +588,33 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: _kCard,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: colorScheme.outline),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        boxShadow: _kCardShadow,
       ),
       child: Column(
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: colorScheme.onSurfaceVariant,
+              color: _kMuted,
               letterSpacing: 0.6,
+              fontFamily: 'PlusJakartaSans',
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: colorScheme.onSurface,
+              color: _kInk,
+              fontFamily: 'PlusJakartaSans',
             ),
           ),
         ],
@@ -596,25 +636,25 @@ class _MoodChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? colorScheme.secondary : colorScheme.surface,
+          color: selected ? _kBlue : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? colorScheme.secondary : colorScheme.outline,
+            color: selected ? _kBlue : _kBorder,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? colorScheme.onSecondary : colorScheme.onSurface,
+            color: selected ? Colors.white : _kInk,
             fontWeight: FontWeight.w600,
             fontSize: 14,
+            fontFamily: 'PlusJakartaSans',
           ),
         ),
       ),
@@ -635,17 +675,16 @@ class _HygieneButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? colorScheme.secondaryContainer : colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
+          color: active ? _kGreenPale : Colors.white,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: active ? colorScheme.secondaryContainer : colorScheme.outline,
+            color: active ? _kGreenPale : _kBorder,
           ),
         ),
         child: Text(
@@ -654,7 +693,8 @@ class _HygieneButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: active ? colorScheme.onSecondaryContainer : colorScheme.onSurface,
+            color: active ? _kGreen : _kInk,
+            fontFamily: 'PlusJakartaSans',
           ),
         ),
       ),
@@ -697,8 +737,6 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     if (widget.points.length < 2) {
       return _placeholder(context);
     }
@@ -713,7 +751,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
             Polyline(
               polylineId: const PolylineId('summary_route'),
               points: widget.points,
-              color: colorScheme.primary,
+              color: _kCoral,
               width: 5,
             ),
           },
@@ -738,12 +776,11 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
   }
 
   Widget _placeholder(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       height: 180,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
+        color: _kRoutePlaceholder,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Stack(
@@ -757,7 +794,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
                   width: 32,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
+                    color: Colors.white.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -766,19 +803,20 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
                   width: 20,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.1),
+                    color: Colors.white.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ],
             ),
           ),
-          Center(
+          const Center(
             child: Text(
               'Route map',
               style: TextStyle(
-                color: colorScheme.onSurfaceVariant,
+                color: _kMuted,
                 fontWeight: FontWeight.w600,
+                fontFamily: 'PlusJakartaSans',
               ),
             ),
           ),
@@ -801,7 +839,6 @@ class _PhotoPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     if (photo == null) {
       return InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -810,13 +847,16 @@ class _PhotoPicker extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
+            color: _kSoftCard,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: Center(
+          child: const Center(
             child: Text(
               '+ Add photo',
-              style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _kMuted,
+                  fontFamily: 'PlusJakartaSans'),
             ),
           ),
         ),
