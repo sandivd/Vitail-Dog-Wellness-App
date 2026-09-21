@@ -22,6 +22,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
   bool _isCollected = false;
   bool _isProcessing = false;
   String _dogName = "your dog"; // Default fallback
+  String? _promoCode;
 
   @override
   void initState() {
@@ -50,41 +51,36 @@ class _CheckInScreenState extends State<CheckInScreen> {
   }
 
   Future<void> _collectReward() async {
+    if (_isProcessing) return;
     setState(() => _isProcessing = true);
     try {
-      // The database reads the cost + title from the rewards table itself,
-      // so the client can't redeem at a discounted price.
-      final success = await Supabase.instance.client.rpc(
+      // Returns the generated promo code on success, null if the
+      // user didn't have enough points.
+      final code = await Supabase.instance.client.rpc(
         'redeem_reward',
         params: {'p_reward_id': widget.rewardId},
       );
 
       if (!mounted) return;
 
-      if (success == true) {
+      if (code is String) {
         setState(() {
+          _promoCode = code;
           _isCollected = true;
           _isProcessing = false;
         });
       } else {
-        // The database rejected it because they didn't have enough points
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Not enough points!'), backgroundColor: Colors.red),
         );
-        setState(() {
-          _isProcessing = false;
-          _swipeValue = 0.0; // Snap the button back so they can retry
-        });
+        setState(() => _isProcessing = false);
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
-      setState(() {
-        _isProcessing = false;
-        _swipeValue = 0.0;
-      });
+      setState(() => _isProcessing = false);
     }
   }
 
@@ -165,13 +161,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           left: _swipeValue * maxDrag,
                           child: GestureDetector(
                             onHorizontalDragUpdate: (details) {
+                              if (_isProcessing) return;
                               setState(() {
                                 _swipeValue += details.primaryDelta! / maxDrag;
                                 _swipeValue = _swipeValue.clamp(0.0, 1.0);
                               });
                             },
                             onHorizontalDragEnd: (details) {
-                              if (_swipeValue > 0.9) {
+                              if (_swipeValue > 0.9 && !_isProcessing) {
                                 _collectReward(); // Trigger collection!
                               } else {
                                 setState(() => _swipeValue = 0.0); // Snap back
@@ -237,7 +234,33 @@ class _CheckInScreenState extends State<CheckInScreen> {
               'Collected',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
+
+            // Promo Code Box
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green, width: 1.5),
+              ),
+              child: Column(
+                children: [
+                  const Text('YOUR PROMO CODE',
+                      style: TextStyle(fontSize: 11, color: Colors.grey, letterSpacing: 1.5)),
+                  const SizedBox(height: 6),
+                  Text(
+                    _promoCode ?? '',
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.bold,
+                        letterSpacing: 2, color: Colors.black),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
 
             Text(
               'One ${widget.title} for $_dogName',
