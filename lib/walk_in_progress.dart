@@ -382,8 +382,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Time / Distance
                     Row(
                       children: [
-                        const Expanded(
-                          child: _StatCard(label: 'TIME', value: '00:00'),
+                        Expanded(
+                          child: _StatCard(label: 'TIME', value: _formattedTime),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
