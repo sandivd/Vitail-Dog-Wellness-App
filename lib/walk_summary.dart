@@ -31,13 +31,6 @@ class WalkSummary extends StatefulWidget {
 }
 
 class _WalkSummaryState extends State<WalkSummary> {
-  static const Color pageBg = Color(0xFFEFECE6);
-  static const Color coral = Color(0xFFBA5A3A);
-  static const Color ink = Color(0xFF1E1E1E);
-  static const Color muted = Color(0xFF7C776E);
-  static const Color goalGreen = Color(0xFFD9E4B0);
-  static const Color goalGreenText = Color(0xFF5C6B3F);
-
   static const List<String> _moods = [
     'Active',
     'Playful',
@@ -156,109 +149,55 @@ class _WalkSummaryState extends State<WalkSummary> {
 
   Future<void> _finishAndSave() async {
     if (_isSaving) return;
+
+    // The timer never started (e.g. location permission was denied).
+    // Discard instead of saving a 0-second walk.
+    if (widget.elapsedSeconds < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Walk not started — nothing to save.')),
+      );
+      Navigator.popUntil(context, (route) => route.isFirst);
+      return;
+    }
+
     setState(() => _isSaving = true);
 
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) {
+    final client = Supabase.instance.client;
+    if (client.auth.currentUser == null) {
       setState(() => _isSaving = false);
       return;
     }
 
-    final today = DateTime.now();
-    final todayDateOnly = DateTime(today.year, today.month, today.day);
-    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
+    final now = DateTime.now();
+    final todayStr =
+        DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
+
+    // Single-dog walks are attributed via dog_id. Multi-dog walks would
+    // need a walk_dogs junction table (not in the schema yet).
+    final String? dogId =
+        widget.dogs.length == 1 ? widget.dogs.first['id']?.toString() : null;
+
+    // GPS trace for the route_data jsonb column.
+    final routeData = [
+      for (final p in widget.routePoints)
+        {'lat': p.latitude, 'lng': p.longitude},
+    ];
+
+    // TODO: persist _photo once the walks table has a photo_url column.
+    // Until then the picker is display-only — no orphan Storage uploads.
+    // Mood and note are the same story (no columns in the schema yet).
 
     try {
-      // Upload the photo first (if any) so we have a URL to store with the walk.
-      String? photoUrl;
-      if (_photo != null) {
-        final fileName =
-            '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage
-            .from('walk_photos')
-            .upload(fileName, File(_photo!.path));
-        photoUrl =
-            Supabase.instance.client.storage.from('walk_photos').getPublicUrl(fileName);
-      }
-
-      int pointsEarned = _baseDistancePoints;
-
-      // Bonus quest points: first 1km+ walk of the day earns +50.
-      bool questBonusApplied = false;
-      if (widget.distanceMeters >= 1000) {
-        final taskCheck = await Supabase.instance.client
-            .from('daily_tasks')
-            .select('walk_done')
-            .eq('user_id', userId)
-            .eq('task_date', todayStr)
-            .maybeSingle();
-
-        if (taskCheck?['walk_done'] != true) {
-          pointsEarned += 50;
-          questBonusApplied = true;
-        }
-      }
-
-      // 1. Save the walk.
-      // NOTE: 'mood', 'note', and 'photo_url' assume matching columns exist
-      // on the 'walks' table (mood text, note text, photo_url text). Add
-      // them in Supabase if they don't exist yet, or this insert will
-      // surface a Postgrest error naming the missing column.
-      await Supabase.instance.client.from('walks').insert({
-        'user_id': userId,
-        'walk_date': todayStr,
-        'distance_meters': widget.distanceMeters,
-        'duration_seconds': widget.elapsedSeconds,
-        'points_earned': pointsEarned,
-        // 'mood': _selectedMood,       no mood column in schema
-        // 'note': _noteController.text.trim(),      no note column in schema
-        // 'photo_url': photoUrl,      no photo column in schema
+      // One atomic RPC: inserts the walk (with route + dog), computes the
+      // points, marks the daily task and updates the streak — all
+      // server-side, so none of it can be spoofed or race itself.
+      await client.rpc('save_walk', params: {
+        'p_distance_meters': widget.distanceMeters,
+        'p_duration_seconds': widget.elapsedSeconds,
+        'p_walk_date': todayStr,
+        'p_dog_id': dogId,
+        'p_route_data': routeData.isEmpty ? null : routeData,
       });
-
-      if (questBonusApplied) {
-        await Supabase.instance.client.from('daily_tasks').upsert({
-          'user_id': userId,
-          'task_date': todayStr,
-          'walk_done': true,
-        }, onConflict: 'user_id, task_date');
-      }
-
-      // 2. Fetch current points, streak, and last walk date.
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points, daily_streak, last_walk_date')
-          .eq('id', userId)
-          .single();
-
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int currentStreak = profileRes['daily_streak'] ?? 0;
-      String? lastWalkStr = profileRes['last_walk_date'];
-
-      // 3. Calculate new streak.
-      int newStreak = 1;
-      if (lastWalkStr != null) {
-        final lastWalk = DateTime.parse(lastWalkStr);
-        final lastWalkDateOnly =
-            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
-        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
-
-        if (diffInDays == 1) {
-          newStreak = currentStreak + 1;
-        } else if (diffInDays == 0) {
-          newStreak = currentStreak;
-        }
-      }
-
-      // 4. Update profile with new points, streak, and date.
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': currentPoints + pointsEarned,
-        'daily_streak': newStreak,
-        'last_walk_date': todayStr,
-      }).eq('id', userId);
-
-      // NOTE: hygiene (pee/poo) entries aren't persisted anywhere yet —
-      // there's no dog-hygiene table in the current schema. They're shown
-      // here for the user's own review, but only the walk itself is saved.
 
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
@@ -289,20 +228,22 @@ class _WalkSummaryState extends State<WalkSummary> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: pageBg,
+      backgroundColor: colorScheme.surface,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           children: [
-            const Center(
+            Center(
               child: Text(
                 'WALK SUMMARY',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 1.0,
-                  color: muted,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -312,11 +253,11 @@ class _WalkSummaryState extends State<WalkSummary> {
               child: Container(
                 width: 64,
                 height: 64,
-                decoration: const BoxDecoration(
-                  color: goalGreen,
+                decoration: BoxDecoration(
+                  color: colorScheme.secondaryContainer,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.star_rounded, color: goalGreenText, size: 30),
+                child: Icon(Icons.star_rounded, color: colorScheme.onSecondaryContainer, size: 30),
               ),
             ),
             const SizedBox(height: 16),
@@ -324,10 +265,10 @@ class _WalkSummaryState extends State<WalkSummary> {
             Text(
               _headline,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: ink,
+                color: colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 24),
@@ -351,7 +292,7 @@ class _WalkSummaryState extends State<WalkSummary> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: goalGreen,
+                color: colorScheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Center(
@@ -359,8 +300,8 @@ class _WalkSummaryState extends State<WalkSummary> {
                   _pointsPreview == null
                       ? 'Calculating points…'
                       : '+$_pointsPreview points earned',
-                  style: const TextStyle(
-                    color: goalGreenText,
+                  style: TextStyle(
+                    color: colorScheme.onSecondaryContainer,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),
@@ -369,13 +310,13 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 28),
 
-            const Text(
+            Text(
               'HOW WAS THE WALK?',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: muted,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
@@ -395,13 +336,13 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 28),
 
-            const Text(
+            Text(
               'ROUTE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: muted,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 12),
@@ -410,7 +351,7 @@ class _WalkSummaryState extends State<WalkSummary> {
 
             if (widget.dogs.isNotEmpty) ...[
               Row(
-                children: const [
+                children: [
                   Expanded(
                     child: Text(
                       'HYGIENE',
@@ -418,7 +359,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: muted,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -431,7 +372,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: muted,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -444,7 +385,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.6,
-                        color: muted,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -462,15 +403,15 @@ class _WalkSummaryState extends State<WalkSummary> {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: colorScheme.surface,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: const Color(0xFFE7E2D8)),
+                    border: Border.all(color: colorScheme.outline),
                   ),
                   child: Row(
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: const Color(0xFFDDD8CC),
+                        backgroundColor: colorScheme.surfaceContainerHighest,
                         backgroundImage:
                             photoUrl != null && photoUrl.toString().isNotEmpty
                                 ? NetworkImage(photoUrl)
@@ -485,12 +426,12 @@ class _WalkSummaryState extends State<WalkSummary> {
                               name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 15),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 15, color: colorScheme.onSurface),
                             ),
                             Text(
                               _hygieneStatus(dogId),
-                              style: const TextStyle(fontSize: 12, color: muted),
+                              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),
@@ -519,13 +460,13 @@ class _WalkSummaryState extends State<WalkSummary> {
               const SizedBox(height: 20),
             ],
 
-            const Text(
+            Text(
               'NOTE',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.6,
-                color: muted,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -534,20 +475,20 @@ class _WalkSummaryState extends State<WalkSummary> {
               decoration: InputDecoration(
                 hintText: 'Add a walk note...',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: colorScheme.surface,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE0DCD3)),
+                  borderSide: BorderSide(color: colorScheme.outline),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: Color(0xFFE0DCD3)),
+                  borderSide: BorderSide(color: colorScheme.outline),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: coral),
+                  borderSide: BorderSide(color: colorScheme.primary),
                 ),
               ),
             ),
@@ -563,9 +504,9 @@ class _WalkSummaryState extends State<WalkSummary> {
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _finishAndSave,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: coral,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: coral.withValues(alpha: 0.6),
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  disabledBackgroundColor: colorScheme.primary.withValues(alpha: 0.6),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
@@ -601,11 +542,13 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colorScheme.outline),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -618,20 +561,20 @@ class _StatCard extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF7C776E),
+              color: colorScheme.onSurfaceVariant,
               letterSpacing: 0.6,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF1E1E1E),
+              color: colorScheme.onSurface,
             ),
           ),
         ],
@@ -651,27 +594,25 @@ class _MoodChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  static const Color _selectedBg = Color(0xFF6D8CA3);
-  static const Color _ink = Color(0xFF1E1E1E);
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? _selectedBg : Colors.white,
+          color: selected ? colorScheme.secondary : colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? _selectedBg : const Color(0xFFE0DCD3),
+            color: selected ? colorScheme.secondary : colorScheme.outline,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : _ink,
+            color: selected ? colorScheme.onSecondary : colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -692,22 +633,19 @@ class _HygieneButton extends StatelessWidget {
   final bool active;
   final VoidCallback onTap;
 
-  static const Color _activeBg = Color(0xFFD9E4B0);
-  static const Color _activeText = Color(0xFF5C6B3F);
-  static const Color _ink = Color(0xFF1E1E1E);
-
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? _activeBg : Colors.white,
+          color: active ? colorScheme.secondaryContainer : colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: active ? _activeBg : const Color(0xFFE0DCD3),
+            color: active ? colorScheme.secondaryContainer : colorScheme.outline,
           ),
         ),
         child: Text(
@@ -716,7 +654,7 @@ class _HygieneButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: active ? _activeText : _ink,
+            color: active ? colorScheme.onSecondaryContainer : colorScheme.onSurface,
           ),
         ),
       ),
@@ -759,8 +697,10 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     if (widget.points.length < 2) {
-      return _placeholder();
+      return _placeholder(context);
     }
 
     return ClipRRect(
@@ -773,7 +713,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
             Polyline(
               polylineId: const PolylineId('summary_route'),
               points: widget.points,
-              color: const Color(0xFFBA5A3A),
+              color: colorScheme.primary,
               width: 5,
             ),
           },
@@ -797,12 +737,13 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
     );
   }
 
-  Widget _placeholder() {
+  Widget _placeholder(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       height: 180,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFD3E3DA),
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Stack(
@@ -816,7 +757,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
                   width: 32,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -825,18 +766,18 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
                   width: 20,
                   height: 18,
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: colorScheme.onSurface.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
               ],
             ),
           ),
-          const Center(
+          Center(
             child: Text(
               'Route map',
               style: TextStyle(
-                color: Color(0xFF5C6B58),
+                color: colorScheme.onSurfaceVariant,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -860,6 +801,7 @@ class _PhotoPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (photo == null) {
       return InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -868,13 +810,13 @@ class _PhotoPicker extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFFF3F0EA),
+            color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Center(
+          child: Center(
             child: Text(
               '+ Add photo',
-              style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1E1E1E)),
+              style: TextStyle(fontWeight: FontWeight.w600, color: colorScheme.onSurface),
             ),
           ),
         ),
