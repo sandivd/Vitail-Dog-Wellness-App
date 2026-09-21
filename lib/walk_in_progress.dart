@@ -4,7 +4,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'exercise_data.dart';
 import 'walk_summary.dart';
 
 class WalkInProgress extends StatefulWidget {
@@ -53,29 +52,14 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   String get _formattedDistance => (_totalDistance / 1000).toStringAsFixed(2);
 
-  // Recommended walk length, derived from each dog's breed + age + weight.
-  // For a group walk, use the highest recommendation among the selected dogs.
+  /// Goal from the dogs' stored daily_goal_minutes (set at onboarding),
+  /// so the progress bar matches the Home screen rings. Group walks use
+  /// the highest goal among the selected dogs.
   int get _goalMinutes {
     if (_dogs.isEmpty) return 30;
-
-    final recommended = _dogs.map((dog) {
-      final breed = (dog['breed'] ?? '').toString();
-      final age = (dog['age'] as num?)?.toDouble() ?? 2.0;
-      final weight = (dog['weight'] as num?)?.toDouble() ?? 2.0;
-      final activity =
-          (dog['activity_level'] ?? 'moderate').toString().toLowerCase();
-
-      final result = ExerciseCalculator.calculate(
-        breed: breed,
-        weightKg: weight,
-        ageYears: age,
-        ownerActivityLevel: activity,
-      );
-
-      return (result['targetMinutes'] as num).toInt();
-    });
-
-    return recommended.reduce((a, b) => a > b ? a : b);
+    final goals = _dogs
+        .map((dog) => (dog['daily_goal_minutes'] as num?)?.toInt() ?? 30);
+    return goals.reduce((a, b) => a > b ? a : b);
   }
 
   double get _progress =>
