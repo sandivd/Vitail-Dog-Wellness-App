@@ -20,6 +20,7 @@ class WalkInProgress extends StatefulWidget {
 }
 
 class _WalkInProgressState extends State<WalkInProgress> {
+  static const Color buttonColor = Color(0xFFBA5A3A);
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
 
   GoogleMapController? _mapController;
