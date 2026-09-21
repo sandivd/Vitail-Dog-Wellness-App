@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'password_field.dart';
 import 'login_view.dart';
 import 'register_screen.dart';
-import 'home_screen.dart';
-import 'onboarding_screen.dart';
+import 'auth_routing.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,6 +17,18 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
 
+  // Shared "where do I go after signing in?" step: onboarding until the
+  // user has added a dog, then Home. (Profile rows are created by a DB
+  // trigger now, so their existence no longer signals onboarding state.)
+  Future<void> _navigateAfterAuth() async {
+    final destination = await resolvePostAuthScreen();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => destination),
+    );
+  }
+
   Future<void> _login() async {
     setState(() => _isLoading = true);
     try {
@@ -26,22 +36,9 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
-
-      if (!mounted) return;
-      
-      if (response != null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
-      } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
-      }
+      await _navigateAfterAuth();
     } catch (e) {
+      if (!mounted) return;
       String errorMessage = 'An error occurred. Please try again.';
       if (e.toString().contains('Invalid login credentials')) {
         errorMessage = 'Incorrect email or password.';
@@ -61,7 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
         serverClientId: '919287771219-4r09c1mtjrruriu921rvpntqukjv0uji.apps.googleusercontent.com',
       ).signIn();
       if (googleUser == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
@@ -73,22 +70,9 @@ class _LoginScreenState extends State<LoginScreen> {
         accessToken: googleAuth.accessToken,
       );
 
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
-
-      if (!mounted) return;
-      
-      if (response != null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
-      } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
-      }
+      await _navigateAfterAuth();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
       );

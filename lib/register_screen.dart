@@ -3,8 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'password_field.dart';
 import 'signup_view.dart';
-import 'home_screen.dart';
-import 'onboarding_screen.dart';
+import 'auth_routing.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,6 +17,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
+
+  // Shared "where do I go after signing in?" step.
+  Future<void> _navigateAfterAuth() async {
+    final destination = await resolvePostAuthScreen();
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => destination),
+    );
+  }
 
   Future<void> _signUp() async {
     if (!PasswordField.isValid(_passwordController.text) || !PasswordField.isValid(_confirmPasswordController.text)) {
@@ -36,14 +45,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text.trim(),
       );
 
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      await Supabase.instance.client.from('profiles').upsert({
-        'id': userId,
-      });
-
-      if (!mounted) return;
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
+      // The profiles row is created automatically by the DB trigger now —
+      // no client-side upsert needed (or allowed, for the points columns).
+      await _navigateAfterAuth();
     } catch (e) {
       String errorMessage = 'An error occurred. Please try again.';
       String errorStr = e.toString().toLowerCase();
@@ -83,21 +87,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         accessToken: googleAuth.accessToken,
       );
 
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      final response = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
-
-      if (!mounted) return;
-      
-      if (response != null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const HomeScreen()));
-      } else {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const OnboardingScreen()));
-      }
+      await _navigateAfterAuth();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),

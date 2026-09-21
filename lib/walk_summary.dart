@@ -149,109 +149,55 @@ class _WalkSummaryState extends State<WalkSummary> {
 
   Future<void> _finishAndSave() async {
     if (_isSaving) return;
+
+    // The timer never started (e.g. location permission was denied).
+    // Discard instead of saving a 0-second walk.
+    if (widget.elapsedSeconds < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Walk not started — nothing to save.')),
+      );
+      Navigator.popUntil(context, (route) => route.isFirst);
+      return;
+    }
+
     setState(() => _isSaving = true);
 
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) {
+    final client = Supabase.instance.client;
+    if (client.auth.currentUser == null) {
       setState(() => _isSaving = false);
       return;
     }
 
-    final today = DateTime.now();
-    final todayDateOnly = DateTime(today.year, today.month, today.day);
-    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
+    final now = DateTime.now();
+    final todayStr =
+        DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
+
+    // Single-dog walks are attributed via dog_id. Multi-dog walks would
+    // need a walk_dogs junction table (not in the schema yet).
+    final String? dogId =
+        widget.dogs.length == 1 ? widget.dogs.first['id']?.toString() : null;
+
+    // GPS trace for the route_data jsonb column.
+    final routeData = [
+      for (final p in widget.routePoints)
+        {'lat': p.latitude, 'lng': p.longitude},
+    ];
+
+    // TODO: persist _photo once the walks table has a photo_url column.
+    // Until then the picker is display-only — no orphan Storage uploads.
+    // Mood and note are the same story (no columns in the schema yet).
 
     try {
-      // Upload the photo first (if any) so we have a URL to store with the walk.
-      String? photoUrl;
-      if (_photo != null) {
-        final fileName =
-            '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage
-            .from('walk_photos')
-            .upload(fileName, File(_photo!.path));
-        photoUrl =
-            Supabase.instance.client.storage.from('walk_photos').getPublicUrl(fileName);
-      }
-
-      int pointsEarned = _baseDistancePoints;
-
-      // Bonus quest points: first 1km+ walk of the day earns +50.
-      bool questBonusApplied = false;
-      if (widget.distanceMeters >= 1000) {
-        final taskCheck = await Supabase.instance.client
-            .from('daily_tasks')
-            .select('walk_done')
-            .eq('user_id', userId)
-            .eq('task_date', todayStr)
-            .maybeSingle();
-
-        if (taskCheck?['walk_done'] != true) {
-          pointsEarned += 50;
-          questBonusApplied = true;
-        }
-      }
-
-      // 1. Save the walk.
-      // NOTE: 'mood', 'note', and 'photo_url' assume matching columns exist
-      // on the 'walks' table (mood text, note text, photo_url text). Add
-      // them in Supabase if they don't exist yet, or this insert will
-      // surface a Postgrest error naming the missing column.
-      await Supabase.instance.client.from('walks').insert({
-        'user_id': userId,
-        'walk_date': todayStr,
-        'distance_meters': widget.distanceMeters,
-        'duration_seconds': widget.elapsedSeconds,
-        'points_earned': pointsEarned,
-        // 'mood': _selectedMood,       no mood column in schema
-        // 'note': _noteController.text.trim(),      no note column in schema
-        // 'photo_url': photoUrl,      no photo column in schema
+      // One atomic RPC: inserts the walk (with route + dog), computes the
+      // points, marks the daily task and updates the streak — all
+      // server-side, so none of it can be spoofed or race itself.
+      await client.rpc('save_walk', params: {
+        'p_distance_meters': widget.distanceMeters,
+        'p_duration_seconds': widget.elapsedSeconds,
+        'p_walk_date': todayStr,
+        'p_dog_id': dogId,
+        'p_route_data': routeData.isEmpty ? null : routeData,
       });
-
-      if (questBonusApplied) {
-        await Supabase.instance.client.from('daily_tasks').upsert({
-          'user_id': userId,
-          'task_date': todayStr,
-          'walk_done': true,
-        }, onConflict: 'user_id, task_date');
-      }
-
-      // 2. Fetch current points, streak, and last walk date.
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points, daily_streak, last_walk_date')
-          .eq('id', userId)
-          .single();
-
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int currentStreak = profileRes['daily_streak'] ?? 0;
-      String? lastWalkStr = profileRes['last_walk_date'];
-
-      // 3. Calculate new streak.
-      int newStreak = 1;
-      if (lastWalkStr != null) {
-        final lastWalk = DateTime.parse(lastWalkStr);
-        final lastWalkDateOnly =
-            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
-        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
-
-        if (diffInDays == 1) {
-          newStreak = currentStreak + 1;
-        } else if (diffInDays == 0) {
-          newStreak = currentStreak;
-        }
-      }
-
-      // 4. Update profile with new points, streak, and date.
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': currentPoints + pointsEarned,
-        'daily_streak': newStreak,
-        'last_walk_date': todayStr,
-      }).eq('id', userId);
-
-      // NOTE: hygiene (pee/poo) entries aren't persisted anywhere yet —
-      // there's no dog-hygiene table in the current schema. They're shown
-      // here for the user's own review, but only the walk itself is saved.
 
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
@@ -752,7 +698,7 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    
+
     if (widget.points.length < 2) {
       return _placeholder(context);
     }

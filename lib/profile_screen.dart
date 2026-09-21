@@ -264,66 +264,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
                 ElevatedButton(
                   onPressed: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final navigator = Navigator.of(context);
                     try {
-                      double newWeight = double.tryParse(_weightInputController.text) ?? 0.0;
-                      if (newWeight <= 0) return;
-                      
-                      // Check if an entry for this exact date already exists
-                      final existingEntry = await Supabase.instance.client
-                          .from('weight_history')
-                          .select('id')
-                          .eq('dog_id', _dogData?['id'])
-                          .eq('recorded_date', _selectedDate.toIso8601String().split('T')[0])
-                          .maybeSingle();
+                      final dogId = _dogData?['id'];
+                      if (dogId == null) return;
 
-                      if (existingEntry != null) {
-                        // UPDATE existing entry for this date
-                        await Supabase.instance.client.from('weight_history').update({
-                          'weight_kg': newWeight,
-                        }).eq('id', existingEntry['id']);
-                      } else {
-                        // INSERT new entry
-                        await Supabase.instance.client.from('weight_history').insert({
-                          'dog_id': _dogData?['id'],
-                          'weight_kg': newWeight,
-                          'recorded_date': _selectedDate.toIso8601String().split('T')[0], // Format as YYYY-MM-DD
-                        });
-                      }
+                      final newWeight =
+                          double.tryParse(_weightInputController.text.trim());
+                      if (newWeight == null || newWeight <= 0) return;
 
-                      // Update the main dogs table with the latest weight
-                      await Supabase.instance.client.from('dogs').update({
-                        'weight': newWeight,
-                      }).eq('id', _dogData?['id']);
+                      // One atomic RPC: upserts the weight entry (one per
+                      // calendar day), syncs dogs.weight, and awards the
+                      // daily quest bonus exactly once.
+                      final result =
+                          await Supabase.instance.client.rpc('log_weight', params: {
+                        'p_dog_id': dogId,
+                        'p_weight_kg': newWeight,
+                        'p_recorded_date':
+                            _selectedDate.toIso8601String().split('T')[0],
+                      });
+                      final pointsEarned = (result as num?)?.toInt() ?? 0;
 
-                      // Complete the daily weight task & give points (Only if they picked today)
-                      if (_selectedDate.year == DateTime.now().year && 
-                          _selectedDate.month == DateTime.now().month && 
-                          _selectedDate.day == DateTime.now().day) {
-                        
-                        final userId = Supabase.instance.client.auth.currentUser!.id;
-                        final today = DateTime.now().toIso8601String().split('T')[0];
-                        
-                        // 1. Check if weight quest was already done today
-                        final taskCheck = await Supabase.instance.client
-                            .from('daily_tasks')
-                            .select('weight_done')
-                            .eq('user_id', userId)
-                            .eq('task_date', today)
-                            .maybeSingle();
-
-                        // 2. If NOT done yet, give 50 points!
-                        if (taskCheck?['weight_done'] != true) {
-                          await Supabase.instance.client.rpc('add_points', params: {'p_amount': 50});
-                        }
-
-                        // 3. Mark task as done
-                        await _completeDailyTask('weight_done');
-                      }
-
-                      if (context.mounted) Navigator.pop(context);
+                      navigator.pop();
                       _fetchProfile(); // Refresh UI
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+
+                      if (pointsEarned > 0) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Weight logged · +$pointsEarned pts')),
+                        );
+                      }
+                    } on PostgrestException catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('Could not save weight: ${e.message}')),
+                      );
                     }
                   },
                   child: const Text('Save'),
@@ -334,19 +308,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       },
     );
-  }
-
-  // Helper to complete daily tasks
-  Future<void> _completeDailyTask(String taskColumn) async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    final today = DateTime.now().toIso8601String().split('T')[0];
-    
-    // Try to update, if it doesn't exist, insert
-    await Supabase.instance.client.from('daily_tasks').upsert({
-      'user_id': userId,
-      'task_date': today,
-      taskColumn: true,
-    }, onConflict: 'user_id, task_date');
   }
 
   @override
