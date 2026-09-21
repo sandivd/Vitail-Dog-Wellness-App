@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 // file imports
 import 'walk_in_progress.dart';
 
 class ChooseDogProfiles extends StatefulWidget {
-  const ChooseDogProfiles({super.key});
-
+  const ChooseDogProfiles({super.key, this.plannedRoute});
+  final List<LatLng>? plannedRoute;
   @override
   State<ChooseDogProfiles> createState() => _ChooseDogProfilesState();
 }
@@ -231,7 +232,7 @@ class _ChooseDogProfilesState extends State<ChooseDogProfiles> {
                             Navigator.pushReplacement(  // navigate to Walk In Progress page
                               context,
                               MaterialPageRoute(
-                                builder: (context) => WalkInProgress(selectedDogs: selected),
+                                builder: (context) => WalkInProgress(selectedDogs: selected, plannedRoute: widget.plannedRoute),
                               ),  
                             );
                           },

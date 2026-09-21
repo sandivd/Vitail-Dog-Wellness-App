@@ -23,9 +23,10 @@ const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
 const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
 
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.selectedDogs});
+  const WalkInProgress({super.key, this.selectedDogs, this.plannedRoute});
 
   final List<Map<String, dynamic>>? selectedDogs;
+  final List<LatLng>? plannedRoute;
 
   @override
   State<WalkInProgress> createState() => _WalkInProgressState();
@@ -203,6 +204,63 @@ class _WalkInProgressState extends State<WalkInProgress> {
     );
   }
 
+  Set<Polyline> get _polylines {
+    final polylines = <Polyline>{
+      Polyline(
+        polylineId: const PolylineId('walk_route'),
+        points: _polylinePoints,
+        color: _kCoral,
+        width: 6,
+      ),
+    };
+
+    // Route planned on WalkScreen before starting — dashed reference line.
+    if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('planned_route'),
+          points: widget.plannedRoute!,
+          color: Colors.black45,
+          width: 4,
+          patterns: [PatternItem.dash(14), PatternItem.gap(10)],
+        ),
+      );
+    }
+
+    return polylines;
+  }
+
+  Set<Marker> get _markers {
+    if (widget.plannedRoute == null || widget.plannedRoute!.isEmpty) {
+      return {};
+    }
+    return {
+      Marker(
+        markerId: const MarkerId('planned_destination'),
+        position: widget.plannedRoute!.last,
+      ),
+    };
+  }
+
+  LatLngBounds _boundsFor(List<LatLng> points) {
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final point in points) {
+      minLat = point.latitude < minLat ? point.latitude : minLat;
+      maxLat = point.latitude > maxLat ? point.latitude : maxLat;
+      minLng = point.longitude < minLng ? point.longitude : minLng;
+      maxLng = point.longitude > maxLng ? point.longitude : maxLng;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -212,19 +270,23 @@ class _WalkInProgressState extends State<WalkInProgress> {
           // Map fills the whole screen; the sheet slides over it.
           Positioned.fill(
             child: GoogleMap(
-              onMapCreated: (c) => _mapController = c,
+              onMapCreated: (c) {
+                _mapController = c;
+                if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
+                  final bounds = _boundsFor(widget.plannedRoute!);
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    _mapController?.animateCamera(
+                      CameraUpdate.newLatLngBounds(bounds, 60),
+                    );
+                  });
+                }
+              },
               initialCameraPosition:
                   const CameraPosition(target: _melbourne, zoom: 16.0),
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
-              polylines: {
-                Polyline(
-                  polylineId: const PolylineId('walk_route'),
-                  points: _polylinePoints,
-                  color: _kCoral,
-                  width: 6,
-                ),
-              },
+              polylines: _polylines,
+              markers: _markers,
             ),
           ),
 

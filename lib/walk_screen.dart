@@ -204,9 +204,17 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   void _startWalk() {
+    final hasPlannedRoute = _currentPosition != null && _droppedPin != null;
+
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ChooseDogProfiles()),
+      MaterialPageRoute(
+        builder: (context) => ChooseDogProfiles(
+          plannedRoute: hasPlannedRoute
+              ? [_currentPosition!, _droppedPin!]
+              : null,
+        ),
+      ),
     );
   }
 
