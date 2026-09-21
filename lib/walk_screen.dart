@@ -16,11 +16,6 @@ class WalkScreen extends StatefulWidget {
 }
 
 class _WalkScreenState extends State<WalkScreen> {
-  static const Color pageBg = Color(0xFFEFECE6);
-  static const Color coral = Color(0xFFBA5A3A);
-  static const Color muted = Color(0xFF7C776E);
-  static const Color linkBlue = Color(0xFF3E6FB0);
-
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
 
   // Average dog-walk pace, used only to estimate time for the placeholder
@@ -209,19 +204,9 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   void _startWalk() {
-    // Carry the dropped-pin route forward if the user set one up — it'll
-    // show on the map once tracking begins in WalkInProgress.
-    final hasPlannedRoute = _currentPosition != null && _droppedPin != null;
-
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => ChooseDogProfiles(
-          plannedRoute: hasPlannedRoute
-              ? [_currentPosition!, _droppedPin!]
-              : null,
-        ),
-      ),
+      MaterialPageRoute(builder: (context) => const ChooseDogProfiles()),
     );
   }
 
@@ -559,8 +544,6 @@ class _RouteLink extends StatelessWidget {
     );
   }
 }
-
-
 
 /// A single nearby-venue row: placeholder thumbnail, name/subtitle, tag pill,
 /// and a chevron. Backed by placeholder data for now (see _nearbyVenues).

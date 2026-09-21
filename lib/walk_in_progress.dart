@@ -23,24 +23,20 @@ const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
 const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
 
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.selectedDogs, this.plannedRoute});
+  const WalkInProgress({super.key, this.selectedDogs});
 
   final List<Map<String, dynamic>>? selectedDogs;
-
-  // Route the user planned on WalkScreen by dropping a pin, shown on the
-  // map as a reference alongside the live-tracked route.
-  final List<LatLng>? plannedRoute;
 
   @override
   State<WalkInProgress> createState() => _WalkInProgressState();
 }
 
 class _WalkInProgressState extends State<WalkInProgress> {
-  static const Color buttonColor = Color(0xFFBA5A3A);
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
 
   GoogleMapController? _mapController;
 
+  bool _isWalking = false;
   bool _isPaused = false;
   double _totalDistance = 0.0; // meters
   int _elapsedSeconds = 0;
@@ -130,6 +126,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
     }
 
     setState(() {
+      _isWalking = true;
       _isPaused = false;
     });
 
@@ -185,7 +182,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
     });
   }
 
-  void _finishWalk() {
+  Future<void> _finishWalk() async {
     _timer?.cancel();
     _positionStream?.cancel();
 
@@ -215,19 +212,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
           // Map fills the whole screen; the sheet slides over it.
           Positioned.fill(
             child: GoogleMap(
-              onMapCreated: (c) {
-                _mapController = c;
-                if (widget.plannedRoute != null &&
-                    widget.plannedRoute!.length >= 2) {
-                  final bounds = _boundsFor(widget.plannedRoute!);
-                  // Give the map a beat to lay out before fitting bounds.
-                  Future.delayed(const Duration(milliseconds: 300), () {
-                    _mapController?.animateCamera(
-                      CameraUpdate.newLatLngBounds(bounds, 60),
-                    );
-                  });
-                }
-              },
+              onMapCreated: (c) => _mapController = c,
               initialCameraPosition:
                   const CameraPosition(target: _melbourne, zoom: 16.0),
               myLocationEnabled: true,
