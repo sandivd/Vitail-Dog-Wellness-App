@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class CheckInScreen extends StatefulWidget {
-  final String rewardId;
+  final int cost;
   final String title;
   final String partnerName;
 
   const CheckInScreen({
     super.key,
-    required this.rewardId,
+    required this.cost,
     required this.title,
     required this.partnerName,
   });
@@ -22,7 +22,6 @@ class _CheckInScreenState extends State<CheckInScreen> {
   bool _isCollected = false;
   bool _isProcessing = false;
   String _dogName = "your dog"; // Default fallback
-  String? _promoCode;
 
   @override
   void initState() {
@@ -38,11 +37,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
           .select('dog_name')
           .eq('owner_id', userId)
           .limit(1)
-          .maybeSingle();
-
+          .single();
+      
       if (mounted) {
         setState(() {
-          _dogName = response?['dog_name'] ?? "your dog";
+          _dogName = response['dog_name'] ?? "your dog";
         });
       }
     } catch (e) {
@@ -51,32 +50,31 @@ class _CheckInScreenState extends State<CheckInScreen> {
   }
 
   Future<void> _collectReward() async {
-    if (_isProcessing) return;
     setState(() => _isProcessing = true);
     try {
-      // Returns the generated promo code on success, null if the
-      // user didn't have enough points.
-      final code = await Supabase.instance.client.rpc(
-        'redeem_reward',
-        params: {'p_reward_id': widget.rewardId},
-      );
+      final userId = Supabase.instance.client.auth.currentUser!.id;
+      
+      // 1. Fetch current points
+      final profileRes = await Supabase.instance.client
+          .from('profiles')
+          .select('total_points')
+          .eq('id', userId)
+          .single();
+      
+      int currentPoints = profileRes['total_points'] ?? 0;
+      int newPoints = currentPoints - widget.cost;
 
-      if (!mounted) return;
+      // 2. Deduct points
+      await Supabase.instance.client.from('profiles').update({
+        'total_points': newPoints,
+      }).eq('id', userId);
 
-      if (code is String) {
-        setState(() {
-          _promoCode = code;
-          _isCollected = true;
-          _isProcessing = false;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not enough points!'), backgroundColor: Colors.red),
-        );
-        setState(() => _isProcessing = false);
-      }
+      // 3. Show success screen
+      setState(() {
+        _isCollected = true;
+        _isProcessing = false;
+      });
     } catch (e) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
@@ -117,13 +115,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 child: const Icon(Icons.pets, size: 50, color: Colors.orange),
               ),
               const SizedBox(height: 32),
-
+              
               const Text(
                 'Show this at the counter',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
               ),
               const SizedBox(height: 16),
-
+              
               Text(
                 'Swipe to collect ${widget.title} for $_dogName at ${widget.partnerName}',
                 textAlign: TextAlign.center,
@@ -161,14 +159,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
                           left: _swipeValue * maxDrag,
                           child: GestureDetector(
                             onHorizontalDragUpdate: (details) {
-                              if (_isProcessing) return;
                               setState(() {
                                 _swipeValue += details.primaryDelta! / maxDrag;
                                 _swipeValue = _swipeValue.clamp(0.0, 1.0);
                               });
                             },
                             onHorizontalDragEnd: (details) {
-                              if (_swipeValue > 0.9 && !_isProcessing) {
+                              if (_swipeValue > 0.9) {
                                 _collectReward(); // Trigger collection!
                               } else {
                                 setState(() => _swipeValue = 0.0); // Snap back
@@ -188,8 +185,8 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                   ),
                                 ],
                               ),
-                              child: _isProcessing
-                                  ? const CircularProgressIndicator(color: Colors.white)
+                              child: _isProcessing 
+                                  ? const CircularProgressIndicator(color: Colors.white) 
                                   : const Icon(Icons.pets, color: Colors.white, size: 30),
                             ),
                           ),
@@ -229,39 +226,13 @@ class _CheckInScreenState extends State<CheckInScreen> {
               ),
             ),
             const SizedBox(height: 32),
-
+            
             const Text(
               'Collected',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black),
             ),
-            const SizedBox(height: 24),
-
-            // Promo Code Box
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green, width: 1.5),
-              ),
-              child: Column(
-                children: [
-                  const Text('YOUR PROMO CODE',
-                      style: TextStyle(fontSize: 11, color: Colors.grey, letterSpacing: 1.5)),
-                  const SizedBox(height: 6),
-                  Text(
-                    _promoCode ?? '',
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold,
-                        letterSpacing: 2, color: Colors.black),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
+            const SizedBox(height: 12),
+            
             Text(
               'One ${widget.title} for $_dogName',
               style: const TextStyle(fontSize: 16, color: Colors.grey),
@@ -271,7 +242,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
             const SizedBox(height: 48),
-
+            
             ElevatedButton(
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(

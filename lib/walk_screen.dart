@@ -156,21 +156,28 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   void _onSearchSubmitted(String query) {
+    // Placeholder search: matches against the local venue list so the field
+    // is interactive today. A real Google-Maps-style search bar needs a
+    // Places Autocomplete/Geocoding integration (extra package + API key)
+    // to resolve arbitrary addresses — swap that in here later.
     final matches = _visibleVenues;
     if (matches.isEmpty) return;
     _dropPinAt(matches.first['location'] as LatLng);
     FocusScope.of(context).unfocus();
   }
 
-  Set<Polyline> _buildPolylines(Color lineColor) {
+  Set<Polyline> get _polylines {
     if (_routeMode == _RouteMode.longest &&
         _currentPosition != null &&
         _droppedPin != null) {
+      // NOTE: draws a straight line as a stand-in "route". A real "longest
+      // route" needs the Directions API to fetch alternate routes and pick
+      // the longest one — this is a placeholder until that's wired up.
       return {
         Polyline(
           polylineId: const PolylineId('pin_route'),
           points: [_currentPosition!, _droppedPin!],
-          color: lineColor,
+          color: coral,
           width: 5,
           patterns: [PatternItem.dash(14), PatternItem.gap(10)],
         ),
@@ -227,10 +234,8 @@ class _WalkScreenState extends State<WalkScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: pageBg,
       body: Stack(
         children: [
           // Map fills the whole screen; overlays and the sheet sit on top.
@@ -242,7 +247,7 @@ class _WalkScreenState extends State<WalkScreen> {
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               markers: _markers,
-              polylines: _buildPolylines(colorScheme.primary),
+              polylines: _polylines,
               onLongPress: _dropPinAt,
             ),
           ),
@@ -259,7 +264,7 @@ class _WalkScreenState extends State<WalkScreen> {
                         child: Container(
                           height: 52,
                           decoration: BoxDecoration(
-                            color: colorScheme.surface,
+                            color: Colors.white,
                             borderRadius: BorderRadius.circular(26),
                             boxShadow: [
                               BoxShadow(
@@ -273,12 +278,12 @@ class _WalkScreenState extends State<WalkScreen> {
                             controller: _searchController,
                             onSubmitted: _onSearchSubmitted,
                             textInputAction: TextInputAction.search,
-                            decoration: InputDecoration(
+                            decoration: const InputDecoration(
                               hintText: 'Search parks, cafés, vets...',
-                              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 15),
+                              hintStyle: TextStyle(color: muted, fontSize: 15),
                               border: InputBorder.none,
                               contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 22),
+                                  EdgeInsets.symmetric(horizontal: 22),
                             ),
                           ),
                         ),
@@ -291,7 +296,7 @@ class _WalkScreenState extends State<WalkScreen> {
                           width: 52,
                           height: 52,
                           decoration: BoxDecoration(
-                            color: colorScheme.surface,
+                            color: Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -301,8 +306,8 @@ class _WalkScreenState extends State<WalkScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(Icons.gps_fixed,
-                              color: colorScheme.secondary, size: 22),
+                          child: const Icon(Icons.gps_fixed,
+                              color: linkBlue, size: 22),
                         ),
                       ),
                     ],
@@ -336,13 +341,13 @@ class _WalkScreenState extends State<WalkScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: BoxDecoration(
-                      color: colorScheme.onSurface,
+                      color: Colors.black87,
                       borderRadius: BorderRadius.circular(24),
                     ),
                     child: Text(
                       _routeSummaryText,
-                      style: TextStyle(
-                        color: colorScheme.surface,
+                      style: const TextStyle(
+                        color: Colors.white,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -363,14 +368,14 @@ class _WalkScreenState extends State<WalkScreen> {
             snapSizes: const [0.16, 0.5, 0.9],
             builder: (context, scrollController) {
               return Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black26,
                       blurRadius: 16,
-                      offset: const Offset(0, -4),
+                      offset: Offset(0, -4),
                     ),
                   ],
                 ),
@@ -384,7 +389,7 @@ class _WalkScreenState extends State<WalkScreen> {
                         height: 5,
                         margin: const EdgeInsets.only(bottom: 18),
                         decoration: BoxDecoration(
-                          color: colorScheme.onSurfaceVariant,
+                          color: Colors.black26,
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
@@ -393,13 +398,13 @@ class _WalkScreenState extends State<WalkScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
+                        const Text(
                           'NEARBY',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 0.8,
-                            color: colorScheme.onSurfaceVariant,
+                            color: muted,
                           ),
                         ),
                         TextButton(
@@ -416,10 +421,10 @@ class _WalkScreenState extends State<WalkScreen> {
                             minimumSize: const Size(0, 0),
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          child: Text(
+                          child: const Text(
                             'See all',
                             style: TextStyle(
-                              color: colorScheme.secondary,
+                              color: linkBlue,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -429,11 +434,11 @@ class _WalkScreenState extends State<WalkScreen> {
                     const SizedBox(height: 12),
 
                     if (_visibleVenues.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 24),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
                         child: Center(
                           child: Text('No matches nearby',
-                              style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                              style: TextStyle(color: muted)),
                         ),
                       )
                     else
@@ -459,8 +464,8 @@ class _WalkScreenState extends State<WalkScreen> {
                               fontSize: 18, fontWeight: FontWeight.w600),
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
+                          backgroundColor: coral,
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
@@ -491,16 +496,18 @@ class _RoutePill extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  static const Color _coral = Color(0xFFBA5A3A);
+  static const Color _ink = Color(0xFF1E1E1E);
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? colorScheme.primary : colorScheme.surface,
+          color: selected ? _coral : Colors.white,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
@@ -513,7 +520,7 @@ class _RoutePill extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
+            color: selected ? Colors.white : _ink,
             fontWeight: FontWeight.w600,
             fontSize: 14,
           ),
@@ -536,9 +543,11 @@ class _RouteLink extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  static const Color _ink = Color(0xFF1E1E1E);
+  static const Color _linkBlue = Color(0xFF3E6FB0);
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -546,12 +555,12 @@ class _RouteLink extends StatelessWidget {
         child: Text(
           label,
           style: TextStyle(
-            color: colorScheme.onSurface,
+            color: _ink,
             fontWeight: FontWeight.w600,
             fontSize: 14,
             decoration:
                 selected ? TextDecoration.underline : TextDecoration.none,
-            decorationColor: colorScheme.secondary,
+            decorationColor: _linkBlue,
             decorationThickness: 2,
           ),
         ),
@@ -579,9 +588,11 @@ class _VenueCard extends StatelessWidget {
   final Color tagColor;
   final VoidCallback onTap;
 
+  static const Color _ink = Color(0xFF1E1E1E);
+  static const Color _muted = Color(0xFF7C776E);
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(18),
@@ -589,9 +600,9 @@ class _VenueCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 14),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: colorScheme.surface,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colorScheme.outline),
+          border: Border.all(color: const Color(0xFFE7E2D8)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,7 +611,7 @@ class _VenueCard extends StatelessWidget {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: colorScheme.surfaceVariant,
+                color: const Color(0xFFF3F0EA),
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
@@ -611,16 +622,16 @@ class _VenueCard extends StatelessWidget {
                 children: [
                   Text(
                     name,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurface,
+                      color: _ink,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+                    style: const TextStyle(fontSize: 13, color: _muted),
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -632,17 +643,17 @@ class _VenueCard extends StatelessWidget {
                     ),
                     child: Text(
                       tag,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface,
+                        color: _ink,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            const Icon(Icons.chevron_right, color: _muted),
           ],
         ),
       ),
