@@ -2,15 +2,16 @@
 
 The rewards page follows Figma node `787:176`: cream background, blue points wallet,
 All / My rewards selector, compact white offer cards, and coral redemption actions.
-The shared bottom navigation is still owned by HomeScreen. The neutral thumbnails
-are intentionally blank in the supplied design. Offer names, prices and balances
+The shared bottom navigation is still owned by HomeScreen. Missing reward images use the white dog logo on a grey background, including
+catalogue cards, saved rewards and the offer details card. The catalogue is sorted
+by points cost from lowest to highest. Offer names, prices and balances
 come from Supabase; sample Figma offers and distances are not inserted into the app.
 
 ## Preserved behaviour
 
 - Read the signed-in user's `profiles.total_points` and the `rewards` catalogue.
 - Offer titles, partners, prices and both existing categories remain available.
-  The catalogue is now one All list; tapping a card displays its category/details.
+  The catalogue is now one All list; tapping a card opens its full details page (Figma `630:1144`).
 - Disable redemption for insufficient points. Final validation remains the server's job.
 - Redeem through the existing CheckInScreen: show the first dog's name (or “your dog”),
   swipe at the counter, call `redeem_reward(p_reward_id)`, block concurrent requests,
@@ -56,3 +57,16 @@ are claimed because those fields and workflows have not been verified.
 `flutter test test/rewards_screen_test.dart` covers tab switching, saved-code viewing
 and copying, affordability, category/tier access, retry and empty states, refresh on
 navigation, late responses, and small-screen/large-text layout.
+
+## Offer details
+
+The catalogue card now opens `RewardDetailsScreen`, replacing the old information
+popup. It uses the exported Figma dog image and back icon, partner heading, location
+information card, and a full-width offer redemption action. The partner, offer title,
+category and points price come from the selected catalogue record. The current model
+has no verified location or hours, so those fields explicitly show unavailable values.
+GO HERE shows a coming-soon message and does not request GPS or open a map.
+
+REDEEM closes details and opens the existing swipe-to-collect screen. Insufficient
+points disable it. Back returns to the catalogue without redeeming. My rewards still
+opens existing saved codes in its code dialog; it never starts a new redemption.

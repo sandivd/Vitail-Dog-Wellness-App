@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vitail/check_in_screen.dart';
 import 'package:vitail/rewards_data.dart';
+import 'package:vitail/reward_details_screen.dart';
 import 'package:vitail/rewards_screen.dart';
 
 const offers = [
@@ -101,11 +102,16 @@ void main() {
       tester.view.physicalSize = const Size(360, 900);
       addTearDown(tester.view.reset);
       final repo = FakeRewardsRepository();
+      repo.catalogue = offers.reversed.toList();
       await tester.pumpWidget(app(repo));
       await tester.pumpAndSettle();
       expect(find.text('300 pts to your next reward'), findsOneWidget);
       expect(find.text('REDEEM'), findsNWidgets(2));
       expect(find.text('LOCKED'), findsNWidgets(2));
+      expect(
+        tester.getTopLeft(find.text(offers.first.title)).dy,
+        lessThan(tester.getTopLeft(find.text(offers.last.title)).dy),
+      );
       final locked = tester
           .widgetList<TextButton>(find.byType(TextButton))
           .where((button) => (button.child as Text).data == 'LOCKED');
@@ -113,7 +119,7 @@ void main() {
       await tester.tap(find.text('Free vet wellness check'));
       await tester.pumpAndSettle();
       expect(find.text('Premium Perks'), findsOneWidget);
-      await tester.tap(find.text('Done'));
+      await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('POINTS WALLET'));
       await tester.pumpAndSettle();
@@ -229,6 +235,36 @@ void main() {
       expect(find.text('150 pts to your next reward'), findsOneWidget);
       expect(repo.historyCalls, 1);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'offer details opens a full page and hands redemption to check-in',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 900);
+      addTearDown(tester.view.reset);
+      final repo = FakeRewardsRepository();
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free long black + puppuccino'));
+      await tester.pumpAndSettle();
+      expect(find.byType(RewardDetailsScreen), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+      await tester.tap(find.text('GO HERE'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Directions coming soon'), findsOneWidget);
+      expect(find.byType(RewardDetailsScreen), findsOneWidget);
+      await tester.tap(find.text('REDEEM'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<CheckInScreen>(find.byType(CheckInScreen)).rewardId,
+        'cafe',
+      );
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pumpAndSettle();
+      expect(find.byType(RewardDetailsScreen), findsNothing);
+      expect(repo.historyCalls, 1);
     },
   );
 

@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import 'check_in_screen.dart';
 import 'rewards_data.dart';
+import 'reward_image_placeholder.dart';
+import 'reward_details_screen.dart';
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key, this.repository, this.isActive = true});
@@ -50,7 +52,17 @@ class _RewardsScreenState extends State<RewardsScreen> {
     try {
       final catalogue = await _repository.loadCatalogue();
       if (!mounted || request != _catalogueRequest) return;
-      setState(() => _catalogue = catalogue);
+      final sortedOffers = List<RewardOffer>.of(catalogue.offers)
+        ..sort((a, b) {
+          final costOrder = a.pointsCost.compareTo(b.pointsCost);
+          return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
+        });
+      setState(
+        () => _catalogue = RewardsCatalogue(
+          points: catalogue.points,
+          offers: sortedOffers,
+        ),
+      );
     } catch (_) {
       if (!mounted || request != _catalogueRequest) return;
       setState(
@@ -204,32 +216,22 @@ class _RewardsScreenState extends State<RewardsScreen> {
     );
   }
 
-  void _showOffer(RewardOffer offer) {
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(offer.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(offer.partnerName),
-            if (offer.category.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(offer.category),
-            ],
-            const SizedBox(height: 16),
-            Text('${_number.format(offer.pointsCost)} pts'),
-          ],
+  Future<void> _showOffer(RewardOffer offer) async {
+    final redeem = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (detailsContext) => RewardDetailsScreen(
+          offer: offer,
+          canRedeem:
+              !_loadingCatalogue &&
+              _catalogueError == null &&
+              (_catalogue?.points ?? 0) >= offer.pointsCost,
+          onRedeem: () => Navigator.pop(detailsContext, true),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Done'),
-          ),
-        ],
       ),
     );
+    if (!mounted || redeem != true) return;
+    await _checkIn(offer);
   }
 
   @override
@@ -519,17 +521,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // The Figma reference deliberately uses empty neutral thumbnails.
-                ExcludeSemantics(
-                  child: Container(
-                    width: 60,
-                    height: 60,
-                    margin: const EdgeInsets.only(top: 4),
-                    decoration: BoxDecoration(
-                      color: _softColor,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: RewardImagePlaceholder(),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
