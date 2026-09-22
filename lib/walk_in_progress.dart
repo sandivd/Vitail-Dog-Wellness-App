@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'walk_summary.dart';
@@ -199,147 +198,16 @@ class _WalkInProgressState extends State<WalkInProgress> {
   }
 
 
-  Future<void> _saveWalk() async {
-    int pointsEarned = (_totalDistance / 100).floor();
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    final today = DateTime.now();
-    final todayDateOnly = DateTime(today.year, today.month, today.day);
-    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
-
-    try {
-      // 1. Save the walk
-      // NOTE: 'walk_date' is required here — profile_screen.dart and
-      // walk_history_screen.dart both read/filter on it, and omitting it
-      // was causing every insert to fail (surfacing as "network error").
-      // Upload the photo first (if any) so we have a URL to store with the walk.
-      String? photoUrl;
-      if (_photo != null) {
-        final fileName =
-            '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage
-            .from('walk_photos')
-            .upload(fileName, File(_photo!.path));
-        photoUrl =
-            Supabase.instance.client.storage.from('walk_photos').getPublicUrl(fileName);
-      }
-
-
-      await Supabase.instance.client.from('walks').insert({
-        'user_id': userId,
-        'walk_date': todayStr,
-        'distance_meters': _totalDistance,
-        'duration_seconds': _elapsedSeconds,
-        'points_earned': pointsEarned,
-        'p_note': _noteController.text.trim(),
-        'p_photo_url': photoUrl,
-      });
-
-      // 2. Fetch current points, streak, and last walk date
-      final profileRes = await Supabase.instance.client
-          .from('profiles')
-          .select('total_points, daily_streak, last_walk_date')
-          .eq('id', userId)
-          .single();
-
-      int currentPoints = profileRes['total_points'] ?? 0;
-      int currentStreak = profileRes['daily_streak'] ?? 0;
-      String? lastWalkStr = profileRes['last_walk_date'];
-
-      // 3. Calculate new streak
-      int newStreak = 1;
-
-      if (lastWalkStr != null) {
-        final lastWalk = DateTime.parse(lastWalkStr);
-        final lastWalkDateOnly =
-            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
-        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
-
-        if (diffInDays == 1) {
-          newStreak = currentStreak + 1;
-        } else if (diffInDays == 0) {
-          newStreak = currentStreak;
-        }
-      }
-
-      // 4. Complete walk quest & give bonus points
-      if (_totalDistance >= 1000) {
-        final taskCheck = await Supabase.instance.client
-            .from('daily_tasks')
-            .select('walk_done')
-            .eq('user_id', userId)
-            .eq('task_date', todayStr)
-            .maybeSingle();
-
-        if (taskCheck?['walk_done'] != true) {
-          pointsEarned += 50;
-
-          await Supabase.instance.client.from('daily_tasks').upsert({
-            'user_id': userId,
-            'task_date': todayStr,
-            'walk_done': true,
-          }, onConflict: 'user_id, task_date');
-        }
-      }
-
-      // 5. Update profile with new points, streak, and date
-      await Supabase.instance.client.from('profiles').update({
-        'total_points': currentPoints + pointsEarned,
-        'daily_streak': newStreak,
-        'last_walk_date': todayStr,
-      }).eq('id', userId);
-    } on PostgrestException catch (e) {
-      // Database/query errors (bad column, RLS denial, constraint violation, etc.)
-      // Surface the real message instead of mislabeling this as a network issue.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save walk: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      // Genuine connectivity/other errors.
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Network error: Could not save walk. Check your connection.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _finishWalk() async {
+  void _finishWalk() {
     _timer?.cancel();
     _positionStream?.cancel();
 
     if (!mounted) return;
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Walk Finished!'),
-        content: Text('You walked ${_totalDistance.toStringAsFixed(0)} meters!'),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await _saveWalk();
-              if (dialogContext.mounted) {
-                Navigator.popUntil(dialogContext, (route) => route.isFirst);
-              }
-            },
-            child: const Text('Nice!'),
-          ),
-        ],
-      ),
-    );
-
+    // WalkSummary owns the actual save (atomic save_walk RPC) — this screen
+    // just stops tracking and hands off everything it collected: distance,
+    // time, goal, dogs, hygiene, the recorded route, and anything the user
+    // already picked/typed here so it isn't lost.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -350,6 +218,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
           dogs: _dogs,
           hygiene: _hygiene,
           routePoints: List<LatLng>.from(_polylinePoints),
+          photo: _photo,
+          initialNote: _noteController.text,
         ),
       ),
     );

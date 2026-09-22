@@ -42,6 +42,8 @@ class WalkSummary extends StatefulWidget {
     required this.dogs,
     required this.hygiene,
     required this.routePoints,
+    this.photo,
+    this.initialNote,
   });
 
   final double distanceMeters;
@@ -53,6 +55,11 @@ class WalkSummary extends StatefulWidget {
   final Map<String, Map<String, bool>> hygiene;
 
   final List<LatLng> routePoints;
+
+  // Carried over from WalkInProgress if the user already picked a photo or
+  // typed a note mid-walk, so neither is lost when they land here.
+  final XFile? photo;
+  final String? initialNote;
 
   @override
   State<WalkSummary> createState() => _WalkSummaryState();
@@ -70,8 +77,9 @@ class _WalkSummaryState extends State<WalkSummary> {
   ];
 
   String? _selectedMood;
-  final TextEditingController _noteController = TextEditingController();
-  XFile? _photo;
+  late final TextEditingController _noteController =
+      TextEditingController(text: widget.initialNote ?? '');
+  late XFile? _photo = widget.photo;
   bool _isSaving = false;
   int? _pointsPreview;
 
@@ -191,7 +199,8 @@ class _WalkSummaryState extends State<WalkSummary> {
     setState(() => _isSaving = true);
 
     final client = Supabase.instance.client;
-    if (client.auth.currentUser == null) {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) {
       setState(() => _isSaving = false);
       return;
     }
@@ -211,21 +220,20 @@ class _WalkSummaryState extends State<WalkSummary> {
         {'lat': p.latitude, 'lng': p.longitude},
     ];
 
-    // Until then the picker is display-only — no orphan Storage uploads.
-    // Mood and note are the same story (no columns in the schema yet).
+    // NOTE: 'p_mood', 'p_note', and 'p_photo_url' below assume the
+    // save_walk() Postgres function has matching parameters (and that the
+    // walks table has mood/note/photo_url columns for it to write into).
+    // If it doesn't yet, this call will fail with a Postgrest "function
+    // not found" error naming the mismatched signature — add the params
+    // to save_walk() (or drop them from this call) accordingly.
 
     try {
-
       // Upload the photo first (if any) so we have a URL to store with the walk.
       String? photoUrl;
       if (_photo != null) {
-        final fileName =
-            '${client}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage
-            .from('walk_photos')
-            .upload(fileName, File(_photo!.path));
-        photoUrl =
-            Supabase.instance.client.storage.from('walk_photos').getPublicUrl(fileName);
+        final fileName = '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await client.storage.from('walk_photos').upload(fileName, File(_photo!.path));
+        photoUrl = client.storage.from('walk_photos').getPublicUrl(fileName);
       }
       // One atomic RPC: inserts the walk (with route + dog), computes the
       // points, marks the daily task and updates the streak — all
@@ -236,6 +244,8 @@ class _WalkSummaryState extends State<WalkSummary> {
         'p_walk_date': todayStr,
         'p_dog_id': dogId,
         'p_route_data': routeData.isEmpty ? null : routeData,
+        'p_hygiene_pee': _hygiene[dogId]?['pee'],
+        'p_hygiene_poo': _hygiene[dogId]?['poo'],
         'p_mood': _selectedMood,
         'p_note': _noteController.text.trim(),
         'p_photo_url': photoUrl,
