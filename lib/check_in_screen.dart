@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -283,10 +284,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: _busy
-                          ? const CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            )
+                          ? const VitailLoading()
                           : const WhiteRewardLogo(),
                     ),
                   ),

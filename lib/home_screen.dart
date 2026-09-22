@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -113,7 +114,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return Scaffold(
         backgroundColor: colorScheme.surface,
         body: Center(
-          child: CircularProgressIndicator(color: colorScheme.primary),
+          child: VitailLoading(),
         ),
       );
     }

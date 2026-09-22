@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -193,6 +194,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: VitailLoading()));
+    }
+    
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: colors.surface,

@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -118,7 +119,7 @@ class _ChooseDogProfilesState extends State<ChooseDogProfiles> {
               // Dog Cards Area
               Expanded(
                 child: _isLoading
-                    ? const Center(child: CircularProgressIndicator(color: buttonColor))
+                    ? const Center(child: VitailLoading())
                     : _dogs.isEmpty
                         ? const Center(
                             child: Text(

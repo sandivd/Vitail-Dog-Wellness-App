@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart'; // For formatting dates
@@ -42,7 +43,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Walk History')),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: VitailLoading())
           : _walks.isEmpty
               ? Center(
                   child: Column(
