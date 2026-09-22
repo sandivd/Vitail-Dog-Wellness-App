@@ -12,11 +12,17 @@ class RewardDetailsScreen extends StatelessWidget {
     required this.offer,
     required this.canRedeem,
     required this.onRedeem,
+    this.redemption,
+    this.onCheckIn,
+    this.onShowCode,
   });
 
   final RewardOffer offer;
   final bool canRedeem;
   final VoidCallback onRedeem;
+  final RedeemedReward? redemption;
+  final VoidCallback? onCheckIn;
+  final VoidCallback? onShowCode;
 
   @override
   Widget build(BuildContext context) {
@@ -239,14 +245,21 @@ class RewardDetailsScreen extends StatelessWidget {
                                   const SizedBox(height: 12),
                                   Align(
                                     alignment: Alignment.centerRight,
-                                    child: Text(
-                                      '${NumberFormat.decimalPattern('en').format(offer.pointsCost)} pts',
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                        color: colors.primary,
-                                      ),
-                                    ),
+                                    child: redemption != null
+                                        ? SvgPicture.asset(
+                                            'assets/icons/reward-redeemed-check.svg',
+                                            width: 38,
+                                            height: 38,
+                                            semanticsLabel: 'Redeemed',
+                                          )
+                                        : Text(
+                                            '${NumberFormat.decimalPattern('en').format(offer.pointsCost)} pts',
+                                            style: TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w700,
+                                              color: colors.primary,
+                                            ),
+                                          ),
                                   ),
                                 ],
                               ),
@@ -255,7 +268,11 @@ class RewardDetailsScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 24),
                         FilledButton(
-                          onPressed: canRedeem ? onRedeem : null,
+                          onPressed: redemption != null
+                              ? onCheckIn
+                              : canRedeem
+                              ? onRedeem
+                              : null,
                           style: FilledButton.styleFrom(
                             backgroundColor: colors.primary,
                             foregroundColor: Colors.white,
@@ -268,9 +285,22 @@ class RewardDetailsScreen extends StatelessWidget {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          child: Text(canRedeem ? 'REDEEM' : 'LOCKED'),
+                          child: Text(
+                            redemption != null
+                                ? redemption!.isCollected
+                                      ? 'VIEW COLLECTION'
+                                      : 'CHECK IN'
+                                : canRedeem
+                                ? 'REDEEM'
+                                : 'LOCKED',
+                          ),
                         ),
-                        if (!canRedeem) ...[
+                        if (redemption != null && onShowCode != null)
+                          TextButton(
+                            onPressed: onShowCode,
+                            child: const Text('View code'),
+                          ),
+                        if (redemption == null && !canRedeem) ...[
                           const SizedBox(height: 8),
                           Text(
                             'You need more points to redeem this offer.',

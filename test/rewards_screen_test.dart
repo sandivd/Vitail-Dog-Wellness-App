@@ -65,36 +65,120 @@ class FakeRewardsRepository implements RewardsRepository {
     if (failHistory) throw Exception('offline');
     return pendingHistory?.future ?? history;
   }
+
+  int redeemCalls = 0;
+  int collectCalls = 0;
+  bool failRedemption = false;
+  bool failCollection = false;
+  Completer<RedeemedReward>? pendingRedemption;
+  final requestIds = <String>[];
+
+  @override
+  Future<RedeemedReward> redeem(RewardOffer offer, String requestId) async {
+    redeemCalls++;
+    requestIds.add(requestId);
+    if (failRedemption) throw Exception('offline');
+    if (pendingRedemption != null) return pendingRedemption!.future;
+    final reward = RedeemedReward(
+      title: offer.title,
+      promoCode: 'NEW123',
+      rewardId: offer.id,
+      partnerName: offer.partnerName,
+      pointsCost: offer.pointsCost,
+      category: offer.category,
+    );
+    points -= offer.pointsCost;
+    history = [reward, ...history];
+    return reward;
+  }
+
+  @override
+  Future<RedeemedReward> collect(RedeemedReward reward) async {
+    collectCalls++;
+    if (failCollection) throw Exception('offline');
+    final collected = RedeemedReward(
+      title: reward.title,
+      promoCode: reward.promoCode,
+      rewardId: reward.rewardId,
+      partnerName: reward.partnerName,
+      pointsCost: reward.pointsCost,
+      category: reward.category,
+      isCollected: true,
+    );
+    history = [
+      collected,
+      ...history.where((r) => r.promoCode != reward.promoCode),
+    ];
+    return collected;
+  }
 }
 
 Widget app(
   FakeRewardsRepository repository, {
   bool active = true,
   double scale = 1,
-}) => MaterialApp(
-  theme: ThemeData(
-    useMaterial3: true,
-    fontFamily: 'PlusJakartaSans',
-    colorScheme: const ColorScheme.light(
-      surface: Color(0xFFF4F0E9),
-      primary: Color(0xFFDC755C),
-      secondary: Color(0xFF5F98BD),
-      tertiary: Color(0xFFAEC568),
-      onSurface: Color(0xFF211F1D),
-      onSurfaceVariant: Color(0xFF6E6A63),
+}) => RepaintBoundary(
+  key: const ValueKey('app-preview'),
+  child: MaterialApp(
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      useMaterial3: true,
+      fontFamily: 'PlusJakartaSans',
+      colorScheme: const ColorScheme.light(
+        surface: Color(0xFFF4F0E9),
+        primary: Color(0xFFDC755C),
+        secondary: Color(0xFF5F98BD),
+        tertiary: Color(0xFFAEC568),
+        onSurface: Color(0xFF211F1D),
+        onSurfaceVariant: Color(0xFF6E6A63),
+      ),
     ),
-  ),
-  builder: (context, child) => MediaQuery(
-    data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
-    child: child!,
-  ),
-  home: RepaintBoundary(
-    key: const ValueKey('preview'),
-    child: RewardsScreen(repository: repository, isActive: active),
+    builder: (context, child) => MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: TextScaler.linear(scale)),
+      child: child!,
+    ),
+    home: RepaintBoundary(
+      key: const ValueKey('preview'),
+      child: RewardsScreen(repository: repository, isActive: active),
+    ),
   ),
 );
 
+Future<void> captureFlow(WidgetTester tester, String name) async {
+  const prefix = String.fromEnvironment('REWARD_FLOW_PREVIEW');
+  if (prefix.isEmpty) return;
+  ScaffoldMessenger.of(
+    tester.element(find.byType(Scaffold).last),
+  ).clearSnackBars();
+  await tester.pumpAndSettle();
+  final original = debugDisableShadows;
+  debugDisableShadows = false;
+  try {
+    final boundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(const ValueKey('app-preview')),
+    );
+    boundary.markNeedsPaint();
+    await tester.pump();
+    await tester.runAsync(() async {
+      final image = await boundary.toImage();
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      await File('$prefix-$name.png').writeAsBytes(bytes!.buffer.asUint8List());
+      image.dispose();
+    });
+  } finally {
+    debugDisableShadows = original;
+  }
+}
+
 void main() {
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    await (FontLoader(
+      'PlusJakartaSans',
+    )..addFont(rootBundle.load('assets/fonts/PlusJakartaSans.ttf'))).load();
+  });
   testWidgets(
     'All uses live affordability and preserves categories and tier preview',
     (tester) async {
@@ -119,6 +203,7 @@ void main() {
       await tester.tap(find.text('Free vet wellness check'));
       await tester.pumpAndSettle();
       expect(find.text('Premium Perks'), findsOneWidget);
+      await tester.ensureVisible(find.byTooltip('Back'));
       await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('POINTS WALLET'));
@@ -150,12 +235,15 @@ void main() {
       );
       await tester.pumpWidget(app(repo));
       await tester.pumpAndSettle();
-      expect(repo.historyCalls, 0);
+      expect(repo.historyCalls, 1);
       await tester.tap(find.text('MY REWARDS'));
       await tester.pumpAndSettle();
       expect(find.text('An old partner offer'), findsOneWidget);
       expect(find.text('Free long black + puppuccino'), findsNothing);
-      await tester.tap(find.text('VIEW CODE'));
+      await tester.tap(find.text('VIEW REWARD'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('View code'));
+      await tester.tap(find.text('View code'));
       await tester.pumpAndSettle();
       expect(find.text('ABC123'), findsOneWidget);
       expect(find.byType(CheckInScreen), findsNothing);
@@ -163,6 +251,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(copied, 'ABC123');
       await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byTooltip('Back'));
+      await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('ALL'));
       await tester.pumpAndSettle();
@@ -217,29 +308,35 @@ void main() {
     },
   );
 
-  testWidgets(
-    'redeem keeps check-in and refreshes wallet and history on return',
-    (tester) async {
-      final repo = FakeRewardsRepository();
-      await tester.pumpWidget(app(repo));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('REDEEM').first);
-      await tester.pumpAndSettle();
-      final checkIn = tester.widget<CheckInScreen>(find.byType(CheckInScreen));
-      expect(checkIn.rewardId, 'cafe');
-      expect(checkIn.partnerName, 'Partner café');
-      expect(find.text('Show this at the counter'), findsOneWidget);
-      repo.points = 250;
-      await tester.tap(find.byIcon(Icons.close));
-      await tester.pumpAndSettle();
-      expect(find.text('150 pts to your next reward'), findsOneWidget);
-      expect(repo.historyCalls, 1);
-      expect(tester.takeException(), isNull);
-    },
-  );
+  testWidgets('redemption popup is dismissible without spending points', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 900);
+    addTearDown(tester.view.reset);
+    final repo = FakeRewardsRepository();
+    await tester.pumpWidget(app(repo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('REDEEM').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Redeem Offer'), findsOneWidget);
+    await captureFlow(tester, 'confirmation');
+    expect(find.textContaining('Expires'), findsNothing);
+    await tester.tap(find.byTooltip('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Redeem Offer'), findsNothing);
+    expect(find.byType(RewardDetailsScreen), findsOneWidget);
+    await tester.tap(find.text('REDEEM'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(8, 80));
+    await tester.pumpAndSettle();
+    expect(find.text('Redeem Offer'), findsNothing);
+    expect(repo.redeemCalls, 0);
+    expect(repo.points, 500);
+  });
 
   testWidgets(
-    'offer details opens a full page and hands redemption to check-in',
+    'redeem once then check in and restore collected status without a time',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(360, 900);
@@ -249,22 +346,135 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Free long black + puppuccino'));
       await tester.pumpAndSettle();
-      expect(find.byType(RewardDetailsScreen), findsOneWidget);
-      expect(find.byType(AlertDialog), findsNothing);
       await tester.tap(find.text('GO HERE'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Directions coming soon'), findsOneWidget);
-      expect(find.byType(RewardDetailsScreen), findsOneWidget);
       await tester.tap(find.text('REDEEM'));
       await tester.pumpAndSettle();
-      expect(
-        tester.widget<CheckInScreen>(find.byType(CheckInScreen)).rewardId,
-        'cafe',
-      );
-      await tester.tap(find.byIcon(Icons.close));
+      await tester.tap(find.text('Redeem Offer'));
       await tester.pumpAndSettle();
-      expect(find.byType(RewardDetailsScreen), findsNothing);
-      expect(repo.historyCalls, 1);
+      expect(find.text('Redeemed!'), findsOneWidget);
+      expect(repo.redeemCalls, 1);
+      expect(repo.points, 250);
+      expect(repo.collectCalls, 0);
+      await tester.tap(find.text('View reward'));
+      await tester.pumpAndSettle();
+      expect(find.text('CHECK IN'), findsOneWidget);
+      await captureFlow(tester, 'redeemed');
+      expect(find.text('250 pts'), findsNothing);
+      await tester.tap(find.text('CHECK IN'));
+      await tester.pumpAndSettle();
+      expect(find.text('Please show to staff'), findsOneWidget);
+      await captureFlow(tester, 'swipe');
+      await tester.drag(
+        find.byKey(const ValueKey('collect-swipe-knob')),
+        const Offset(280, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Collected!'), findsOneWidget);
+      await captureFlow(tester, 'collected');
+      expect(find.text('Time'), findsNothing);
+      expect(find.text('Place'), findsOneWidget);
+      expect(repo.history.first.isCollected, isTrue);
+      expect(repo.redeemCalls, 1);
+      expect(repo.collectCalls, 1);
+      expect(repo.points, 250);
+      await tester.tap(find.text('DONE'));
+      await tester.pumpAndSettle();
+      expect(find.text('VIEW COLLECTION'), findsOneWidget);
+      await tester.ensureVisible(find.byTooltip('Back'));
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('MY REWARDS'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free long black + puppuccino'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('VIEW COLLECTION'));
+      await tester.pumpAndSettle();
+      expect(find.text('Time'), findsNothing);
+      expect(find.text('Place'), findsOneWidget);
+      expect(repo.history.first.isCollected, isTrue);
+      expect(repo.collectCalls, 1);
+    },
+  );
+
+  testWidgets(
+    'redemption retry reuses its request ID and collection failures do not show success',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 900);
+      addTearDown(tester.view.reset);
+      final repo = FakeRewardsRepository()..failRedemption = true;
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('REDEEM').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Redeem Offer'));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('couldn’t confirm redemption'),
+        findsOneWidget,
+      );
+      expect(find.text('Redeemed!'), findsNothing);
+      repo.failRedemption = false;
+      await tester.tap(find.text('Redeem Offer'));
+      await tester.pumpAndSettle();
+      expect(repo.requestIds.toSet().length, 1);
+      await tester.tap(find.text('View reward'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('CHECK IN'));
+      await tester.pumpAndSettle();
+      repo.failCollection = true;
+      await tester.drag(
+        find.byKey(const ValueKey('collect-swipe-knob')),
+        const Offset(280, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Collection couldn’t be confirmed'),
+        findsOneWidget,
+      );
+      expect(find.text('Collected!'), findsNothing);
+      repo.failCollection = false;
+      await tester.drag(
+        find.byKey(const ValueKey('collect-swipe-knob')),
+        const Offset(280, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Collected!'), findsOneWidget);
+      expect(repo.points, 250);
+    },
+  );
+
+  testWidgets(
+    'closing the popup while redemption is pending preserves the result',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(360, 900);
+      addTearDown(tester.view.reset);
+      final repo = FakeRewardsRepository()
+        ..pendingRedemption = Completer<RedeemedReward>();
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('REDEEM').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Redeem Offer'));
+      await tester.pump();
+      await tester.tap(find.byTooltip('Close'));
+      await tester.pumpAndSettle();
+      repo.pendingRedemption!.complete(
+        RedeemedReward(
+          title: offers.first.title,
+          promoCode: 'NEW123',
+          rewardId: 'cafe',
+          partnerName: 'Partner café',
+          pointsCost: 250,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('CHECK IN'), findsOneWidget);
+      expect(repo.redeemCalls, 1);
+      expect(tester.takeException(), isNull);
     },
   );
 

@@ -25,17 +25,41 @@ class RewardOffer {
 }
 
 class RedeemedReward {
-  const RedeemedReward({required this.title, required this.promoCode});
+  const RedeemedReward({
+    required this.title,
+    required this.promoCode,
+    this.rewardId,
+    this.partnerName,
+    this.pointsCost,
+    this.category,
+    this.isCollected = false,
+  });
 
   factory RedeemedReward.fromJson(Map<String, dynamic> row) => RedeemedReward(
     title: row['reward_title'] as String,
     promoCode: row['promo_code'] as String,
+    rewardId: row['reward_id'] as String?,
+    partnerName: row['partner_name'] as String?,
+    pointsCost: (row['points_cost'] as num?)?.toInt(),
+    category: row['category'] as String?,
+    isCollected: row['is_collected'] as bool? ?? false,
   );
 
-  // Historical redemptions store the title, not a foreign key to the catalogue.
-  // Do not guess a partner or cost by matching potentially duplicate titles.
   final String title;
   final String promoCode;
+  final String? rewardId;
+  final String? partnerName;
+  final int? pointsCost;
+  final String? category;
+  final bool isCollected;
+
+  RewardOffer get detailsOffer => RewardOffer(
+    id: rewardId ?? '',
+    title: title,
+    partnerName: partnerName ?? 'Partner details unavailable',
+    pointsCost: pointsCost ?? 0,
+    category: category ?? '',
+  );
 }
 
 class RewardsCatalogue {
@@ -47,6 +71,8 @@ class RewardsCatalogue {
 abstract class RewardsRepository {
   Future<RewardsCatalogue> loadCatalogue();
   Future<List<RedeemedReward>> loadRedeemed();
+  Future<RedeemedReward> redeem(RewardOffer offer, String requestId);
+  Future<RedeemedReward> collect(RedeemedReward reward);
 }
 
 class SupabaseRewardsRepository implements RewardsRepository {
@@ -75,12 +101,42 @@ class SupabaseRewardsRepository implements RewardsRepository {
 
   @override
   Future<List<RedeemedReward>> loadRedeemed() async {
-    // This contract is also used by the original redemption implementation.
-    // Filter by the signed-in owner; the database must enforce the same via RLS.
+    final userId = _userId;
     final rows = await _client
         .from('redeemed_rewards')
         .select('reward_title,promo_code')
-        .eq('user_id', _userId);
-    return rows.map(RedeemedReward.fromJson).toList();
+        .eq('user_id', userId);
+    final receipts = await _client
+        .from('reward_receipts')
+        .select()
+        .eq('user_id', userId);
+    final byCode = {for (final row in receipts) row['promo_code']: row};
+    return rows
+        .map((row) => RedeemedReward.fromJson(byCode[row['promo_code']] ?? row))
+        .toList();
+  }
+
+  @override
+  Future<RedeemedReward> redeem(RewardOffer offer, String requestId) async {
+    final result = await _client.rpc(
+      'redeem_offer',
+      params: {'p_reward_id': offer.id, 'p_request_id': requestId},
+    );
+    return RedeemedReward.fromJson(Map<String, dynamic>.from(result as Map));
+  }
+
+  @override
+  Future<RedeemedReward> collect(RedeemedReward reward) async {
+    final result = await _client.rpc(
+      'collect_reward',
+      params: {'p_promo_code': reward.promoCode},
+    );
+    final collected = RedeemedReward.fromJson(
+      Map<String, dynamic>.from(result as Map),
+    );
+    if (!collected.isCollected) {
+      throw StateError('Collection was not confirmed.');
+    }
+    return collected;
   }
 }

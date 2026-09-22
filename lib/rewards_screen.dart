@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import 'check_in_screen.dart';
+import 'reward_flow.dart';
 import 'rewards_data.dart';
 import 'reward_image_placeholder.dart';
-import 'reward_details_screen.dart';
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({super.key, this.repository, this.isActive = true});
@@ -35,6 +33,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     super.initState();
     _repository = widget.repository ?? SupabaseRewardsRepository();
     _loadCatalogue();
+    _loadRedeemed();
   }
 
   @override
@@ -111,27 +110,23 @@ class _RewardsScreenState extends State<RewardsScreen> {
     if (mine) _loadRedeemed();
   }
 
-  Future<void> _checkIn(RewardOffer reward) async {
-    if (_loadingCatalogue || _catalogueError != null) return;
-    if ((_catalogue?.points ?? 0) < reward.pointsCost) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Not enough points!')));
-      return;
-    }
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CheckInScreen(
-          rewardId: reward.id,
-          title: reward.title,
-          partnerName: reward.partnerName,
-        ),
-      ),
-    );
+  void _receiptChanged(RedeemedReward reward) {
     if (!mounted) return;
-    // Refresh both lists after collection, including when the user uses Back.
-    await Future.wait([_loadCatalogue(), _loadRedeemed()]);
+    setState(
+      () => _redeemed = [
+        reward,
+        ...?_redeemed?.where((entry) => entry.promoCode != reward.promoCode),
+      ],
+    );
+    _loadCatalogue();
+    _loadRedeemed();
+  }
+
+  RedeemedReward? _activeReceipt(RewardOffer offer) {
+    for (final reward in _redeemed ?? <RedeemedReward>[]) {
+      if (reward.rewardId == offer.id && !reward.isCollected) return reward;
+    }
+    return null;
   }
 
   Color get _cardColor => Theme.of(context).brightness == Brightness.dark
@@ -140,50 +135,6 @@ class _RewardsScreenState extends State<RewardsScreen> {
   Color get _softColor => Theme.of(context).brightness == Brightness.dark
       ? const Color(0xFF302E2B)
       : const Color(0xFFF9F7F3);
-
-  Future<void> _showCode(RedeemedReward reward) => showDialog<void>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: Text(reward.title),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('Show this code at the counter.'),
-          const SizedBox(height: 20),
-          const Text(
-            'YOUR PROMO CODE',
-            style: TextStyle(fontSize: 11, letterSpacing: 1.5),
-          ),
-          const SizedBox(height: 8),
-          SelectableText(
-            reward.promoCode,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 2,
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: reward.promoCode));
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Code copied to clipboard!')),
-            );
-          },
-          child: const Text('Copy code'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext),
-          child: const Text('Done'),
-        ),
-      ],
-    ),
-  );
 
   void _showTier() {
     final points = _catalogue!.points;
@@ -216,22 +167,28 @@ class _RewardsScreenState extends State<RewardsScreen> {
     );
   }
 
-  Future<void> _showOffer(RewardOffer offer) async {
-    final redeem = await Navigator.push<bool>(
+  Future<void> _showOffer(
+    RewardOffer offer, {
+    bool openRedemption = false,
+    RedeemedReward? receipt,
+  }) async {
+    await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (detailsContext) => RewardDetailsScreen(
+        builder: (_) => RewardFlow(
           offer: offer,
+          repository: _repository,
           canRedeem:
               !_loadingCatalogue &&
               _catalogueError == null &&
               (_catalogue?.points ?? 0) >= offer.pointsCost,
-          onRedeem: () => Navigator.pop(detailsContext, true),
+          redemption: receipt ?? _activeReceipt(offer),
+          openRedemption: openRedemption,
+          onChanged: _receiptChanged,
         ),
       ),
     );
-    if (!mounted || redeem != true) return;
-    await _checkIn(offer);
+    if (mounted) await _refresh();
   }
 
   @override
@@ -428,13 +385,18 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
     return offers.map((offer) {
       final canAfford = _catalogue!.points >= offer.pointsCost;
+      final redeemed = _activeReceipt(offer) != null;
       return _rewardCard(
         title: offer.title,
         subtitle: offer.partnerName,
         footer: '${_number.format(offer.pointsCost)} pts',
-        action: canAfford ? 'REDEEM' : 'LOCKED',
-        onAction: canAfford && !_loadingCatalogue
-            ? () => _checkIn(offer)
+        action: redeemed
+            ? 'VIEW REWARD'
+            : canAfford
+            ? 'REDEEM'
+            : 'LOCKED',
+        onAction: redeemed || (canAfford && !_loadingCatalogue)
+            ? () => _showOffer(offer, openRedemption: !redeemed)
             : null,
         onDetails: () => _showOffer(offer),
       );
@@ -459,11 +421,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
         .map(
           (reward) => _rewardCard(
             title: reward.title,
-            subtitle: 'Redeemed reward',
-            footer: 'Code saved',
-            action: 'VIEW CODE',
-            onAction: () => _showCode(reward),
-            onDetails: () => _showCode(reward),
+            subtitle: reward.partnerName ?? 'Redeemed reward',
+            footer: reward.isCollected ? 'Collected' : 'Ready to collect',
+            action: 'VIEW REWARD',
+            footerColor: reward.isCollected
+                ? Theme.of(context).colorScheme.tertiary
+                : null,
+            buttonColor: Theme.of(context).colorScheme.tertiary,
+            onAction: () => _showOffer(reward.detailsOffer, receipt: reward),
+            onDetails: () => _showOffer(reward.detailsOffer, receipt: reward),
           ),
         )
         .toList();
@@ -504,6 +470,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
     required String action,
     required VoidCallback? onAction,
     required VoidCallback onDetails,
+    Color? footerColor,
+    Color? buttonColor,
   }) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
@@ -560,7 +528,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
-                              color: colors.primary,
+                              color: footerColor ?? colors.primary,
                             ),
                           );
                           final button = TextButton(
@@ -569,7 +537,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               foregroundColor: Colors.white,
                               backgroundColor: onAction == null
                                   ? _softColor
-                                  : colors.primary,
+                                  : buttonColor ?? colors.primary,
                               disabledForegroundColor: colors.onSurfaceVariant,
                               minimumSize: const Size(96, 28),
                               padding: const EdgeInsets.symmetric(
