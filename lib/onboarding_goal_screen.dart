@@ -2,129 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'onboarding_style.dart';
 
-class OnboardingGoalScreen extends StatefulWidget {
-  const OnboardingGoalScreen({
-    super.key,
-    required this.title,
-    required this.options,
-    required this.badgeIcon,
-    required this.onSelected,
-    this.initialValue,
-    this.requireConfirm = false,
-  });
-
-  final String title;
-
-  final List<String> options;
-
-  final IconData badgeIcon;
-
-  final ValueChanged<String> onSelected;
-
-  final String? initialValue;
-
-  final bool requireConfirm;
-
-  @override
-  State<OnboardingGoalScreen> createState() => _OnboardingGoalScreenState();
-}
-
-class _OnboardingGoalScreenState extends State<OnboardingGoalScreen> {
-  String? _selected;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = widget.initialValue;
-  }
-
-  void _choose(String option) {
-    setState(() => _selected = option);
-    if (!widget.requireConfirm) {
-      widget.onSelected(option);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: OnboardingStyle.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 48,
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Navigator.canPop(context)
-                    ? IconButton(
-                        tooltip: 'Back',
-                        onPressed: () => Navigator.maybePop(context),
-                        icon: OnboardingStyle.icon('back'),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ),
-            Expanded(
-              child: Align(
-                alignment: const Alignment(0, -0.25),
-                child: SingleChildScrollView(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Center(child: OnboardingBadge(icon: widget.badgeIcon)),
-                          const SizedBox(height: 28),
-                          Text(
-                            widget.title,
-                            textAlign: TextAlign.center,
-                            style: OnboardingStyle.text(
-                              26,
-                              weight: FontWeight.w700,
-                              height: 1.3,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          for (int i = 0; i < widget.options.length; i++) ...[
-                            if (i > 0) const SizedBox(height: 12),
-                            OnboardingOptionCard(
-                              label: widget.options[i],
-                              selected: _selected == widget.options[i],
-                              onTap: () => _choose(widget.options[i]),
-                            ),
-                          ],
-                          if (widget.requireConfirm) ...[
-                            const SizedBox(height: 32),
-                            ElevatedButton(
-                              onPressed: _selected == null
-                                  ? null
-                                  : () => widget.onSelected(_selected!),
-                              style: OnboardingStyle.primaryButton,
-                              child: Text('Continue',
-                                  style: OnboardingStyle.text(16)),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 Route<T> onboardingFadeRoute<T>(Widget page) => PageRouteBuilder<T>(
       transitionDuration: const Duration(milliseconds: 220),
       reverseTransitionDuration: const Duration(milliseconds: 180),
+      opaque: true,
       pageBuilder: (context, animation, secondaryAnimation) => page,
       transitionsBuilder: (context, animation, secondaryAnimation, child) =>
           FadeTransition(opacity: animation, child: child),
@@ -144,40 +25,203 @@ class OnboardingGoalAnswers {
       'OnboardingGoalAnswers(helpGoal: $helpGoal, mattersMost: $mattersMost)';
 }
 
-Future<OnboardingGoalAnswers?> runOnboardingGoals(BuildContext context) async {
-  final String? help = await Navigator.push<String>(
+void startOnboardingGoals(
+  BuildContext context, {
+  required Widget Function(OnboardingGoalAnswers answers) nextScreenBuilder,
+}) {
+  Navigator.push<void>(
     context,
-    onboardingFadeRoute<String>(
-      Builder(
-        builder: (stepContext) => OnboardingGoalScreen(
-          title: OnboardingGoals.helpTitle,
-          options: OnboardingGoals.helpOptions,
-          badgeIcon: Icons.pets,
-          onSelected: (value) => Navigator.pop(stepContext, value),
+    onboardingFadeRoute<void>(_GoalFlow(nextScreenBuilder: nextScreenBuilder)),
+  );
+}
+
+class _GoalFlow extends StatefulWidget {
+  const _GoalFlow({required this.nextScreenBuilder});
+
+  final Widget Function(OnboardingGoalAnswers answers) nextScreenBuilder;
+
+  @override
+  State<_GoalFlow> createState() => _GoalFlowState();
+}
+
+class _GoalFlowState extends State<_GoalFlow> {
+  int _step = 0;
+  String? _help;
+  String? _matters;
+
+  void _back() {
+    if (_step == 0) {
+      Navigator.maybePop(context);
+    } else {
+      setState(() => _step = 0);
+    }
+  }
+
+  void _select(String value) {
+    if (_step == 0) {
+      setState(() {
+        _help = value;
+        _step = 1;
+      });
+      return;
+    }
+
+    _matters = value;
+    Navigator.pushReplacement<void, void>(
+      context,
+      onboardingFadeRoute<void>(
+        widget.nextScreenBuilder(
+          OnboardingGoalAnswers(
+            helpGoal: _help ?? '',
+            mattersMost: _matters ?? '',
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
-  if (help == null || !context.mounted) return null;
+  @override
+  Widget build(BuildContext context) {
+    final bool onFirstStep = _step == 0;
 
-  final String? matters = await Navigator.push<String>(
-    context,
-    onboardingFadeRoute<String>(
-      Builder(
-        builder: (stepContext) => OnboardingGoalScreen(
-          title: OnboardingGoals.mattersTitle,
-          options: OnboardingGoals.mattersOptions,
-          badgeIcon: Icons.favorite_border,
-          onSelected: (value) => Navigator.pop(stepContext, value),
+    return PopScope(
+      canPop: onFirstStep,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) setState(() => _step = 0);
+      },
+      child: Scaffold(
+        backgroundColor: OnboardingStyle.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              SizedBox(
+                height: 48,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    tooltip: 'Back',
+                    onPressed: _back,
+                    icon: OnboardingStyle.icon('back'),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Align(
+                  alignment: const Alignment(0, -0.25),
+                  child: SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 460),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 200),
+                          switchInCurve: Curves.easeOut,
+                          switchOutCurve: Curves.easeIn,
+                          layoutBuilder: (currentChild, previousChildren) =>
+                              Stack(
+                            alignment: Alignment.topCenter,
+                            children: <Widget>[
+                              ...previousChildren,
+                              if (currentChild != null) currentChild,
+                            ],
+                          ),
+                          child: _GoalQuestion(
+                            key: ValueKey<int>(_step),
+                            title: onFirstStep
+                                ? OnboardingGoals.helpTitle
+                                : OnboardingGoals.mattersTitle,
+                            options: onFirstStep
+                                ? OnboardingGoals.helpOptions
+                                : OnboardingGoals.mattersOptions,
+                            badgeIcon:
+                                onFirstStep ? Icons.pets : Icons.favorite_border,
+                            initialValue: onFirstStep ? _help : _matters,
+                            onSelected: _select,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+}
 
-  if (matters == null) return null;
+class _GoalQuestion extends StatefulWidget {
+  const _GoalQuestion({
+    super.key,
+    required this.title,
+    required this.options,
+    required this.badgeIcon,
+    required this.onSelected,
+    this.initialValue,
+  });
 
-  return OnboardingGoalAnswers(helpGoal: help, mattersMost: matters);
+  final String title;
+  final List<String> options;
+  final IconData badgeIcon;
+  final ValueChanged<String> onSelected;
+  final String? initialValue;
+
+  @override
+  State<_GoalQuestion> createState() => _GoalQuestionState();
+}
+
+class _GoalQuestionState extends State<_GoalQuestion> {
+  static const double _titleBlockHeight = 82;
+
+  String? _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.initialValue;
+  }
+
+  void _choose(String option) {
+    setState(() => _selected = option);
+    widget.onSelected(option);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Center(child: OnboardingBadge(icon: widget.badgeIcon)),
+        const SizedBox(height: 28),
+        SizedBox(
+          height: _titleBlockHeight,
+          child: Center(
+            child: Text(
+              widget.title,
+              textAlign: TextAlign.center,
+              style: OnboardingStyle.text(
+                26,
+                weight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        for (int i = 0; i < widget.options.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          OnboardingOptionCard(
+            label: widget.options[i],
+            selected: _selected == widget.options[i],
+            onTap: () => _choose(widget.options[i]),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 class OnboardingGoals {

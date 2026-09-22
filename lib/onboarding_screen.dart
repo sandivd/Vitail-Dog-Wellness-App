@@ -129,19 +129,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
       if (!mounted) return;
 
-      final goals = await runOnboardingGoals(context);
-      if (!mounted) return;
-      debugPrint('Onboarding goals: $goals');
-
-      Navigator.pushReplacement(
+      startOnboardingGoals(
         context,
-        MaterialPageRoute(
-          builder: (context) => HighPawScreen(
+        nextScreenBuilder: (goals) {
+          debugPrint('Onboarding goals: $goals');
+          return HighPawScreen(
             dogName: _dogNameController.text.trim(),
             dailyGoalMins: _dailyGoalMins!,
             dailyGoalKm: _dailyGoalKm!,
-          ),
-        ),
+            breed: _selectedBreed,
+          );
+        },
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Database Error: $e')));
