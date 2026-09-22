@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vitail/microchip_screen.dart';
 
 import 'auth_routing.dart';
 import 'login_screen.dart';
@@ -56,7 +57,7 @@ class VitailApp extends StatelessWidget {
             ),
           ),
           themeMode: currentMode,
-          home: const OnboardingScreen(),
+          home: const MicrochipScreen(),
         );
       },
     );

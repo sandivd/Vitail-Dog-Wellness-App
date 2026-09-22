@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'home_screen.dart';
 import 'onboarding_style.dart';
+import 'microchip_screen.dart';
+import 'onboarding_goal_screen.dart';
 
 class HighPawScreen extends StatefulWidget {
   final String dogName;
@@ -117,8 +118,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
                           ElevatedButton(
                             onPressed: () => Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(
-                                  builder: (_) => const HomeScreen()),
+                              onboardingFadeRoute(const MicrochipScreen()),
                             ),
                             style: OnboardingStyle.primaryButton,
                             child: Text('Continue',
