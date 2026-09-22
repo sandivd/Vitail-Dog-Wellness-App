@@ -132,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: colorScheme.onSurfaceVariant.withOpacity(0.2),
+                    backgroundColor: colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
                     backgroundImage: _dogPhotoUrl != null 
                         ? CachedNetworkImageProvider(_dogPhotoUrl!) 
                         : null,
@@ -166,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: (_currentKm / _dailyGoalKm).clamp(0.0, 1.0),
                           strokeWidth: 14,
                           color: colorScheme.secondary,
-                          backgroundColor: colorScheme.secondary.withOpacity(0.2),
+                          backgroundColor: colorScheme.secondary.withValues(alpha: 0.2),
                         ),
                       ),
                       SizedBox(
@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: (_currentMins / _dailyGoalMins).clamp(0.0, 1.0),
                           strokeWidth: 10,
                           color: colorScheme.tertiary,
-                          backgroundColor: colorScheme.tertiary.withOpacity(0.2),
+                          backgroundColor: colorScheme.tertiary.withValues(alpha: 0.2),
                         ),
                       ),
                       Column(
@@ -283,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       const WalkScreen(),
-      const RewardsScreen(),
+      RewardsScreen(isActive: _currentIndex == 2),
       const ProfileScreen(),
     ];
 
@@ -295,7 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          border: Border(top: BorderSide(color: colorScheme.onSurfaceVariant.withOpacity(0.2), width: 1)),
+          border: Border(top: BorderSide(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2), width: 1)),
         ),
         padding: EdgeInsets.only(
           top: 8.0,
@@ -320,10 +320,10 @@ class _HomeScreenState extends State<HomeScreen> {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.onSurfaceVariant.withOpacity(0.1)),
+        border: Border.all(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.1)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
