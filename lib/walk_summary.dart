@@ -211,11 +211,22 @@ class _WalkSummaryState extends State<WalkSummary> {
         {'lat': p.latitude, 'lng': p.longitude},
     ];
 
-    // TODO: persist _photo once the walks table has a photo_url column.
     // Until then the picker is display-only — no orphan Storage uploads.
     // Mood and note are the same story (no columns in the schema yet).
 
     try {
+
+      // Upload the photo first (if any) so we have a URL to store with the walk.
+      String? photoUrl;
+      if (_photo != null) {
+        final fileName =
+            '${client}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await Supabase.instance.client.storage
+            .from('walk_photos')
+            .upload(fileName, File(_photo!.path));
+        photoUrl =
+            Supabase.instance.client.storage.from('walk_photos').getPublicUrl(fileName);
+      }
       // One atomic RPC: inserts the walk (with route + dog), computes the
       // points, marks the daily task and updates the streak — all
       // server-side, so none of it can be spoofed or race itself.
@@ -225,6 +236,9 @@ class _WalkSummaryState extends State<WalkSummary> {
         'p_walk_date': todayStr,
         'p_dog_id': dogId,
         'p_route_data': routeData.isEmpty ? null : routeData,
+        'p_mood': _selectedMood,
+        'p_note': _noteController.text.trim(),
+        'p_photo_url': photoUrl,
       });
 
       if (mounted) {

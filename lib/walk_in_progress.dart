@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'walk_summary.dart';
 
@@ -52,6 +54,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   // dogId -> {'pee': bool, 'poo': bool}
   late final Map<String, Map<String, bool>> _hygiene;
+  XFile? _photo;
 
   List<Map<String, dynamic>> get _dogs => widget.selectedDogs ?? [];
 
@@ -183,11 +186,159 @@ class _WalkInProgressState extends State<WalkInProgress> {
     });
   }
 
+  Future<void> _pickPhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1080,
+      imageQuality: 75,
+    );
+    if (image != null && mounted) {
+      setState(() => _photo = image);
+    }
+  }
+
+
+  Future<void> _saveWalk() async {
+    int pointsEarned = (_totalDistance / 100).floor();
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final today = DateTime.now();
+    final todayDateOnly = DateTime(today.year, today.month, today.day);
+    final todayStr = todayDateOnly.toIso8601String().split('T')[0];
+
+    try {
+      // 1. Save the walk
+      // NOTE: 'walk_date' is required here — profile_screen.dart and
+      // walk_history_screen.dart both read/filter on it, and omitting it
+      // was causing every insert to fail (surfacing as "network error").
+      // Upload the photo first (if any) so we have a URL to store with the walk.
+      String? photoUrl;
+      if (_photo != null) {
+        final fileName =
+            '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await Supabase.instance.client.storage
+            .from('walk_photos')
+            .upload(fileName, File(_photo!.path));
+        photoUrl =
+            Supabase.instance.client.storage.from('walk_photos').getPublicUrl(fileName);
+      }
+
+
+      await Supabase.instance.client.from('walks').insert({
+        'user_id': userId,
+        'walk_date': todayStr,
+        'distance_meters': _totalDistance,
+        'duration_seconds': _elapsedSeconds,
+        'points_earned': pointsEarned,
+        'p_note': _noteController.text.trim(),
+        'p_photo_url': photoUrl,
+      });
+
+      // 2. Fetch current points, streak, and last walk date
+      final profileRes = await Supabase.instance.client
+          .from('profiles')
+          .select('total_points, daily_streak, last_walk_date')
+          .eq('id', userId)
+          .single();
+
+      int currentPoints = profileRes['total_points'] ?? 0;
+      int currentStreak = profileRes['daily_streak'] ?? 0;
+      String? lastWalkStr = profileRes['last_walk_date'];
+
+      // 3. Calculate new streak
+      int newStreak = 1;
+
+      if (lastWalkStr != null) {
+        final lastWalk = DateTime.parse(lastWalkStr);
+        final lastWalkDateOnly =
+            DateTime(lastWalk.year, lastWalk.month, lastWalk.day);
+        final diffInDays = todayDateOnly.difference(lastWalkDateOnly).inDays;
+
+        if (diffInDays == 1) {
+          newStreak = currentStreak + 1;
+        } else if (diffInDays == 0) {
+          newStreak = currentStreak;
+        }
+      }
+
+      // 4. Complete walk quest & give bonus points
+      if (_totalDistance >= 1000) {
+        final taskCheck = await Supabase.instance.client
+            .from('daily_tasks')
+            .select('walk_done')
+            .eq('user_id', userId)
+            .eq('task_date', todayStr)
+            .maybeSingle();
+
+        if (taskCheck?['walk_done'] != true) {
+          pointsEarned += 50;
+
+          await Supabase.instance.client.from('daily_tasks').upsert({
+            'user_id': userId,
+            'task_date': todayStr,
+            'walk_done': true,
+          }, onConflict: 'user_id, task_date');
+        }
+      }
+
+      // 5. Update profile with new points, streak, and date
+      await Supabase.instance.client.from('profiles').update({
+        'total_points': currentPoints + pointsEarned,
+        'daily_streak': newStreak,
+        'last_walk_date': todayStr,
+      }).eq('id', userId);
+    } on PostgrestException catch (e) {
+      // Database/query errors (bad column, RLS denial, constraint violation, etc.)
+      // Surface the real message instead of mislabeling this as a network issue.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not save walk: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      // Genuine connectivity/other errors.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content:
+                Text('Network error: Could not save walk. Check your connection.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _finishWalk() async {
     _timer?.cancel();
     _positionStream?.cancel();
 
     if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Walk Finished!'),
+        content: Text('You walked ${_totalDistance.toStringAsFixed(0)} meters!'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await _saveWalk();
+              if (dialogContext.mounted) {
+                Navigator.popUntil(dialogContext, (route) => route.isFirst);
+              }
+            },
+            child: const Text('Nice!'),
+          ),
+        ],
+      ),
+    );
 
     Navigator.pushReplacement(
       context,
@@ -430,6 +581,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         ],
                       ),
                     ),
+
                     const SizedBox(height: 24),
 
                     // Hygiene log per dog
@@ -558,34 +710,14 @@ class _WalkInProgressState extends State<WalkInProgress> {
                       const SizedBox(height: 8),
                     ],
 
+
+
+
+
                     // Add photo
-                    InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Photo picker coming soon')),
-                        );
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: _kCardBg,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '+ Add photo',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _kMuted,
-                              fontFamily: 'PlusJakartaSans',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    _PhotoPicker(photo: _photo, onPick: _pickPhoto, onClear: () {
+                      setState(() => _photo = null);
+                    }),
                     const SizedBox(height: 20),
 
                     // Note
@@ -769,6 +901,75 @@ class _HygieneButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PhotoPicker extends StatelessWidget {
+  const _PhotoPicker({
+    required this.photo,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final XFile? photo;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photo == null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onPick,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: Color(0xFFF9F7F3),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Center(
+            child: Text(
+              '+ Add photo',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _kMuted,
+                  fontFamily: 'PlusJakartaSans'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.file(
+            File(photo!.path),
+            height: 160,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: InkWell(
+            onTap: onClear,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 16),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
