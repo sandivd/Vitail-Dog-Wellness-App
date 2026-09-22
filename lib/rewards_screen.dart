@@ -29,6 +29,10 @@ class _RewardsScreenState extends State<RewardsScreen> {
   int _redeemedRequest = 0;
   final _number = NumberFormat.decimalPattern('en');
 
+  /// Full-screen branded loader only while the first catalogue load is in
+  /// flight; later refreshes and redeemed-rewards loads keep the visible UI.
+  bool get _isLoading => _loadingCatalogue && _catalogue == null;
+
   @override
   void initState() {
     super.initState();
