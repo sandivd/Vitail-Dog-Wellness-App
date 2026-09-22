@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -189,7 +190,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                                 ],
                               ),
                               child: _isProcessing
-                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  ? const VitailLoading()
                                   : const Icon(Icons.pets, color: Colors.white, size: 30),
                             ),
                           ),

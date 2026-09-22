@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'check_in_screen.dart';
@@ -78,7 +79,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: VitailLoading()));
     }
 
     // Group rewards by category

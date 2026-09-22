@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -564,8 +565,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ? const SizedBox(
                 width: 22,
                 height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+                child: VitailLoading())
             : const Text('Save changes',
                 style: TextStyle(
                     fontFamily: 'PlusJakartaSans',

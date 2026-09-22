@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -559,10 +560,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                        child: VitailLoading(),
                       )
                     : const Text(
                         'Done',

@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'password_field.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -94,7 +95,7 @@ class SignupView extends StatelessWidget {
                               elevation: 0, minimumSize: const Size.fromHeight(54),
                               shape: const StadiumBorder(), textStyle: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 15, fontWeight: FontWeight.w700)),
                             child: isLoading ? const SizedBox(width: 22, height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2, semanticsLabel: 'Creating account'))
+                              child: VitailLoading(semanticsLabel: 'Creating account'))
                               : const Text('Sign up')),
                           const SizedBox(height: 14),
                           Row(children: [
