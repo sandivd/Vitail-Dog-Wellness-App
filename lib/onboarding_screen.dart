@@ -8,6 +8,7 @@ import 'dog_date_picker.dart';
 import 'dog_photo_sheet.dart';
 import 'exercise_data.dart';
 import 'high_paw_screen.dart';
+import 'onboarding_goal_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -19,13 +20,20 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _dogNameController = TextEditingController();
   final _weightController = TextEditingController();
+  final _colourController = TextEditingController();
   
   String? _selectedBreed;
   DateTime? _birthday;
   String? _selectedSex;
+    String? _deSexed;
+  String? _walkTime;
   XFile? _imageFile;
   bool _isLoading = false;
   String _ownerActivityLevel = 'moderate';
+
+  bool _dogSaved = false;
+  int? _dailyGoalMins;
+  double? _dailyGoalKm;
 
   Future<void> _pickImage() async {
     FocusScope.of(context).unfocus();
@@ -54,8 +62,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-  Future<void> _saveToDatabase() async {
-    if (_dogNameController.text.trim().isEmpty || !['Male', 'Female'].contains(_selectedSex)) {
+    Future<void> _saveToDatabase() async {
+    if (_dogNameController.text.trim().isEmpty ||
+        !['Male', 'Female'].contains(_selectedSex)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.red),
       );
@@ -64,65 +73,73 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      double age = 0.0;
-      final today = DateTime.now();
-      int years = today.year - _birthday!.year;
-      int months = today.month - _birthday!.month;
-      if (months < 0) {
-        years--;
-        months += 12;
+      if (!_dogSaved) {
+        final userId = Supabase.instance.client.auth.currentUser!.id;
+
+        double age = 0.0;
+        final today = DateTime.now();
+        int years = today.year - _birthday!.year;
+        int months = today.month - _birthday!.month;
+        if (months < 0) {
+          years--;
+          months += 12;
+        }
+        age = years + (months / 12);
+
+        double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
+        String? photoUrl;
+
+        if (_imageFile != null) {
+          final fileName = '${userId}_dog_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await Supabase.instance.client.storage.from('dog_photos').upload(fileName, File(_imageFile!.path));
+          photoUrl = Supabase.instance.client.storage.from('dog_photos').getPublicUrl(fileName);
+        }
+
+        var target = ExerciseCalculator.calculate(
+          breed: _selectedBreed!,
+          weightKg: weight,
+          ageYears: age,
+          ownerActivityLevel: _ownerActivityLevel,
+        );
+
+        _dailyGoalMins = target['targetMinutes'];
+        _dailyGoalKm = target['kmTarget'];
+
+        final dogResponse = await Supabase.instance.client.from('dogs').insert({
+          'owner_id': userId,
+          'dog_name': _dogNameController.text.trim(),
+          'breed': _selectedBreed,
+          'weight': weight,
+          'birthday': _birthday!.toIso8601String().split('T')[0],
+          'sex': _selectedSex,
+          'photo_url': photoUrl,
+          'daily_goal_minutes': _dailyGoalMins,
+          'daily_goal_km': _dailyGoalKm,
+          'owner_activity_level': _ownerActivityLevel,
+        }).select().single();
+
+        await Supabase.instance.client.from('weight_history').insert({
+          'dog_id': dogResponse['id'],
+          'weight_kg': weight,
+          'recorded_date': DateTime.now().toIso8601String(),
+        });
+
+        _dogSaved = true;
       }
-      age = years + (months / 12);
-
-      double weight = double.tryParse(_weightController.text.trim()) ?? 0.0;
-      String? photoUrl;
-
-      if (_imageFile != null) {
-        final fileName = '${userId}_dog_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await Supabase.instance.client.storage.from('dog_photos').upload(fileName, File(_imageFile!.path));
-        photoUrl = Supabase.instance.client.storage.from('dog_photos').getPublicUrl(fileName);
-      }
-
-      var target = ExerciseCalculator.calculate(
-        breed: _selectedBreed!,
-        weightKg: weight,
-        ageYears: age,
-        ownerActivityLevel: _ownerActivityLevel,
-      );
-
-      int dailyGoalMins = target['targetMinutes'];
-      double dailyGoalKm = target['kmTarget'];
-
-      final dogResponse = await Supabase.instance.client.from('dogs').insert({
-        'owner_id': userId,
-        'dog_name': _dogNameController.text.trim(),
-        'breed': _selectedBreed,
-        'weight': weight,
-        'birthday': _birthday!.toIso8601String().split('T')[0],
-        'sex': _selectedSex,
-        'photo_url': photoUrl,
-        'daily_goal_minutes': dailyGoalMins,
-        'daily_goal_km': dailyGoalKm,
-        'owner_activity_level': _ownerActivityLevel,
-      }).select().single();
-
-      await Supabase.instance.client.from('weight_history').insert({
-        'dog_id': dogResponse['id'],
-        'weight_kg': weight,
-        'recorded_date': DateTime.now().toIso8601String(),
-      });
 
       if (!mounted) return;
-      
+
+      final goals = await runOnboardingGoals(context);
+      if (!mounted) return;
+      debugPrint('Onboarding goals: $goals');
+
       Navigator.pushReplacement(
-        context, 
+        context,
         MaterialPageRoute(
           builder: (context) => HighPawScreen(
             dogName: _dogNameController.text.trim(),
-            dailyGoalMins: dailyGoalMins,
-            dailyGoalKm: dailyGoalKm,
+            dailyGoalMins: _dailyGoalMins!,
+            dailyGoalKm: _dailyGoalKm!,
           ),
         ),
       );
@@ -137,6 +154,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void dispose() {
     _dogNameController.dispose();
     _weightController.dispose();
+    _colourController.dispose();
     super.dispose();
   }
 
@@ -157,5 +175,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     onOwnerActivityChanged: (level) => setState(() => _ownerActivityLevel = level),
     onNext: _saveToDatabase,
     loading: _isLoading,
+    deSexed: _deSexed,
+    onDeSexed: (value) => setState(() => _deSexed = value),
+    colourController: _colourController,
+    walkTime: _walkTime,
+    onWalkTime: (value) => setState(() => _walkTime = value),
   );
 }

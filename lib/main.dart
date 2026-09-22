@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_routing.dart';
 import 'login_screen.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -55,7 +56,7 @@ class VitailApp extends StatelessWidget {
             ),
           ),
           themeMode: currentMode,
-          home: const AuthGate(),
+          home: const OnboardingScreen(),
         );
       },
     );

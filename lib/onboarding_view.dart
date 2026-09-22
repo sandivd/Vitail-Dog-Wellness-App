@@ -8,8 +8,11 @@ class OnboardingView extends StatelessWidget {
     required this.birthdayLabel, this.hasBirthday = false, required this.onBirthday, required this.breeds,
     required this.onBreed, required this.onPhoto, required this.onNext,
     required this.ownerActivityLevel, required this.onOwnerActivityChanged,
-    required this.loading, this.photo});
-  
+    required this.loading, this.photo,
+    required this.deSexed, required this.onDeSexed,
+    required this.colourController,
+    required this.walkTime, required this.onWalkTime});
+
   final TextEditingController nameController, weightController;
   final String? sex;
   final String birthdayLabel;
@@ -22,27 +25,71 @@ class OnboardingView extends StatelessWidget {
   final ValueChanged<String> onOwnerActivityChanged;
   final bool loading;
   final ImageProvider? photo;
-  
+
+  final String? deSexed;
+  final ValueChanged<String> onDeSexed;
+
+  final TextEditingController colourController;
+
+  final String? walkTime;
+  final ValueChanged<String> onWalkTime;
+
   static const background = Color(0xFFF4F0E9);
   static const ink = Color(0xFF211F1D);
   static const border = Color(0xFFDAD6CD);
   static const green = Color(0xFFAEC568);
   static const coral = Color(0xFFCD533B);
+  static const hintGrey = Color(0xFF6E6A63);
 
   Widget icon(String name) => SvgPicture.asset('assets/icons/onboarding-$name.svg', width: 24, height: 24);
+
   InputDecoration decoration(String hint, {Widget? suffix}) => InputDecoration(
     hintText: hint, filled: true, fillColor: Colors.white,
-    hintStyle: const TextStyle(color: Color(0xFF6E6A63), fontSize: 14),
+    hintStyle: const TextStyle(color: hintGrey, fontSize: 14),
     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
     suffixIcon: suffix == null ? null : Padding(padding: const EdgeInsets.all(14), child: suffix),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: border)),
     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: border)),
     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: coral)),
   );
-  Widget field(String label, Widget child) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-    Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-    const SizedBox(height: 6), child,
-  ]);
+
+  Widget field(String label, Widget child, {String? hint}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Row(children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        if (hint != null)
+          Text(hint, style: const TextStyle(fontSize: 12, color: hintGrey, fontWeight: FontWeight.w500)),
+      ]),
+      const SizedBox(height: 6), child,
+    ],
+  );
+
+  Widget choiceRow(
+    List<String> values,
+    String? selected,
+    ValueChanged<String> onChanged, {
+    bool upper = true,
+  }) =>
+    Row(children: [
+      for (final value in values) ...[
+        if (value != values.first) const SizedBox(width: 10),
+        Expanded(child: Semantics(selected: selected == value,
+          child: OutlinedButton(
+            onPressed: loading ? null : () => onChanged(value),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(52),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              backgroundColor: selected == value ? green : Colors.white,
+              foregroundColor: selected == value ? Colors.white : ink,
+              side: BorderSide(color: selected == value ? green : border),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+            child: FittedBox(
+              child: Text(upper ? value.toUpperCase() : value,
+                style: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 14, fontWeight: FontWeight.w600)))))),
+      ]
+    ]);
 
   @override
   Widget build(BuildContext context) => Theme(
@@ -63,6 +110,8 @@ class OnboardingView extends StatelessWidget {
                     icon: icon('back'))),
               ]),
               const SizedBox(height: 32),
+
+              // Photo
               Center(child: Semantics(button: true, label: 'Choose dog photo',
                 child: InkWell(onTap: loading ? null : onPhoto, borderRadius: BorderRadius.circular(40),
                   child: SizedBox(width: 88, height: 86, child: Stack(children: [
@@ -76,31 +125,25 @@ class OnboardingView extends StatelessWidget {
                   ])),
                 ))),
               const SizedBox(height: 16),
+
               field('Name *', TextField(controller: nameController, textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.next, decoration: decoration("What's your dog's name?"))),
               const SizedBox(height: 16),
-              field('Sex *', Row(children: [for (final value in ['Male', 'Female']) ...[
-                if (value == 'Female') const SizedBox(width: 10),
-                Expanded(child: Semantics(selected: sex == value,
-                  child: OutlinedButton(onPressed: loading ? null : () => onSex(value),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52),
-                      backgroundColor: sex == value ? green : Colors.white,
-                      foregroundColor: sex == value ? Colors.white : ink,
-                      side: BorderSide(color: sex == value ? green : border),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                    child: Text(value.toUpperCase(), style: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 14, fontWeight: FontWeight.w600)))))
-              ]])),
+
+              field('Sex *', choiceRow(const ['Male', 'Female'], sex, onSex)),
               const SizedBox(height: 16),
-              field('Date of birth', TextField(readOnly: true, onTap: loading ? null : onBirthday,
-                controller: null, decoration: decoration(birthdayLabel, suffix: icon('calendar')).copyWith(
-                  hintStyle: TextStyle(color: hasBirthday ? ink : const Color(0xFF6E6A63), fontSize: 14)))),
+
+              field('De-sexed *', choiceRow(const ['Yes', 'No'], deSexed, onDeSexed)),
               const SizedBox(height: 16),
-              field('Weight', TextField(controller: weightController,
+
+              field('Weight *', TextField(controller: weightController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [DogWeightInputFormatter()],
-                decoration: decoration('E.g. 12', suffix: const Text('kg')))),
+                decoration: decoration('E.g. 12', suffix: const Text('kg'))),
+                hint: 'Helps set a walk goal'),
               const SizedBox(height: 16),
-              field('Breed', LayoutBuilder(builder: (context, constraints) => Autocomplete<String>(
+
+              field('Breed *', LayoutBuilder(builder: (context, constraints) => Autocomplete<String>(
                 optionsViewOpenDirection: OptionsViewOpenDirection.up,
                 optionsBuilder: (value) => breeds.where((breed) => breed.toLowerCase().contains(value.text.toLowerCase())),
                 onSelected: onBreed,
@@ -129,19 +172,30 @@ class OnboardingView extends StatelessWidget {
                   decoration: decoration('Select breed', suffix: icon('chevron'))),
               ))),
               const SizedBox(height: 16),
-              // NEW: Owner Activity Level Selector
-              field('Your activity level *', Row(children: [for (final value in ['Low', 'Moderate', 'High']) ...[
-                if (value != 'Low') const SizedBox(width: 10),
-                Expanded(child: Semantics(selected: ownerActivityLevel == value.toLowerCase(),
-                  child: OutlinedButton(onPressed: loading ? null : () => onOwnerActivityChanged(value.toLowerCase()),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52),
-                      backgroundColor: ownerActivityLevel == value.toLowerCase() ? green : Colors.white,
-                      foregroundColor: ownerActivityLevel == value.toLowerCase() ? Colors.white : ink,
-                      side: BorderSide(color: ownerActivityLevel == value.toLowerCase() ? green : border),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                    child: FittedBox(child: Text(value.toUpperCase(), style: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 14, fontWeight: FontWeight.w600)))))),
-              ]])),
+
+              field('Colour / markings', TextField(controller: colourController,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.next,
+                decoration: decoration('E.g. Black & white')), hint: 'optional'),
+              const SizedBox(height: 16),
+
+              field('Date of birth *', TextField(readOnly: true, onTap: loading ? null : onBirthday,
+                controller: null, decoration: decoration(birthdayLabel, suffix: icon('calendar')).copyWith(
+                  hintStyle: TextStyle(color: hasBirthday ? ink : hintGrey, fontSize: 14)))),
+              const SizedBox(height: 16),
+
+              field('Usually walks in the *',
+                choiceRow(const ['Morning', 'Afternoon', 'Evening'], walkTime, onWalkTime, upper: false)),
+              const SizedBox(height: 16),
+
+              field('Your activity level *', choiceRow(
+                const ['Low', 'Moderate', 'High'],
+                ownerActivityLevel.isEmpty
+                  ? null
+                  : ownerActivityLevel[0].toUpperCase() + ownerActivityLevel.substring(1),
+                (value) => onOwnerActivityChanged(value.toLowerCase()))),
               const SizedBox(height: 32),
+
               ElevatedButton(onPressed: loading ? null : onNext,
                 style: ElevatedButton.styleFrom(backgroundColor: coral, foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(56), elevation: 0, shape: const StadiumBorder()),
@@ -155,7 +209,6 @@ class OnboardingView extends StatelessWidget {
   );
 }
 
-/// Allows optional decimal kilograms between 0 and 100, including partial edits.
 class DogWeightInputFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
