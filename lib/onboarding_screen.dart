@@ -30,6 +30,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   XFile? _imageFile;
   bool _isLoading = false;
   String _ownerActivityLevel = 'moderate';
+  String? _healthImpact;
 
   bool _dogSaved = false;
   int? _dailyGoalMins;
@@ -71,6 +72,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (_selectedBreed == null) 'breed',
       if (_birthday == null) 'date of birth',
       if (_walkTime == null) 'usual walk time',
+      if (_healthImpact == null) 'health condition',
     ];
     if (missing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -189,5 +191,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     colourController: _colourController,
     walkTime: _walkTime,
     onWalkTime: (value) => setState(() => _walkTime = value),
+    healthImpact: _healthImpact,
+    onHealthImpact: (value) => setState(() => _healthImpact = value),
   );
 }

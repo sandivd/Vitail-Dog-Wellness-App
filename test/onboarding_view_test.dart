@@ -26,6 +26,7 @@ void main() {
       deSexed: null, onDeSexed: (value) {},
       colourController: colour,
       walkTime: null, onWalkTime: (value) {},
+      healthImpact: null, onHealthImpact: (value) {},
       onSex: (value) => setState(() => sex = value), birthdayLabel: 'Select date of birth',
       onBirthday: () => dates++, breeds: const ['Beagle', 'Poodle'], onBreed: (value) => breed = value,
       onPhoto: () => photos++, onNext: () => next++, loading: false))));

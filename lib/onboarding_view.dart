@@ -11,7 +11,8 @@ class OnboardingView extends StatelessWidget {
     required this.loading, this.photo,
     required this.deSexed, required this.onDeSexed,
     required this.colourController,
-    required this.walkTime, required this.onWalkTime});
+    required this.walkTime, required this.onWalkTime,
+    required this.healthImpact, required this.onHealthImpact});
 
   final TextEditingController nameController, weightController;
   final String? sex;
@@ -33,6 +34,16 @@ class OnboardingView extends StatelessWidget {
 
   final String? walkTime;
   final ValueChanged<String> onWalkTime;
+
+  final String? healthImpact;
+  final ValueChanged<String> onHealthImpact;
+
+  static const List<String> healthOptions = [
+    'No condition',
+    "Doesn't affect activity",
+    'Moderately affects activity',
+    'Heavily affects activity',
+  ];
 
   static const background = Color(0xFFF4F0E9);
   static const ink = Color(0xFF211F1D);
@@ -90,6 +101,22 @@ class OnboardingView extends StatelessWidget {
                 style: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 14, fontWeight: FontWeight.w600)))))),
       ]
     ]);
+    
+    Widget dropdown(String hint, String? value, List<String> options, ValueChanged<String> onChanged) => Container(
+    height: 56, padding: const EdgeInsets.symmetric(horizontal: 20),
+    decoration: BoxDecoration(color: Colors.white,
+      border: Border.all(color: border), borderRadius: BorderRadius.circular(14)),
+    child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+      value: value, isExpanded: true,
+      hint: Text(hint, style: const TextStyle(fontFamily: 'PlusJakartaSans', color: hintGrey, fontSize: 14)),
+      dropdownColor: Colors.white, borderRadius: BorderRadius.circular(14),
+      style: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 14, color: ink),
+      icon: icon('chevron'),
+      items: [for (final option in options) DropdownMenuItem(value: option, child: Text(option))],
+      onChanged: loading ? null : (selected) { if (selected != null) onChanged(selected); },
+    )),
+  );
+
 
   @override
   Widget build(BuildContext context) => Theme(
@@ -186,6 +213,10 @@ class OnboardingView extends StatelessWidget {
 
               field('Usually walks in the *',
                 choiceRow(const ['Morning', 'Afternoon', 'Evening'], walkTime, onWalkTime, upper: false)),
+              const SizedBox(height: 16),
+
+              field('Health condition *',
+                dropdown('Select an option', healthImpact, healthOptions, onHealthImpact)),
               const SizedBox(height: 16),
 
               field('Your activity level *', choiceRow(
