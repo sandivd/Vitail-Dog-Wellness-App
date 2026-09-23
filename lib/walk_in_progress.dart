@@ -24,9 +24,9 @@ const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
 const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
 
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.selectedDogs, this.plannedRoute});
+  const WalkInProgress({super.key, this.dog, this.plannedRoute});
 
-  final List<Map<String, dynamic>>? selectedDogs;
+  final Map<String, dynamic>? dog;
   final List<LatLng>? plannedRoute;
 
   @override
@@ -51,17 +51,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
       DraggableScrollableController();
   final TextEditingController _noteController = TextEditingController();
 
-  // dogId -> {'pee': bool, 'poo': bool}
-  late final Map<String, Map<String, bool>> _hygiene;
+  // {'pee': bool, 'poo': bool} for the single dog on this walk.
+  late final Map<String, bool> _hygiene;
   XFile? _photo;
 
-  List<Map<String, dynamic>> get _dogs => widget.selectedDogs ?? [];
-
-  String get _title {
-    if (_dogs.length > 1) return 'Group walk';
-    if (_dogs.isNotEmpty) return (_dogs.first['dog_name'] ?? 'Walk').toString();
-    return 'Walk';
-  }
+  String get _title => (widget.dog?['dog_name'] as String?) ?? 'Walk';
 
   String get _formattedTime {
     final minutes = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
@@ -71,15 +65,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   String get _formattedDistance => (_totalDistance / 1000).toStringAsFixed(2);
 
-  /// Goal from the dogs' stored daily_goal_minutes (set at onboarding),
-  /// so the progress bar matches the Home screen rings. Group walks use
-  /// the highest goal among the selected dogs.
-  int get _goalMinutes {
-    if (_dogs.isEmpty) return 30;
-    final goals = _dogs
-        .map((dog) => (dog['daily_goal_minutes'] as num?)?.toInt() ?? 30);
-    return goals.reduce((a, b) => a > b ? a : b);
-  }
+  /// Goal from the dog's stored daily_goal_minutes (set at onboarding), so
+  /// the progress bar matches the Home screen ring.
+  int get _goalMinutes =>
+      (widget.dog?['daily_goal_minutes'] as num?)?.toInt() ?? 30;
 
   double get _progress =>
       (_elapsedSeconds / (_goalMinutes * 60)).clamp(0.0, 1.0);
@@ -87,10 +76,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
   @override
   void initState() {
     super.initState();
-    _hygiene = {
-      for (final dog in _dogs)
-        dog['id'].toString(): {'pee': false, 'poo': false},
-    };
+    _hygiene = {'pee': false, 'poo': false};
     _startWalk();
   }
 
@@ -179,9 +165,9 @@ class _WalkInProgressState extends State<WalkInProgress> {
     setState(() => _isPaused = !_isPaused);
   }
 
-  void _toggleHygiene(String dogId, String type) {
+  void _toggleHygiene(String type) {
     setState(() {
-      _hygiene[dogId]![type] = !(_hygiene[dogId]![type] ?? false);
+      _hygiene[type] = !(_hygiene[type] ?? false);
     });
   }
 
@@ -215,7 +201,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
           distanceMeters: _totalDistance,
           elapsedSeconds: _elapsedSeconds,
           goalMinutes: _goalMinutes,
-          dogs: _dogs,
+          dog: widget.dog,
           hygiene: _hygiene,
           routePoints: List<LatLng>.from(_polylinePoints),
           photo: _photo,
@@ -454,8 +440,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
                     const SizedBox(height: 24),
 
-                    // Hygiene log per dog
-                    if (_dogs.isNotEmpty) ...[
+                    // Hygiene log for this dog
+                    if (widget.dog != null) ...[
                       const Row(
                         children: [
                           Expanded(
@@ -501,13 +487,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      ..._dogs.map((dog) {
-                        final dogId = dog['id'].toString();
-                        final name = dog['dog_name'] ?? 'Dog';
-                        final breed = dog['breed'] ?? 'Unknown';
-                        final photoUrl = dog['photo_url'];
-                        final peeDone = _hygiene[dogId]?['pee'] ?? false;
-                        final pooDone = _hygiene[dogId]?['poo'] ?? false;
+                      Builder(builder: (context) {
+                        final name = widget.dog!['dog_name'] ?? 'Dog';
+                        final breed = widget.dog!['breed'] ?? 'Unknown';
+                        final photoUrl = widget.dog!['photo_url'];
+                        final peeDone = _hygiene['pee'] ?? false;
+                        final pooDone = _hygiene['poo'] ?? false;
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -561,7 +546,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 child: _HygieneButton(
                                   label: 'PEE',
                                   active: peeDone,
-                                  onTap: () => _toggleHygiene(dogId, 'pee'),
+                                  onTap: () => _toggleHygiene('pee'),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -570,7 +555,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 child: _HygieneButton(
                                   label: 'POO',
                                   active: pooDone,
-                                  onTap: () => _toggleHygiene(dogId, 'poo'),
+                                  onTap: () => _toggleHygiene('poo'),
                                 ),
                               ),
                             ],
@@ -592,7 +577,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
                     // Note
                     Text(
-                      _dogs.length > 1 ? 'GROUP NOTE' : 'NOTE',
+                      'NOTE',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
