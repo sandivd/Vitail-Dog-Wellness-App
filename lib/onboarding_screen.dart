@@ -63,10 +63,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
     Future<void> _saveToDatabase() async {
-    if (_dogNameController.text.trim().isEmpty ||
-        !['Male', 'Female'].contains(_selectedSex)) {
+        final missing = <String>[
+      if (_dogNameController.text.trim().isEmpty) 'name',
+      if (!['Male', 'Female'].contains(_selectedSex)) 'sex',
+      if (_deSexed == null) 'de-sexed',
+      if (double.tryParse(_weightController.text.trim()) == null) 'weight',
+      if (_selectedBreed == null) 'breed',
+      if (_birthday == null) 'date of birth',
+      if (_walkTime == null) 'usual walk time',
+    ];
+    if (missing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields'), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text('Please fill in: ${missing.join(', ')}'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }

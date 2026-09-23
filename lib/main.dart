@@ -57,7 +57,7 @@ class VitailApp extends StatelessWidget {
             ),
           ),
           themeMode: currentMode,
-          home: const MicrochipScreen(),
+          home: const AuthGate(),
         );
       },
     );
