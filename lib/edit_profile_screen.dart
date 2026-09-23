@@ -15,6 +15,7 @@ import 'onboarding_view.dart' show DogWeightInputFormatter;
 /// Full-screen "Edit profile" editor for the dog's details (Figma design).
 /// Pushed from the pencil badge on the Profile screen; pops with `true`
 /// when changes were saved so the caller can refresh.
+/// Theme-aware: inherits the app theme, so Dark Mode applies everywhere.
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key, required this.dog});
 
@@ -26,13 +27,24 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  // Design tokens from the Figma file.
-  static const background = Color(0xFFF4F0E9);
-  static const ink = Color(0xFF211F1D);
-  static const muted = Color(0xFF6E6A63);
-  static const border = Color(0xFFDAD6CD);
-  static const green = Color(0xFFAEC568);
-  static const coral = Color(0xFFDC755C);
+  // ------------------------------------------------------ theme-aware tokens
+  // Light values match the Figma; dark values come from the app theme in
+  // main.dart — resolved live so the Dark Mode toggle works.
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+
+  Color get background => Theme.of(context).colorScheme.surface;      // F4F0E9 / 121212
+  Color get ink => Theme.of(context).colorScheme.onSurface;           // 211F1D / F4F0E9
+  Color get muted => Theme.of(context).colorScheme.onSurfaceVariant;  // 6E6A63 / AAAAAA
+  Color get border => Theme.of(context).colorScheme.outline;          // DAD6CD / 444444
+  Color get green => Theme.of(context).colorScheme.tertiary;          // AEC568
+  Color get coral => Theme.of(context).colorScheme.primary;           // DC755C
+
+  /// Elevated "input" surface: white in light, one step above the page
+  /// background in dark.
+  Color get fieldFill => _isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
+  // ------------------------------------------------------------------- state
 
   final List<String> _breeds = ExerciseCalculator.dogBreeds;
 
@@ -78,34 +90,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  // ------------------------------------------------------------------ helpers
+  // ----------------------------------------------------------------- helpers
 
   TextStyle style(double size,
-          {Color color = ink, FontWeight weight = FontWeight.w600}) =>
+          {Color? color, FontWeight weight = FontWeight.w600}) =>
       TextStyle(fontFamily: 'PlusJakartaSans',
-          fontSize: size, fontWeight: weight, color: color);
+          fontSize: size, fontWeight: weight, color: color ?? ink);
 
   Widget icon(String name) => SvgPicture.asset('assets/icons/onboarding-$name.svg',
-      width: 24, height: 24);
+      width: 24, height: 24,
+      // back / chevron / calendar / camera have black strokes baked into
+      // the SVG files — invisible on dark, so re-tint them there.
+      colorFilter: _isDark
+          ? const ColorFilter.mode(Color(0xFFF4F0E9), BlendMode.srcIn)
+          : null);
 
   InputDecoration decoration(String hint, {Widget? suffix}) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: muted, fontSize: 14),
+        hintStyle: TextStyle(color: muted, fontSize: 14),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: fieldFill,
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         suffixIcon: suffix == null
             ? null
             : Padding(padding: const EdgeInsets.all(12), child: suffix),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: border)),
+            borderSide: BorderSide(color: border)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: border)),
+            borderSide: BorderSide(color: border)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: coral)),
+            borderSide: BorderSide(color: coral)),
       );
 
   Widget field(String label, Widget child) => Column(
@@ -143,7 +160,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         SnackBar(content: Text(message), backgroundColor: Colors.red));
   }
 
-  // ------------------------------------------------------------------ actions
+  // ----------------------------------------------------------------- actions
 
   Future<void> _pickPhoto() async {
     FocusScope.of(context).unfocus();
@@ -199,7 +216,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (_newPhoto != null) {
         final fileName =
             'dog_${dogId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await client.storage.from('dog_photos').upload(fileName, File(_newPhoto!.path));
+        await client.storage
+            .from('dog_photos')
+            .upload(fileName, File(_newPhoto!.path));
         photoUrl = client.storage.from('dog_photos').getPublicUrl(fileName);
       }
 
@@ -210,8 +229,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           oldWeight == null || (oldWeight - weight).abs() > 0.001;
       if (weightChanged) {
         final now = DateTime.now();
-        final today =
-            DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
+        final today = DateTime(now.year, now.month, now.day)
+            .toIso8601String()
+            .split('T')[0];
         await client.rpc('log_weight', params: {
           'p_dog_id': dogId,
           'p_weight_kg': weight,
@@ -235,7 +255,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         breed: _selectedBreed!,
         weightKg: weight,
         ageYears: ageYears,
-        ownerActivityLevel: (dog['owner_activity_level'] as String?) ?? 'moderate',
+        ownerActivityLevel:
+            (dog['owner_activity_level'] as String?) ?? 'moderate',
       );
 
       // 4. Persist everything to the dogs table.
@@ -265,70 +286,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  // -------------------------------------------------------------------- build
+  // ------------------------------------------------------------------- build
 
   @override
   Widget build(BuildContext context) {
-    return Theme(
-      // Figma-faithful light theme, same approach as the onboarding screen.
-      data: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        fontFamily: 'PlusJakartaSans',
-        colorScheme: ColorScheme.fromSeed(seedColor: coral),
-        textTheme: ThemeData.light().textTheme.apply(
-            fontFamily: 'PlusJakartaSans', bodyColor: ink, displayColor: ink),
-      ),
-      child: PopScope(
-        canPop: !_isSaving,
-        child: Scaffold(
-          backgroundColor: background,
-          body: SafeArea(
-            child: widget.dog == null
-                ? Center(
-                    child: Text('No dog profile found.',
-                        style: style(15, color: muted)))
-                : SingleChildScrollView(
-                    keyboardDismissBehavior:
-                        ScrollViewKeyboardDismissBehavior.onDrag,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildHeader(),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(28, 20, 28, 32),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _buildAvatarSection(),
-                              const SizedBox(height: 16),
-                              field(
-                                'Name *',
-                                TextField(
-                                  controller: _nameController,
-                                  textCapitalization: TextCapitalization.words,
-                                  textInputAction: TextInputAction.next,
-                                  decoration:
-                                      decoration("What's your dog's name?"),
-                                ),
+    // No forced Theme — the screen inherits the app theme (and the Dark
+    // Mode toggle) directly.
+    return PopScope(
+      canPop: !_isSaving,
+      child: Scaffold(
+        backgroundColor: background,
+        body: SafeArea(
+          child: widget.dog == null
+              ? Center(
+                  child: Text('No dog profile found.',
+                      style: style(15, color: muted)))
+              : SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildHeader(),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(28, 20, 28, 32),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildAvatarSection(),
+                            const SizedBox(height: 16),
+                            field(
+                              'Name *',
+                              TextField(
+                                controller: _nameController,
+                                textCapitalization: TextCapitalization.words,
+                                textInputAction: TextInputAction.next,
+                                decoration:
+                                    decoration("What's your dog's name?"),
                               ),
-                              const SizedBox(height: 16),
-                              field('Sex *', _buildSexSelector()),
-                              const SizedBox(height: 16),
-                              field('Date of birth *', _buildBirthdayField()),
-                              const SizedBox(height: 16),
-                              field('Breed *', _buildBreedField()),
-                              const SizedBox(height: 16),
-                              _buildAgeWeightRow(),
-                              const SizedBox(height: 32),
-                              _buildSaveButton(),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 16),
+                            field('Sex *', _buildSexSelector()),
+                            const SizedBox(height: 16),
+                            field('Date of birth *', _buildBirthdayField()),
+                            const SizedBox(height: 16),
+                            field('Breed *', _buildBreedField()),
+                            const SizedBox(height: 16),
+                            _buildAgeWeightRow(),
+                            const SizedBox(height: 32),
+                            _buildSaveButton(),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-          ),
+                ),
         ),
       ),
     );
@@ -340,17 +352,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 18),
-          child:
-              Text('Edit profile', style: style(22, weight: FontWeight.w700)),
+          child: Text('Edit profile', style: style(22, weight: FontWeight.w700)),
         ),
         Align(
           alignment: Alignment.centerLeft,
           child: IconButton(
             tooltip: 'Back',
-            onPressed:
-                _isSaving ? null : () => Navigator.maybePop(context),
-            icon: SvgPicture.asset('assets/icons/onboarding-back.svg',
-                width: 24, height: 24),
+            onPressed: _isSaving ? null : () => Navigator.maybePop(context),
+            icon: icon('back'),
           ),
         ),
       ],
@@ -365,10 +374,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           radius: 40,
           backgroundColor: border,
           backgroundImage: image,
-          child: image == null
-              ? SvgPicture.asset('assets/icons/onboarding-camera.svg',
-                  width: 24, height: 24)
-              : null,
+          child: image == null ? icon('camera') : null,
         ),
         const SizedBox(height: 8),
         ElevatedButton(
@@ -404,10 +410,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   : () => setState(() => _selectedSex = value),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(52),
-                backgroundColor: _selectedSex == value ? green : Colors.white,
+                backgroundColor: _selectedSex == value ? green : fieldFill,
                 foregroundColor: _selectedSex == value ? Colors.white : ink,
-                side: BorderSide(
-                    color: _selectedSex == value ? green : border),
+                side: BorderSide(color: _selectedSex == value ? green : border),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
               ),
@@ -435,8 +440,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             : 'Select date of birth',
         suffix: icon('calendar'),
       ).copyWith(
-        hintStyle:
-            TextStyle(color: hasBirthday ? ink : muted, fontSize: 14),
+        hintStyle: TextStyle(color: hasBirthday ? ink : muted, fontSize: 14),
       ),
     );
   }
@@ -453,7 +457,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           return Align(
             alignment: Alignment.topLeft,
             child: Material(
-              color: Colors.white,
+              color: fieldFill,
               elevation: 4,
               borderRadius: BorderRadius.circular(14),
               clipBehavior: Clip.antiAlias,
@@ -473,15 +477,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     return InkWell(
                       onTap: () => select(matches[index]),
                       child: Container(
-                        color: highlighted ? background : Colors.white,
+                        color: highlighted ? background : fieldFill,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 14),
                         child: Text(matches[index],
-                            style: const TextStyle(
-                                fontFamily: 'PlusJakartaSans',
-                                fontSize: 14,
-                                color: ink,
-                                fontWeight: FontWeight.w500)),
+                            style: style(14, weight: FontWeight.w500)),
                       ),
                     );
                   },
@@ -526,7 +526,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _buildAgeField() {
     // Age is derived from date of birth — a live preview, not an input.
     // Styled flat/recessed (page-coloured fill) so it reads as a computed
-    // value sitting next to the crisp white Weight input.
+    // value sitting next to the crisp elevated Weight input.
     final hasBirthday = _birthday != null;
     return Semantics(
       label: hasBirthday ? 'Age: $_ageYears years' : 'Age not set',
@@ -535,7 +535,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20),
         alignment: Alignment.centerLeft,
         decoration: BoxDecoration(
-          color: background, // same beige as the page — reads as "not editable"
+          color: background,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: border),
         ),

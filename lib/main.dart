@@ -1,3 +1,5 @@
+import 'vitail_launch.dart';
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vitail/microchip_screen.dart';
@@ -57,7 +59,7 @@ class VitailApp extends StatelessWidget {
             ),
           ),
           themeMode: currentMode,
-          home: const AuthGate(),
+          home: const VitailLaunch(child: AuthGate()),
         );
       },
     );
@@ -76,7 +78,7 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   Widget _screen = const Scaffold(
-    body: Center(child: CircularProgressIndicator()),
+    body: Center(child: VitailLoading()),
   );
 
   @override

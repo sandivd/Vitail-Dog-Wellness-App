@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -39,20 +40,27 @@ class WalkSummary extends StatefulWidget {
     required this.distanceMeters,
     required this.elapsedSeconds,
     required this.goalMinutes,
-    required this.dogs,
+    required this.dog,
     required this.hygiene,
     required this.routePoints,
+    this.photo,
+    this.initialNote,
   });
 
   final double distanceMeters;
   final int elapsedSeconds;
   final int goalMinutes;
-  final List<Map<String, dynamic>> dogs;
+  final Map<String, dynamic>? dog;
 
-  // dogId -> {'pee': bool, 'poo': bool}, as tracked during the walk.
-  final Map<String, Map<String, bool>> hygiene;
+  // {'pee': bool, 'poo': bool}, as tracked during the walk.
+  final Map<String, bool> hygiene;
 
   final List<LatLng> routePoints;
+
+  // Carried over from WalkInProgress if the user already picked a photo or
+  // typed a note mid-walk, so neither is lost when they land here.
+  final XFile? photo;
+  final String? initialNote;
 
   @override
   State<WalkSummary> createState() => _WalkSummaryState();
@@ -70,22 +78,20 @@ class _WalkSummaryState extends State<WalkSummary> {
   ];
 
   String? _selectedMood;
-  final TextEditingController _noteController = TextEditingController();
-  XFile? _photo;
+  late final TextEditingController _noteController =
+      TextEditingController(text: widget.initialNote ?? '');
+  late XFile? _photo = widget.photo;
   bool _isSaving = false;
   int? _pointsPreview;
 
   // Local, editable copy of the hygiene log, in case the user wants to
   // correct something before saving.
-  late final Map<String, Map<String, bool>> _hygiene;
+  late final Map<String, bool> _hygiene;
 
   @override
   void initState() {
     super.initState();
-    _hygiene = {
-      for (final entry in widget.hygiene.entries)
-        entry.key: Map<String, bool>.from(entry.value),
-    };
+    _hygiene = Map<String, bool>.from(widget.hygiene);
     _computePointsPreview();
   }
 
@@ -146,20 +152,17 @@ class _WalkSummaryState extends State<WalkSummary> {
     return 'Great walk! $remaining min short of today\'s goal.';
   }
 
-  String _hygieneStatus(String dogId) {
-    final entry = _hygiene[dogId];
-    if (entry == null) return 'Not yet';
+  String get _hygieneStatus {
     final doneCount =
-        (entry['pee'] == true ? 1 : 0) + (entry['poo'] == true ? 1 : 0);
+        (_hygiene['pee'] == true ? 1 : 0) + (_hygiene['poo'] == true ? 1 : 0);
     if (doneCount == 2) return 'Done';
     if (doneCount == 1) return 'Done 1/2';
     return 'Not yet';
   }
 
-  void _toggleHygiene(String dogId, String type) {
+  void _toggleHygiene(String type) {
     setState(() {
-      _hygiene.putIfAbsent(dogId, () => {'pee': false, 'poo': false});
-      _hygiene[dogId]![type] = !(_hygiene[dogId]![type] ?? false);
+      _hygiene[type] = !(_hygiene[type] ?? false);
     });
   }
 
@@ -191,7 +194,8 @@ class _WalkSummaryState extends State<WalkSummary> {
     setState(() => _isSaving = true);
 
     final client = Supabase.instance.client;
-    if (client.auth.currentUser == null) {
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) {
       setState(() => _isSaving = false);
       return;
     }
@@ -200,10 +204,8 @@ class _WalkSummaryState extends State<WalkSummary> {
     final todayStr =
         DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
 
-    // Single-dog walks are attributed via dog_id. Multi-dog walks would
-    // need a walk_dogs junction table (not in the schema yet).
-    final String? dogId =
-        widget.dogs.length == 1 ? widget.dogs.first['id']?.toString() : null;
+    // Single dog per user, attributed via dog_id.
+    final String? dogId = widget.dog?['id']?.toString();
 
     // GPS trace for the route_data jsonb column.
     final routeData = [
@@ -211,11 +213,21 @@ class _WalkSummaryState extends State<WalkSummary> {
         {'lat': p.latitude, 'lng': p.longitude},
     ];
 
-    // TODO: persist _photo once the walks table has a photo_url column.
-    // Until then the picker is display-only — no orphan Storage uploads.
-    // Mood and note are the same story (no columns in the schema yet).
+    // NOTE: 'p_mood', 'p_note', and 'p_photo_url' below assume the
+    // save_walk() Postgres function has matching parameters (and that the
+    // walks table has mood/note/photo_url columns for it to write into).
+    // If it doesn't yet, this call will fail with a Postgrest "function
+    // not found" error naming the mismatched signature — add the params
+    // to save_walk() (or drop them from this call) accordingly.
 
     try {
+      // Upload the photo first (if any) so we have a URL to store with the walk.
+      String? photoUrl;
+      if (_photo != null) {
+        final fileName = '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await client.storage.from('walk_photos').upload(fileName, File(_photo!.path));
+        photoUrl = client.storage.from('walk_photos').getPublicUrl(fileName);
+      }
       // One atomic RPC: inserts the walk (with route + dog), computes the
       // points, marks the daily task and updates the streak — all
       // server-side, so none of it can be spoofed or race itself.
@@ -225,6 +237,11 @@ class _WalkSummaryState extends State<WalkSummary> {
         'p_walk_date': todayStr,
         'p_dog_id': dogId,
         'p_route_data': routeData.isEmpty ? null : routeData,
+        'p_hygiene_pee': _hygiene['pee'],
+        'p_hygiene_poo': _hygiene['poo'],
+        'p_mood': _selectedMood,
+        'p_note': _noteController.text.trim(),
+        'p_photo_url': photoUrl,
       });
 
       if (mounted) {
@@ -380,7 +397,7 @@ class _WalkSummaryState extends State<WalkSummary> {
             _RouteMapPreview(points: widget.routePoints),
             const SizedBox(height: 28),
 
-            if (widget.dogs.isNotEmpty) ...[
+            if (widget.dog != null) ...[
               const Row(
                 children: [
                   Expanded(
@@ -426,12 +443,11 @@ class _WalkSummaryState extends State<WalkSummary> {
                 ],
               ),
               const SizedBox(height: 10),
-              ...widget.dogs.map((dog) {
-                final dogId = dog['id'].toString();
-                final name = dog['dog_name'] ?? 'Dog';
-                final photoUrl = dog['photo_url'];
-                final peeDone = _hygiene[dogId]?['pee'] ?? false;
-                final pooDone = _hygiene[dogId]?['poo'] ?? false;
+              Builder(builder: (context) {
+                final name = widget.dog!['dog_name'] ?? 'Dog';
+                final photoUrl = widget.dog!['photo_url'];
+                final peeDone = _hygiene['pee'] ?? false;
+                final pooDone = _hygiene['poo'] ?? false;
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -467,7 +483,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                                   fontFamily: 'PlusJakartaSans'),
                             ),
                             Text(
-                              _hygieneStatus(dogId),
+                              _hygieneStatus,
                               style: const TextStyle(
                                   fontSize: 12,
                                   color: _kMuted,
@@ -481,7 +497,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         child: _HygieneButton(
                           label: 'PEE',
                           active: peeDone,
-                          onTap: () => _toggleHygiene(dogId, 'pee'),
+                          onTap: () => _toggleHygiene('pee'),
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -490,7 +506,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                         child: _HygieneButton(
                           label: 'POO',
                           active: pooDone,
-                          onTap: () => _toggleHygiene(dogId, 'poo'),
+                          onTap: () => _toggleHygiene('poo'),
                         ),
                       ),
                     ],
@@ -559,10 +575,7 @@ class _WalkSummaryState extends State<WalkSummary> {
                     ? const SizedBox(
                         width: 22,
                         height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                        child: VitailLoading(),
                       )
                     : const Text(
                         'Done',

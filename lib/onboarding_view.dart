@@ -1,3 +1,4 @@
+import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -230,7 +231,7 @@ class OnboardingView extends StatelessWidget {
               ElevatedButton(onPressed: loading ? null : onNext,
                 style: ElevatedButton.styleFrom(backgroundColor: coral, foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(56), elevation: 0, shape: const StadiumBorder()),
-                child: loading ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                child: loading ? const SizedBox(width: 22, height: 22, child: VitailLoading())
                   : const Text('Next', style: TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 16, fontWeight: FontWeight.w600))),
             ]),
           ),

@@ -1,290 +1,394 @@
+import 'vitail_loading.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:intl/intl.dart';
+import 'reward_image_placeholder.dart';
+import 'rewards_data.dart';
 
+/// Collects an already-paid reward. This screen never deducts points.
 class CheckInScreen extends StatefulWidget {
-  final String rewardId;
-  final String title;
-  final String partnerName;
-
   const CheckInScreen({
     super.key,
-    required this.rewardId,
-    required this.title,
-    required this.partnerName,
+    required this.reward,
+    required this.onCollect,
   });
+  final RedeemedReward reward;
+  final Future<RedeemedReward> Function() onCollect;
 
   @override
   State<CheckInScreen> createState() => _CheckInScreenState();
 }
 
 class _CheckInScreenState extends State<CheckInScreen> {
-  double _swipeValue = 0.0; // 0.0 to 1.0
-  bool _isCollected = false;
-  bool _isProcessing = false;
-  String _dogName = "your dog"; // Default fallback
-  String? _promoCode;
+  double _swipe = 0;
+  bool _busy = false;
+  String? _error;
+  late RedeemedReward? _collected = widget.reward.isCollected
+      ? widget.reward
+      : null;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchDogName();
-  }
-
-  Future<void> _fetchDogName() async {
+  Future<void> _collect() async {
+    if (_busy || _collected != null) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final userId = Supabase.instance.client.auth.currentUser!.id;
-      final response = await Supabase.instance.client
-          .from('dogs')
-          .select('dog_name')
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
-
+      final receipt = await widget.onCollect();
+      if (!receipt.isCollected) {
+        throw StateError('Collection not confirmed');
+      }
+      if (mounted) setState(() => _collected = receipt);
+    } catch (_) {
       if (mounted) {
         setState(() {
-          _dogName = response?['dog_name'] ?? "your dog";
+          _error =
+              'Collection couldn’t be confirmed. Please swipe again to retry.';
+          _swipe = 0;
         });
       }
-    } catch (e) {
-      // Silently fail, use default name
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _collectReward() async {
-    if (_isProcessing) return;
-    setState(() => _isProcessing = true);
-    try {
-      // Returns the generated promo code on success, null if the
-      // user didn't have enough points.
-      final code = await Supabase.instance.client.rpc(
-        'redeem_reward',
-        params: {'p_reward_id': widget.rewardId},
-      );
-
-      if (!mounted) return;
-
-      if (code is String) {
-        setState(() {
-          _promoCode = code;
-          _isCollected = true;
-          _isProcessing = false;
-        });
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not enough points!'), backgroundColor: Colors.red),
-        );
-        setState(() => _isProcessing = false);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-      );
-      setState(() => _isProcessing = false);
-    }
-  }
+  Color get _card => Theme.of(context).brightness == Brightness.dark
+      ? const Color(0xFF242321)
+      : Colors.white;
 
   @override
-  Widget build(BuildContext context) {
-    if (_isCollected) {
-      return _buildSuccessScreen();
-    }
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Paw Print Icon
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.orange[100],
-                  shape: BoxShape.circle,
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    body: SafeArea(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      64,
+                      24,
+                      _collected == null ? 48 : 64,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: _collected == null
+                          ? _swipeContent()
+                          : _receiptContent(_collected!),
+                    ),
+                  ),
                 ),
-                child: const Icon(Icons.pets, size: 50, color: Colors.orange),
               ),
-              const SizedBox(height: 32),
-
-              const Text(
-                'Show this at the counter',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Swipe to collect ${widget.title} for $_dogName at ${widget.partnerName}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-              const SizedBox(height: 48),
-
-              // SWIPE MECHANISM
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  double maxDrag = constraints.maxWidth - 70; // 70 is button width
-                  return Container(
-                    width: double.infinity,
-                    height: 70,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(35),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        // Background Text
-                        Center(
-                          child: Text(
-                            'SWIPE TO COLLECT  →',
-                            style: TextStyle(
-                              color: Colors.grey[500],
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                        ),
-                        // Draggable Button
-                        Positioned(
-                          left: _swipeValue * maxDrag,
-                          child: GestureDetector(
-                            onHorizontalDragUpdate: (details) {
-                              if (_isProcessing) return;
-                              setState(() {
-                                _swipeValue += details.primaryDelta! / maxDrag;
-                                _swipeValue = _swipeValue.clamp(0.0, 1.0);
-                              });
-                            },
-                            onHorizontalDragEnd: (details) {
-                              if (_swipeValue > 0.9 && !_isProcessing) {
-                                _collectReward(); // Trigger collection!
-                              } else {
-                                setState(() => _swipeValue = 0.0); // Snap back
-                              }
-                            },
-                            child: Container(
-                              width: 70,
-                              height: 70,
-                              decoration: BoxDecoration(
-                                color: Colors.orange,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.orange.withValues(alpha: 0.4),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: _isProcessing
-                                  ? const CircularProgressIndicator(color: Colors.white)
-                                  : const Icon(Icons.pets, color: Colors.white, size: 30),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
+            ),
           ),
-        ),
+          Positioned(
+            top: 8,
+            right: 12,
+            child: IconButton(
+              tooltip: 'Close',
+              onPressed: () => Navigator.pop(context, _collected),
+              icon: const Text('×', style: TextStyle(fontSize: 26)),
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 
-  // SUCCESS SCREEN UI
-  Widget _buildSuccessScreen() {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+  List<Widget> _swipeContent() {
+    final reward = widget.reward;
+    final colors = Theme.of(context).colorScheme;
+    return [
+      const Text(
+        'Please show to staff',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 18),
+      Text(
+        'Swipe to collect',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+      ),
+      const SizedBox(height: 18),
+      Text(
+        'Once you swipe, your offer will be collected and it can’t be undone.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+      ),
+      const SizedBox(height: 28),
+      Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
           children: [
-            // Green Checkmark
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.green[100],
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.check_circle,
-                size: 80,
-                color: Colors.green,
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            const Text(
-              'Collected',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.black),
-            ),
-            const SizedBox(height: 24),
-
-            // Promo Code Box
-            Container(
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.green, width: 1.5),
-              ),
+            const RewardImagePlaceholder(),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('YOUR PROMO CODE',
-                      style: TextStyle(fontSize: 11, color: Colors.grey, letterSpacing: 1.5)),
+                  Text(
+                    reward.title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 6),
                   Text(
-                    _promoCode ?? '',
-                    style: const TextStyle(
-                        fontSize: 24, fontWeight: FontWeight.bold,
-                        letterSpacing: 2, color: Colors.black),
+                    reward.partnerName ?? 'Partner details unavailable',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      reward.pointsCost == null
+                          ? 'Redeemed'
+                          : '${NumberFormat.decimalPattern('en').format(reward.pointsCost)} pts',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: colors.primary,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
-
-            Text(
-              'One ${widget.title} for $_dogName',
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            Text(
-              '· ${widget.partnerName} ·',
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 48),
-
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-              ),
-              child: const Text('Done', style: TextStyle(fontSize: 18)),
-            ),
           ],
         ),
       ),
+      const SizedBox(height: 54),
+      if (_error != null) ...[
+        Text(
+          _error!,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colors.error),
+        ),
+        const SizedBox(height: 12),
+      ],
+      _slider(),
+    ];
+  }
+
+  Widget _slider() {
+    final colors = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxDrag = math.max(1.0, constraints.maxWidth - 64);
+        return Semantics(
+          label: 'Swipe to collect reward',
+          value: '${(_swipe * 100).round()} percent',
+          increasedValue:
+              '${((_swipe + 0.25).clamp(0, 1) * 100).round()} percent',
+          onIncrease: _busy
+              ? null
+              : () {
+                  setState(() => _swipe = (_swipe + 0.25).clamp(0, 1));
+                  if (_swipe >= 1) _collect();
+                },
+          child: Container(
+            height: 64,
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF302E2B)
+                  : const Color(0xFFF9F7F3),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? colors.outline
+                    : const Color(0xFFDBD7D1),
+                width: 1.5,
+              ),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 68, right: 30),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      children: [
+                        const Text(
+                          'SWIPE TO COLLECT',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 22),
+                        SvgPicture.asset(
+                          'assets/icons/reward-swipe-arrow.svg',
+                          width: 18,
+                          height: 18,
+                          colorFilter: ColorFilter.mode(
+                            colors.onSurface,
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 3 + _swipe * maxDrag,
+                  top: 3,
+                  child: GestureDetector(
+                    key: const ValueKey('collect-swipe-knob'),
+                    onHorizontalDragUpdate: _busy
+                        ? null
+                        : (details) => setState(
+                            () => _swipe = (_swipe + details.delta.dx / maxDrag)
+                                .clamp(0, 1),
+                          ),
+                    onHorizontalDragEnd: _busy
+                        ? null
+                        : (_) {
+                            if (_swipe > 0.9) {
+                              _collect();
+                            } else {
+                              setState(() => _swipe = 0);
+                            }
+                          },
+                    onHorizontalDragCancel: () {
+                      if (!_busy) setState(() => _swipe = 0);
+                    },
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: colors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _busy
+                          ? const VitailLoading()
+                          : const WhiteRewardLogo(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
+
+  List<Widget> _receiptContent(RedeemedReward reward) => [
+    Center(
+      child: Container(
+        width: 72,
+        height: 72,
+        padding: const EdgeInsets.all(16),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF2F6E7),
+          shape: BoxShape.circle,
+        ),
+        child: SvgPicture.asset(
+          'assets/icons/reward-collected-check.svg',
+          width: 40,
+          height: 40,
+        ),
+      ),
+    ),
+    const SizedBox(height: 18),
+    const Text(
+      'Collected!',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+    ),
+    const SizedBox(height: 60),
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Theme.of(context).colorScheme.outline
+              : const Color(0xFFDBD7D1),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          _receiptRow('Order', reward.title),
+          const Divider(height: 1, color: Color(0xFFDBD7D1)),
+          _receiptRow(
+            'Place',
+            reward.partnerName ?? 'Partner details unavailable',
+          ),
+        ],
+      ),
+    ),
+    const SizedBox(height: 32),
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: FilledButton(
+        onPressed: () => Navigator.pop(context, reward),
+        style: FilledButton.styleFrom(
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Colors.white,
+          minimumSize: const Size(double.infinity, 44),
+          shape: const StadiumBorder(),
+          textStyle: const TextStyle(
+            fontFamily: 'PlusJakartaSans',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        child: const Text('DONE'),
+      ),
+    ),
+  ];
+
+  Widget _receiptRow(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 62,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    ),
+  );
 }
