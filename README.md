@@ -36,7 +36,7 @@
 **Backend (BaaS):**
 - **Platform:** Supabase
 - **Database:** PostgreSQL (with Row Level Security)
-- **Authentication:** Supabase GoTrue (Email/Password)
+- **Authentication:** Supabase Auth (Email/Password) and Google OAuth
 - **Storage:** Supabase Storage Buckets (Client-side compressed images)
 
 **External APIs:**
