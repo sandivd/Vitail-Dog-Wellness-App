@@ -3,7 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'walk_choose_dog_profiles.dart';
+import 'walk_in_progress.dart';
 import 'venues_screen.dart';
 
 enum _RouteMode { last, longest }
@@ -34,6 +34,7 @@ class _WalkScreenState extends State<WalkScreen> {
 
   Map<String, dynamic>? _lastWalk;
   bool _loadingLastWalk = true;
+  bool _isStartingWalk = false;
 
   // Placeholder partner venues. Swap for a Supabase 'venues' query once
   // that table exists, keeping the same name/subtitle/tag/location shape.
@@ -203,11 +204,57 @@ class _WalkScreenState extends State<WalkScreen> {
     return '${(meters / 1000).toStringAsFixed(1)} km · $minutes min';
   }
 
-  void _startWalk() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const ChooseDogProfiles()),
-    );
+  Future<void> _startWalk() async {
+    if (_isStartingWalk) return;
+    setState(() => _isStartingWalk = true);
+
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      // Single dog per user — fetch it directly instead of routing through
+      // a dog-selection screen.
+      final dog = await Supabase.instance.client
+          .from('dogs')
+          .select()
+          .eq('owner_id', userId)
+          .limit(1)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      if (dog == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No dog found. Please register a dog first.'),
+          ),
+        );
+        return;
+      }
+
+      // Carry the dropped-pin route forward if the user set one up — it'll
+      // show on the map once tracking begins in WalkInProgress.
+      final hasPlannedRoute = _currentPosition != null && _droppedPin != null;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => WalkInProgress(
+            dog: dog,
+            plannedRoute:
+                hasPlannedRoute ? [_currentPosition!, _droppedPin!] : null,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start walk: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isStartingWalk = false);
+    }
   }
 
   @override
@@ -436,8 +483,17 @@ class _WalkScreenState extends State<WalkScreen> {
                     SizedBox(
                       height: 56,
                       child: ElevatedButton.icon(
-                        onPressed: _startWalk,
-                        icon: const Icon(Icons.play_arrow, size: 24),
+                        onPressed: _isStartingWalk ? null : _startWalk,
+                        icon: _isStartingWalk
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.play_arrow, size: 24),
                         label: const Text(
                           'Start a walk',
                           style: TextStyle(
@@ -446,6 +502,8 @@ class _WalkScreenState extends State<WalkScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
+                          disabledBackgroundColor:
+                              colorScheme.primary.withValues(alpha: 0.6),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),

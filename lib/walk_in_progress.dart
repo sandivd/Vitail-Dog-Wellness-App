@@ -1,8 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'walk_summary.dart';
 
@@ -23,9 +24,10 @@ const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
 const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
 
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.selectedDogs});
+  const WalkInProgress({super.key, this.dog, this.plannedRoute});
 
-  final List<Map<String, dynamic>>? selectedDogs;
+  final Map<String, dynamic>? dog;
+  final List<LatLng>? plannedRoute;
 
   @override
   State<WalkInProgress> createState() => _WalkInProgressState();
@@ -49,16 +51,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
       DraggableScrollableController();
   final TextEditingController _noteController = TextEditingController();
 
-  // dogId -> {'pee': bool, 'poo': bool}
-  late final Map<String, Map<String, bool>> _hygiene;
+  // {'pee': bool, 'poo': bool} for the single dog on this walk.
+  late final Map<String, bool> _hygiene;
+  XFile? _photo;
 
-  List<Map<String, dynamic>> get _dogs => widget.selectedDogs ?? [];
-
-  String get _title {
-    if (_dogs.length > 1) return 'Group walk';
-    if (_dogs.isNotEmpty) return (_dogs.first['dog_name'] ?? 'Walk').toString();
-    return 'Walk';
-  }
+  String get _title => (widget.dog?['dog_name'] as String?) ?? 'Walk';
 
   String get _formattedTime {
     final minutes = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
@@ -68,15 +65,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   String get _formattedDistance => (_totalDistance / 1000).toStringAsFixed(2);
 
-  /// Goal from the dogs' stored daily_goal_minutes (set at onboarding),
-  /// so the progress bar matches the Home screen rings. Group walks use
-  /// the highest goal among the selected dogs.
-  int get _goalMinutes {
-    if (_dogs.isEmpty) return 30;
-    final goals = _dogs
-        .map((dog) => (dog['daily_goal_minutes'] as num?)?.toInt() ?? 30);
-    return goals.reduce((a, b) => a > b ? a : b);
-  }
+  /// Goal from the dog's stored daily_goal_minutes (set at onboarding), so
+  /// the progress bar matches the Home screen ring.
+  int get _goalMinutes =>
+      (widget.dog?['daily_goal_minutes'] as num?)?.toInt() ?? 30;
 
   double get _progress =>
       (_elapsedSeconds / (_goalMinutes * 60)).clamp(0.0, 1.0);
@@ -84,10 +76,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
   @override
   void initState() {
     super.initState();
-    _hygiene = {
-      for (final dog in _dogs)
-        dog['id'].toString(): {'pee': false, 'poo': false},
-    };
+    _hygiene = {'pee': false, 'poo': false};
     _startWalk();
   }
 
@@ -176,18 +165,35 @@ class _WalkInProgressState extends State<WalkInProgress> {
     setState(() => _isPaused = !_isPaused);
   }
 
-  void _toggleHygiene(String dogId, String type) {
+  void _toggleHygiene(String type) {
     setState(() {
-      _hygiene[dogId]![type] = !(_hygiene[dogId]![type] ?? false);
+      _hygiene[type] = !(_hygiene[type] ?? false);
     });
   }
 
-  Future<void> _finishWalk() async {
+  Future<void> _pickPhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1080,
+      imageQuality: 75,
+    );
+    if (image != null && mounted) {
+      setState(() => _photo = image);
+    }
+  }
+
+
+  void _finishWalk() {
     _timer?.cancel();
     _positionStream?.cancel();
 
     if (!mounted) return;
 
+    // WalkSummary owns the actual save (atomic save_walk RPC) — this screen
+    // just stops tracking and hands off everything it collected: distance,
+    // time, goal, dogs, hygiene, the recorded route, and anything the user
+    // already picked/typed here so it isn't lost.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -195,13 +201,72 @@ class _WalkInProgressState extends State<WalkInProgress> {
           distanceMeters: _totalDistance,
           elapsedSeconds: _elapsedSeconds,
           goalMinutes: _goalMinutes,
-          dogs: _dogs,
+          dog: widget.dog,
           hygiene: _hygiene,
           routePoints: List<LatLng>.from(_polylinePoints),
+          photo: _photo,
+          initialNote: _noteController.text,
         ),
       ),
     );
   }
+
+  Set<Polyline> get _polylines {
+    final polylines = <Polyline>{
+      Polyline(
+        polylineId: const PolylineId('walk_route'),
+        points: _polylinePoints,
+        color: _kCoral,
+        width: 6,
+      ),
+    };
+
+    // Route planned on WalkScreen before starting — dashed reference line.
+    if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('planned_route'),
+          points: widget.plannedRoute!,
+          color: Colors.black45,
+          width: 4,
+          patterns: [PatternItem.dash(14), PatternItem.gap(10)],
+        ),
+      );
+    }
+
+    return polylines;
+  }
+
+  Set<Marker> get _markers {
+    if (widget.plannedRoute == null || widget.plannedRoute!.isEmpty) {
+      return {};
+    }
+    return {
+      Marker(
+        markerId: const MarkerId('planned_destination'),
+        position: widget.plannedRoute!.last,
+      ),
+    };
+  }
+
+  LatLngBounds _boundsFor(List<LatLng> points) {
+    double minLat = points.first.latitude;
+    double maxLat = points.first.latitude;
+    double minLng = points.first.longitude;
+    double maxLng = points.first.longitude;
+
+    for (final point in points) {
+      minLat = point.latitude < minLat ? point.latitude : minLat;
+      maxLat = point.latitude > maxLat ? point.latitude : maxLat;
+      minLng = point.longitude < minLng ? point.longitude : minLng;
+      maxLng = point.longitude > maxLng ? point.longitude : maxLng;
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -212,19 +277,23 @@ class _WalkInProgressState extends State<WalkInProgress> {
           // Map fills the whole screen; the sheet slides over it.
           Positioned.fill(
             child: GoogleMap(
-              onMapCreated: (c) => _mapController = c,
+              onMapCreated: (c) {
+                _mapController = c;
+                if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
+                  final bounds = _boundsFor(widget.plannedRoute!);
+                  Future.delayed(const Duration(milliseconds: 300), () {
+                    _mapController?.animateCamera(
+                      CameraUpdate.newLatLngBounds(bounds, 60),
+                    );
+                  });
+                }
+              },
               initialCameraPosition:
                   const CameraPosition(target: _melbourne, zoom: 16.0),
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
-              polylines: {
-                Polyline(
-                  polylineId: const PolylineId('walk_route'),
-                  points: _polylinePoints,
-                  color: _kCoral,
-                  width: 6,
-                ),
-              },
+              polylines: _polylines,
+              markers: _markers,
             ),
           ),
 
@@ -320,8 +389,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Time / Distance
                     Row(
                       children: [
-                        const Expanded(
-                          child: _StatCard(label: 'TIME', value: '00:00'),
+                        Expanded(
+                          child: _StatCard(label: 'TIME', value: _formattedTime),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -368,10 +437,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         ],
                       ),
                     ),
+
                     const SizedBox(height: 24),
 
-                    // Hygiene log per dog
-                    if (_dogs.isNotEmpty) ...[
+                    // Hygiene log for this dog
+                    if (widget.dog != null) ...[
                       const Row(
                         children: [
                           Expanded(
@@ -417,13 +487,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      ..._dogs.map((dog) {
-                        final dogId = dog['id'].toString();
-                        final name = dog['dog_name'] ?? 'Dog';
-                        final breed = dog['breed'] ?? 'Unknown';
-                        final photoUrl = dog['photo_url'];
-                        final peeDone = _hygiene[dogId]?['pee'] ?? false;
-                        final pooDone = _hygiene[dogId]?['poo'] ?? false;
+                      Builder(builder: (context) {
+                        final name = widget.dog!['dog_name'] ?? 'Dog';
+                        final breed = widget.dog!['breed'] ?? 'Unknown';
+                        final photoUrl = widget.dog!['photo_url'];
+                        final peeDone = _hygiene['pee'] ?? false;
+                        final pooDone = _hygiene['poo'] ?? false;
 
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -477,7 +546,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 child: _HygieneButton(
                                   label: 'PEE',
                                   active: peeDone,
-                                  onTap: () => _toggleHygiene(dogId, 'pee'),
+                                  onTap: () => _toggleHygiene('pee'),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -486,7 +555,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 child: _HygieneButton(
                                   label: 'POO',
                                   active: pooDone,
-                                  onTap: () => _toggleHygiene(dogId, 'poo'),
+                                  onTap: () => _toggleHygiene('poo'),
                                 ),
                               ),
                             ],
@@ -496,39 +565,19 @@ class _WalkInProgressState extends State<WalkInProgress> {
                       const SizedBox(height: 8),
                     ],
 
+
+
+
+
                     // Add photo
-                    InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('Photo picker coming soon')),
-                        );
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: _kCardBg,
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            '+ Add photo',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: _kMuted,
-                              fontFamily: 'PlusJakartaSans',
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    _PhotoPicker(photo: _photo, onPick: _pickPhoto, onClear: () {
+                      setState(() => _photo = null);
+                    }),
                     const SizedBox(height: 20),
 
                     // Note
                     Text(
-                      _dogs.length > 1 ? 'GROUP NOTE' : 'NOTE',
+                      'NOTE',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -707,6 +756,75 @@ class _HygieneButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _PhotoPicker extends StatelessWidget {
+  const _PhotoPicker({
+    required this.photo,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  final XFile? photo;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    if (photo == null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onPick,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: Color(0xFFF9F7F3),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Center(
+            child: Text(
+              '+ Add photo',
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: _kMuted,
+                  fontFamily: 'PlusJakartaSans'),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.file(
+            File(photo!.path),
+            height: 160,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+        ),
+        Positioned(
+          top: 8,
+          right: 8,
+          child: InkWell(
+            onTap: onClear,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 16),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
