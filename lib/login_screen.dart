@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'login_view.dart';
 import 'register_screen.dart';
 import 'auth_routing.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -96,6 +97,10 @@ class _LoginScreenState extends State<LoginScreen> {
       isLoading: _isLoading,
       onEmailLogin: _login,
       onGoogleLogin: _signInWithGoogle,
+      onForgotPassword: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const ForgotPasswordScreen()),
+      ),
       onSignUp: () => Navigator.push(context,
         MaterialPageRoute(builder: (context) => const RegisterScreen())),
     );

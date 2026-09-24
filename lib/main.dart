@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -5,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'auth_routing.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
+import 'reset_password_screen.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -55,29 +57,7 @@ final ThemeData darkTheme = ThemeData(
   ),
 );
 
-class VitailApp extends StatelessWidget {
-  const VitailApp({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (_, ThemeMode currentMode, _) {
-        return MaterialApp(
-          title: 'Vitail',
-          theme: lightTheme,
-          darkTheme: darkTheme,
-          themeMode: currentMode,
-          // Default is 200ms / linear, which reads as laggy.
-          // 150ms / easeOut feels snappy. (Duration.zero = instant swap.)
-          themeAnimationDuration: const Duration(milliseconds: 150),
-          themeAnimationCurve: Curves.easeOut,
-          home: const AuthGate(),
-        );
-      },
-    );
-  }
-}
 
 /// Restores the session on cold start so returning users skip the login
 /// screen, then routes to onboarding or home depending on whether they've
@@ -133,4 +113,63 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) => _screen;
+}
+
+/// Lets us navigate from places with no BuildContext under the MaterialApp
+/// (the password-recovery listener below).
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+class VitailApp extends StatefulWidget {
+  const VitailApp({super.key});
+
+  @override
+  State<VitailApp> createState() => _VitailAppState();
+}
+
+class _VitailAppState extends State<VitailApp> {
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // When the user taps the reset link in their email, the OS opens the
+    // app, supabase_flutter exchanges the recovery code for a session, and
+    // this event fires. Listening at the app root (not on any one screen)
+    // means it works regardless of which screen is showing — including
+    // cold starts, which race AuthGate's own boot logic.
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      if (state.event == AuthChangeEvent.passwordRecovery) {
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
+          (route) => false,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, ThemeMode currentMode, _) {
+        return MaterialApp(
+          title: 'Vitail',
+          navigatorKey: navigatorKey,
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: currentMode,
+          themeAnimationDuration: const Duration(milliseconds: 150),
+          themeAnimationCurve: Curves.easeOut,
+          home: const AuthGate(),
+        );
+      },
+    );
+  }
 }

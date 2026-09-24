@@ -12,6 +12,7 @@ void main() {
     var emailCalls = 0;
     var googleCalls = 0;
     var signupCalls = 0;
+    var forgotCalls = 0;
     tester.view.resetPhysicalSize();
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);
@@ -20,7 +21,7 @@ void main() {
       home: MediaQuery(data: MediaQueryData(size: const Size(360, 800),
         viewInsets: EdgeInsets.only(bottom: keyboard)), child: LoginView(
         emailController: email, passwordController: password, isLoading: loading,
-        onEmailLogin: () => emailCalls++, onGoogleLogin: () => googleCalls++,
+        onEmailLogin: () => emailCalls++, onGoogleLogin: () => googleCalls++, onForgotPassword: () => forgotCalls++,
         onSignUp: () => signupCalls++)));
     await tester.runAsync(() async {
       final loader = FontLoader('PlusJakartaSans')
@@ -39,7 +40,8 @@ void main() {
     await tester.tap(find.text('Continue with email'));
     await tester.tap(find.text('Continue with Google'));
     await tester.tap(find.text("Don't have an account? Sign up", findRichText: true));
-    expect([emailCalls, googleCalls, signupCalls], [1, 1, 1]);
+    await tester.tap(find.text('Forgot password?'));
+    expect([emailCalls, googleCalls, signupCalls, forgotCalls], [1, 1, 1, 1]);
     expect(find.byKey(const ValueKey('lucide-mail')), findsOneWidget);
     expect(find.byKey(const ValueKey('lucide-lock-keyhole')), findsOneWidget);
     expect(find.byKey(const ValueKey('google-logo')), findsOneWidget);
