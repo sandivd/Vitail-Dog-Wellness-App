@@ -8,7 +8,7 @@ class LoginView extends StatelessWidget {
   const LoginView({super.key, required this.emailController,
     required this.passwordController, required this.isLoading,
     required this.onEmailLogin, required this.onGoogleLogin,
-    required this.onSignUp});
+    required this.onSignUp, required this.onForgotPassword});
 
   final TextEditingController emailController;
   final TextEditingController passwordController;
@@ -16,6 +16,7 @@ class LoginView extends StatelessWidget {
   final VoidCallback onEmailLogin;
   final VoidCallback onGoogleLogin;
   final VoidCallback onSignUp;
+  final VoidCallback onForgotPassword;
 
   Widget _lucideIcon(BuildContext context, String name) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -95,7 +96,23 @@ class LoginView extends StatelessWidget {
                             autofillHints: const [AutofillHints.password], textInputAction: TextInputAction.done,
                             onSubmitted: (_) { if (!isLoading) onEmailLogin(); },
                             style: TextStyle(fontFamily: 'PlusJakartaSans', color: colorScheme.onSurface)),
-                          const SizedBox(height: 24),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: isLoading ? null : onForgotPassword,
+                              style: TextButton.styleFrom(
+                                foregroundColor: colorScheme.primary,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: const Size(0, 32),
+                                textStyle: const TextStyle(
+                                    fontFamily: 'PlusJakartaSans',
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600),
+                              ),
+                              child: const Text('Forgot password?'),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
                           
                           ElevatedButton(onPressed: isLoading ? null : onEmailLogin,
                             style: ElevatedButton.styleFrom(backgroundColor: colorScheme.primary, foregroundColor: colorScheme.onPrimary,
