@@ -466,6 +466,9 @@ class _WalkSummaryState extends State<WalkSummary> {
                             photoUrl != null && photoUrl.toString().isNotEmpty
                                 ? NetworkImage(photoUrl)
                                 : null,
+                        child: photoUrl == null
+                          ? const Icon(Icons.pets, color: _kMuted)
+                          : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
