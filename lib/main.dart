@@ -7,6 +7,7 @@ import 'auth_routing.dart';
 import 'home_screen.dart';
 import 'login_screen.dart';
 import 'reset_password_screen.dart';
+import 'vitail_launch.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -167,8 +168,7 @@ class _VitailAppState extends State<VitailApp> {
           themeMode: currentMode,
           themeAnimationDuration: const Duration(milliseconds: 150),
           themeAnimationCurve: Curves.easeOut,
-          home: const AuthGate(),
-        );
+          home: const VitailLaunch(child: AuthGate()),        );
       },
     );
   }
