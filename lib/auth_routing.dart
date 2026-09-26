@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'dog_sharing.dart';
+import 'edit_profile_screen.dart';
 import 'home_screen.dart';
 import 'onboarding_screen.dart';
 
@@ -14,15 +16,12 @@ Future<Widget> resolvePostAuthScreen() async {
   final client = Supabase.instance.client;
   final userId = client.auth.currentUser?.id;
 
-  // Defensive: callers only run this right after a successful sign-in.
   if (userId == null) return const OnboardingScreen();
 
-  final dog = await client
-      .from('dogs')
-      .select('id')
-      .eq('owner_id', userId)
-      .limit(1)
-      .maybeSingle();
+  final link = await primaryDogForCurrentUser();
+  if (link == null) return const OnboardingScreen();
 
-  return dog == null ? const OnboardingScreen() : const HomeScreen();
+  return link.role == 'carer'
+      ? EditProfileScreen(dog: link.dog)
+      : const HomeScreen();
 }
