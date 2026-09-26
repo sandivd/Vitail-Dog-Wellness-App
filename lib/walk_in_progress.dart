@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'walk_summary.dart';
 
@@ -509,8 +510,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 backgroundColor: _kAvatarBg,
                                 backgroundImage: photoUrl != null &&
                                         photoUrl.toString().isNotEmpty
-                                    ? NetworkImage(photoUrl)
+                                    ? CachedNetworkImageProvider(photoUrl)
                                     : null,
+                                child: photoUrl == null
+                                  ? const Icon(Icons.pets, color: _kMuted)
+                                  : null,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
