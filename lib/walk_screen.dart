@@ -18,6 +18,11 @@ class WalkScreen extends StatefulWidget {
 class _WalkScreenState extends State<WalkScreen> {
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
 
+  // Collapsed height of the draggable sheet, as a fraction of screen height.
+  // Shared with the Start-walk overlay below so it always sits just above
+  // the sheet's handle instead of being covered by it.
+  static const double _sheetCollapsedSize = 0.14;
+
   // Average dog-walk pace, used only to estimate time for the placeholder
   // "route to pin" line below (see _polylines / _routeSummaryText).
   static const double _walkingSpeedMetersPerSecond = 1.3; // ~4.7 km/h
@@ -279,7 +284,7 @@ class _WalkScreenState extends State<WalkScreen> {
             ),
           ),
 
-          // Top overlay: search bar, route mode toggle, legend, summary pill.
+          // Top overlay: search bar and route mode toggle.
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -341,58 +346,97 @@ class _WalkScreenState extends State<WalkScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Route mode toggle
-                  Row(
-                    children: [
-                      _RoutePill(
-                        label: 'Last route',
-                        selected: _routeMode == _RouteMode.last,
-                        onTap: () => setState(() => _routeMode = _RouteMode.last),
-                      ),
-                      const SizedBox(width: 16),
-                      _RouteLink(
-                        label: 'Longest route',
-                        selected: _routeMode == _RouteMode.longest,
-                        onTap: () =>
-                            setState(() => _routeMode = _RouteMode.longest),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  const SizedBox(height: 10),
-                  const SizedBox(height: 18),
-
-                  // Distance / time summary pill
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.onSurface,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text(
-                      _routeSummaryText,
-                      style: TextStyle(
-                        color: colorScheme.surface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  // Route mode toggle — one bar, selected side shown as a
+                  // green pill.
+                  _RouteModeToggle(
+                    mode: _routeMode,
+                    onChanged: (mode) => setState(() => _routeMode = mode),
                   ),
                 ],
               ),
             ),
           ),
 
+          // Summary pill + Start walk button: a fixed overlay above the
+          // draggable sheet, not part of its scrollable content.
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.sizeOf(context).height * _sheetCollapsedSize + 20,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Distance / time summary pill
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.onSurface,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    _routeSummaryText,
+                    style: TextStyle(
+                      color: colorScheme.surface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _isStartingWalk ? null : _startWalk,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      disabledBackgroundColor:
+                          colorScheme.primary.withValues(alpha: 0.6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isStartingWalk
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Start walk',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Icon(Icons.play_arrow, size: 24),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Draggable panel: nearby venues + start walk button.
           DraggableScrollableSheet(
             controller: _sheetController,
-            initialChildSize: 0.5,
-            minChildSize: 0.16,
+            initialChildSize: _sheetCollapsedSize,
+            minChildSize: _sheetCollapsedSize,
             maxChildSize: 0.9,
             snap: true,
-            snapSizes: const [0.16, 0.5, 0.9],
+            snapSizes: const [_sheetCollapsedSize, 0.5, 0.9],
             builder: (context, scrollController) {
               return Container(
                 decoration: BoxDecoration(
@@ -478,39 +522,6 @@ class _WalkScreenState extends State<WalkScreen> {
                           onTap: () => _dropPinAt(venue['location'] as LatLng),
                         ),
                       ),
-
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _isStartingWalk ? null : _startWalk,
-                        icon: _isStartingWalk
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.play_arrow, size: 24),
-                        label: const Text(
-                          'Start a walk',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
-                          disabledBackgroundColor:
-                              colorScheme.primary.withValues(alpha: 0.6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               );
@@ -522,16 +533,71 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 }
 
-/// Filled pill used for the currently-selected route mode ("Last route").
-class _RoutePill extends StatelessWidget {
-  const _RoutePill({
+/// Segmented bar for choosing between "Last route" and "Longest route" —
+/// one pill-shaped container, with the selected side highlighted as a
+/// solid green pill.
+class _RouteModeToggle extends StatelessWidget {
+  const _RouteModeToggle({required this.mode, required this.onChanged});
+
+  final _RouteMode mode;
+  final ValueChanged<_RouteMode> onChanged;
+
+  // Matches the green used for mood chips / points pill elsewhere in the
+  // app (see walk_summary.dart's _kGreen) — not in ColorScheme, so hardcoded
+  // to stay consistent with those other hardcoded Figma tokens.
+  static const Color _kGreen = Color(0xFFAEC568);
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RouteModeSegment(
+              label: 'Last route',
+              selected: mode == _RouteMode.last,
+              selectedColor: _kGreen,
+              onTap: () => onChanged(_RouteMode.last),
+            ),
+          ),
+          Expanded(
+            child: _RouteModeSegment(
+              label: 'Longest route',
+              selected: mode == _RouteMode.longest,
+              selectedColor: _kGreen,
+              onTap: () => onChanged(_RouteMode.longest),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteModeSegment extends StatelessWidget {
+  const _RouteModeSegment({
     required this.label,
     required this.selected,
+    required this.selectedColor,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
+  final Color selectedColor;
   final VoidCallback onTap;
 
   @override
@@ -540,62 +606,20 @@ class _RoutePill extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? colorScheme.primary : colorScheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Underlined text link style used for the non-selected route mode
-/// ("Longest route"), matching the mockup's link-like second option.
-class _RouteLink extends StatelessWidget {
-  const _RouteLink({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? selectedColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+        ),
         child: Text(
           label,
           style: TextStyle(
-            color: colorScheme.onSurface,
+            color: selected ? Colors.white : colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 14,
-            decoration:
-                selected ? TextDecoration.underline : TextDecoration.none,
-            decorationColor: colorScheme.secondary,
-            decorationThickness: 2,
           ),
         ),
       ),
