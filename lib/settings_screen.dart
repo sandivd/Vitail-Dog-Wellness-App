@@ -20,7 +20,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true;
+  bool _notificationsEnabled = true; // optimistic default until prefs load
   bool _isSigningOut = false;
   bool _isExporting = false;
   bool _isDeleting = false;
@@ -44,6 +44,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: weight,
           color: color ?? ink);
 
+  @override
+  void initState() {
+    super.initState();
+    // Read from the instance cached in main() — safe synchronously, and
+    // the correct value is present on the FIRST frame, so the switch
+    // never animates on open.
+    _notificationsEnabled = appPrefs.getBool('walkReminders') ?? true;
+  }
+
   // ------------------------------------------------------------- preferences
 
   Future<void> _setDarkMode(bool dark) async {
@@ -52,6 +61,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     themeNotifier.value = dark ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('darkMode', dark);
+  }
+
+  // NEW: persist the walk-reminders toggle so it survives sign-out/in
+  // and app restarts (local device preference, like dark mode).
+  Future<void> _setWalkReminders(bool enabled) async {
+    setState(() => _notificationsEnabled = enabled);
+    await appPrefs.setBool('walkReminders', enabled);
   }
 
   Future<void> _openEditProfile() async {
@@ -186,7 +202,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 20),
               Text('Log out', style: style(22, weight: FontWeight.w700)),
               const SizedBox(height: 8),
-              
+
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () {
@@ -223,7 +239,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 10),
-              
+
               TextButton(
                 onPressed: () => Navigator.pop(sheet),
                 child: Text('Cancel',
@@ -257,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ----------------------------------------------------------- delete account
 
-    Future<void> _confirmDeleteAccount() async {
+  Future<void> _confirmDeleteAccount() async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: cardFill,
@@ -494,8 +510,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: 'Walk reminders',
                     subtitle: 'A daily nudge to get out and walk (coming soon)',
                     value: _notificationsEnabled,
-                    onChanged: (v) =>
-                        setState(() => _notificationsEnabled = v),
+                    onChanged:
+                        _setWalkReminders, // NEW: persists the choice
                   ),
 
                   _sectionLabel('YOUR DOG'),

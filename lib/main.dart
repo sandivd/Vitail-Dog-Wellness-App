@@ -12,14 +12,18 @@ import 'vitail_launch.dart';
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
 
+/// Cached in main() so any screen can read preferences synchronously —
+/// no first-frame flash of default values (the async-load gap that made
+/// the walk-reminders switch visibly animate off on open).
+late final SharedPreferences appPrefs;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
 
-  // Restore the saved theme before the first frame (Settings persists it).
-  final prefs = await SharedPreferences.getInstance();
+  appPrefs = await SharedPreferences.getInstance();
   themeNotifier.value =
-      (prefs.getBool('darkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
+      (appPrefs.getBool('darkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
 
   runApp(const VitailApp());
 }
