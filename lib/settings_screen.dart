@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'main.dart';
+import 'notifications.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,7 +21,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true; // optimistic default until prefs load
+  bool _notificationsEnabled = false;
+  int _reminderHour = 9;
+  int _reminderMinute = 0;
   bool _isSigningOut = false;
   bool _isExporting = false;
   bool _isDeleting = false;
@@ -44,13 +47,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: weight,
           color: color ?? ink);
 
+
   @override
   void initState() {
     super.initState();
-    // Read from the instance cached in main() — safe synchronously, and
-    // the correct value is present on the FIRST frame, so the switch
-    // never animates on open.
-    _notificationsEnabled = appPrefs.getBool('walkReminders') ?? true;
+    // appPrefs is cached in main(), so these reads are synchronous —
+    // correct values on the first frame, no toggle flash.
+    _notificationsEnabled = appPrefs.getBool('walkReminders') ?? false;
+    _reminderHour = appPrefs.getInt('reminderHour') ?? 9;
+    _reminderMinute = appPrefs.getInt('reminderMinute') ?? 0;
   }
 
   // ------------------------------------------------------------- preferences
@@ -66,8 +71,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // NEW: persist the walk-reminders toggle so it survives sign-out/in
   // and app restarts (local device preference, like dark mode).
   Future<void> _setWalkReminders(bool enabled) async {
+    if (enabled) {
+      final granted = await Notifications.requestPermission();
+      if (!granted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Vitail needs notification permission for walk reminders. '
+                'Enable it in system settings, then try again.')));
+        return; // no setState — the switch stays off
+      }
+      await Notifications.scheduleWalkReminder(
+          hour: _reminderHour, minute: _reminderMinute);
+    } else {
+      await Notifications.cancelWalkReminder();
+    }
     setState(() => _notificationsEnabled = enabled);
     await appPrefs.setBool('walkReminders', enabled);
+  }
+
+  Future<void> _pickReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _reminderHour, minute: _reminderMinute),
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _reminderHour = picked.hour;
+      _reminderMinute = picked.minute;
+    });
+    await appPrefs.setInt('reminderHour', _reminderHour);
+    await appPrefs.setInt('reminderMinute', _reminderMinute);
+
+    if (_notificationsEnabled) {
+      // Cancel-then-schedule with a fixed ID: re-scheduling is idempotent.
+      await Notifications.scheduleWalkReminder(
+          hour: _reminderHour, minute: _reminderMinute);
+    }
   }
 
   Future<void> _openEditProfile() async {
@@ -508,10 +549,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _sectionLabel('NOTIFICATIONS'),
                   _toggleCard(
                     title: 'Walk reminders',
-                    subtitle: 'A daily nudge to get out and walk (coming soon)',
+                    subtitle: 'A daily nudge to get out and walk',
                     value: _notificationsEnabled,
-                    onChanged:
-                        _setWalkReminders, // NEW: persists the choice
+                    onChanged: _setWalkReminders,
+                  ),
+                  const SizedBox(height: 12),
+                  _navCard(
+                    title: 'Remind me at',
+                    subtitle: _notificationsEnabled
+                        ? TimeOfDay(
+                                hour: _reminderHour, minute: _reminderMinute)
+                            .format(context)
+                        : 'Turn on walk reminders to pick a time',
+                    trailing: Icon(Icons.schedule, color: muted),
+                    onTap: _notificationsEnabled ? _pickReminderTime : null,
                   ),
 
                   _sectionLabel('YOUR DOG'),
