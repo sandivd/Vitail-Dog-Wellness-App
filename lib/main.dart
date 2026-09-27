@@ -8,6 +8,7 @@ import 'home_screen.dart';
 import 'login_screen.dart';
 import 'reset_password_screen.dart';
 import 'vitail_launch.dart';
+import 'notifications.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
@@ -25,7 +26,30 @@ Future<void> main() async {
   themeNotifier.value =
       (appPrefs.getBool('darkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
 
+  await Notifications.init();
   runApp(const VitailApp());
+
+  // Restore the daily reminder if it's on (covers reinstalls/updates;
+  // device reboots are handled by the manifest boot receiver).
+  unawaited(() async {
+    if (appPrefs.getBool('walkReminders') ?? false) {
+      final client = Supabase.instance.client;
+
+      // The session restores asynchronously — wait for it (same pattern
+      // as AuthGate) so the reminder message can use the dog's name,
+      // goal and streak. Skip entirely if signed out; the previously
+      // scheduled alarm just keeps its last message.
+      if (client.auth.currentSession == null) {
+        await client.auth.onAuthStateChange.first;
+      }
+      if (client.auth.currentUser == null) return;
+
+      await Notifications.scheduleWalkReminder(
+        hour: appPrefs.getInt('reminderHour') ?? 9,
+        minute: appPrefs.getInt('reminderMinute') ?? 0,
+      );
+    }
+  }());
 }
 
 // Global notifier for Dark Mode
