@@ -7,10 +7,13 @@ import 'rewards_data.dart';
 import 'reward_image_placeholder.dart';
 
 class RewardsScreen extends StatefulWidget {
-  const RewardsScreen({super.key, this.repository, this.isActive = true});
+  const RewardsScreen({super.key, this.repository, this.isActive = true, this.partnerId,
+    this.venueName,});
 
   final RewardsRepository? repository;
   final bool isActive;
+  final String? partnerId;
+  final String? venueName;
 
   @override
   State<RewardsScreen> createState() => _RewardsScreenState();
@@ -56,7 +59,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
     try {
       final catalogue = await _repository.loadCatalogue();
       if (!mounted || request != _catalogueRequest) return;
-      final sortedOffers = List<RewardOffer>.of(catalogue.offers)
+      final sortedOffers = catalogue.offers
+          .where(
+            (offer) =>
+                widget.partnerId == null ||
+                offer.partnerId == widget.partnerId,
+          )
+          .toList()
         ..sort((a, b) {
           final costOrder = a.pointsCost.compareTo(b.pointsCost);
           return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
@@ -214,7 +223,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
             padding: const EdgeInsets.fromLTRB(24, 30, 24, 32),
             children: [
               Text(
-                'Rewards',
+                widget.venueName == null ? 'Rewards' : 'Rewards at ${widget.venueName}',
                 style: TextStyle(
                   fontSize: 26,
                   height: 1.4,
@@ -417,16 +426,30 @@ class _RewardsScreenState extends State<RewardsScreen> {
     if (_redeemedError != null) {
       return [_message(_redeemedError!, retry: _loadRedeemed)];
     }
-    if (_redeemed == null || _redeemed!.isEmpty) {
+    final venueOfferIds = (_catalogue?.offers ?? [])
+        .map((offer) => offer.id)
+        .toSet();
+    final rewards = widget.partnerId == null
+        ? _redeemed!
+        : _redeemed!
+              .where(
+                (reward) =>
+                    reward.rewardId != null &&
+                    venueOfferIds.contains(reward.rewardId),
+              )
+              .toList();
+
+    if (rewards.isEmpty) {
       return [
         _message(
-          'No redeemed rewards yet. Find your first treat in All rewards.',
+          'No redeemed rewards for this venue yet.',
           action: 'Browse rewards',
           retry: () async => _selectTab(false),
         ),
       ];
     }
-    return _redeemed!
+
+    return rewards
         .map(
           (reward) => _rewardCard(
             title: reward.title,

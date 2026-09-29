@@ -3,6 +3,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'venue_detail.dart';
 import 'walk_in_progress.dart';
 import 'venues_screen.dart';
 
@@ -43,35 +44,17 @@ class _WalkScreenState extends State<WalkScreen> {
 
   // Placeholder partner venues. Swap for a Supabase 'venues' query once
   // that table exists, keeping the same name/subtitle/tag/location shape.
-  final List<Map<String, dynamic>> _nearbyVenues = const [
-    {
-      'name': 'Royal Park',
-      'subtitle': 'Off-lead park · 400 m',
-      'tag': 'Free entry',
-      'tagColor': Color(0xFFD9E4B0),
-      'location': LatLng(-37.7850, 144.9470),
-    },
-    {
-      'name': 'The Grounds Café',
-      'subtitle': 'Dog-friendly café · 650 m',
-      'tag': 'Free coffee · 250 pts',
-      'tagColor': Color(0xFFE7B9A6),
-      'location': LatLng(-37.8110, 144.9600),
-    },
-    {
-      'name': 'Paws Vet Clinic',
-      'subtitle': 'Partner vet · 1.2 km',
-      'tag': '15% off check-up',
-      'tagColor': Color(0xFFB9D8CE),
-      'location': LatLng(-37.8180, 144.9700),
-    },
-  ];
+  
 
-  List<Map<String, dynamic>> get _visibleVenues {
+  List<VenueInfo> _nearbyVenues = [];
+  bool _loadingVenues = true;
+  String? _venueError;
+
+  List<VenueInfo> get _visibleVenues {
     final query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) return _nearbyVenues;
     return _nearbyVenues
-        .where((v) => v['name'].toString().toLowerCase().contains(query))
+        .where((venue) => venue.name.toLowerCase().contains(query))
         .toList();
   }
 
@@ -80,6 +63,7 @@ class _WalkScreenState extends State<WalkScreen> {
     super.initState();
     _locateUser();
     _fetchLastWalk();
+    _fetchVenues();
   }
 
   @override
@@ -140,6 +124,44 @@ class _WalkScreenState extends State<WalkScreen> {
     }
   }
 
+  Future<void> _fetchVenues() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('venues')
+          .select('partner_id, venue_name, closing_time, coordinates, venue_details')
+          .order('venue_name');
+
+      if (!mounted) return;
+      setState(() {
+        _nearbyVenues = rows
+            .map((row) => VenueInfo.fromJson(Map<String, dynamic>.from(row)))
+            .toList();
+        _venueError = null;
+        _loadingVenues = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _venueError = 'Could not load nearby venues.';
+        _loadingVenues = false;
+      });
+    }
+  }
+
+
+  void _openVenue(VenueInfo venue) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VenueDetailScreen(
+          venue: venue,
+          userLocation: _currentPosition,
+          onStartWalk: () => _startWalk(destination: venue.location)
+        ),
+      ),
+    );
+  }
+
   void _recenter() {
     if (_currentPosition != null) {
       _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
@@ -159,7 +181,8 @@ class _WalkScreenState extends State<WalkScreen> {
   void _onSearchSubmitted(String query) {
     final matches = _visibleVenues;
     if (matches.isEmpty) return;
-    _dropPinAt(matches.first['location'] as LatLng);
+    final location = matches.first.location;
+    if (location != null) _dropPinAt(location);
     FocusScope.of(context).unfocus();
   }
 
@@ -209,7 +232,7 @@ class _WalkScreenState extends State<WalkScreen> {
     return '${(meters / 1000).toStringAsFixed(1)} km · $minutes min';
   }
 
-  Future<void> _startWalk() async {
+  Future<void> _startWalk({LatLng? destination}) async {
     if (_isStartingWalk) return;
     setState(() => _isStartingWalk = true);
 
@@ -237,17 +260,18 @@ class _WalkScreenState extends State<WalkScreen> {
         return;
       }
 
-      // Carry the dropped-pin route forward if the user set one up — it'll
-      // show on the map once tracking begins in WalkInProgress.
-      final hasPlannedRoute = _currentPosition != null && _droppedPin != null;
+      final routeDestination = destination ?? _droppedPin;
+      final hasPlannedRoute =
+          _currentPosition != null && routeDestination != null;
 
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => WalkInProgress(
             dog: dog,
-            plannedRoute:
-                hasPlannedRoute ? [_currentPosition!, _droppedPin!] : null,
+            plannedRoute: hasPlannedRoute
+                ? [_currentPosition!, routeDestination!]
+                : null,
           ),
         ),
       );
@@ -308,6 +332,7 @@ class _WalkScreenState extends State<WalkScreen> {
                           ),
                           child: TextField(
                             controller: _searchController,
+                            onChanged: (_) => setState(() {}),
                             onSubmitted: _onSearchSubmitted,
                             textInputAction: TextInputAction.search,
                             decoration: InputDecoration(
@@ -504,22 +529,43 @@ class _WalkScreenState extends State<WalkScreen> {
                     ),
                     const SizedBox(height: 12),
 
-                    if (_visibleVenues.isEmpty)
+                    if (_loadingVenues)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_venueError != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Center(
-                          child: Text('No matches nearby',
-                              style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          child: Text(
+                            _venueError!,
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (_visibleVenues.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            'No venues nearby',
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
                       )
                     else
                       ..._visibleVenues.map(
                         (venue) => _VenueCard(
-                          name: venue['name'] as String,
-                          subtitle: venue['subtitle'] as String,
-                          tag: venue['tag'] as String,
-                          tagColor: venue['tagColor'] as Color,
-                          onTap: () => _dropPinAt(venue['location'] as LatLng),
+                          name: venue.name,
+                          subtitle: venue.distanceLabelFrom(_currentPosition),
+                          tag: venue.hoursLabel,
+                          tagColor: colorScheme.tertiary.withValues(alpha: 0.3),
+                          onTap: () => _openVenue(venue),
                         ),
                       ),
                   ],
