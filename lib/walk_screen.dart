@@ -42,7 +42,7 @@ class _WalkScreenState extends State<WalkScreen> {
   bool _loadingLastWalk = true;
   bool _isStartingWalk = false;
 
-  // Partner venues loaded from the Supabase 'venues' table.
+  // Partner venues loaded from the Supabase 'partnered_venues' table.
   List<VenueInfo> _nearbyVenues = [];
   bool _loadingVenues = true;
   String? _venueError;
@@ -144,7 +144,7 @@ class _WalkScreenState extends State<WalkScreen> {
       // select() with no column list = every column. VenueInfo.fromJson picks
       // out what it needs (incl. optional latitude/longitude/points), so this
       // keeps working before and after those columns are added.
-      final rows = await Supabase.instance.client.from('venues').select();
+      final rows = await Supabase.instance.client.from('partnered_venues').select();
 
       if (!mounted) return;
       setState(() {
