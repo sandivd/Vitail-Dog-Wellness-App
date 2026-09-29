@@ -42,20 +42,35 @@ class _WalkScreenState extends State<WalkScreen> {
   bool _loadingLastWalk = true;
   bool _isStartingWalk = false;
 
-  // Placeholder partner venues. Swap for a Supabase 'venues' query once
-  // that table exists, keeping the same name/subtitle/tag/location shape.
-  
-
+  // Partner venues loaded from the Supabase 'venues' table.
   List<VenueInfo> _nearbyVenues = [];
   bool _loadingVenues = true;
   String? _venueError;
 
+  /// Venues matching the search box, nearest first. Until the user's location
+  /// is known (or for venues without coordinates) they fall back to A–Z.
   List<VenueInfo> get _visibleVenues {
     final query = _searchController.text.trim().toLowerCase();
-    if (query.isEmpty) return _nearbyVenues;
-    return _nearbyVenues
-        .where((venue) => venue.name.toLowerCase().contains(query))
-        .toList();
+    final matches = query.isEmpty
+        ? [..._nearbyVenues]
+        : _nearbyVenues
+              .where((venue) => venue.name.toLowerCase().contains(query))
+              .toList();
+
+    matches.sort((a, b) {
+      final distanceA = a.distanceMetersFrom(_currentPosition);
+      final distanceB = b.distanceMetersFrom(_currentPosition);
+      if (distanceA != null && distanceB != null) {
+        final byDistance = distanceA.compareTo(distanceB);
+        if (byDistance != 0) return byDistance;
+      } else if (distanceA != null) {
+        return -1; // venues with a known distance come first
+      } else if (distanceB != null) {
+        return 1;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return matches;
   }
 
   @override
@@ -126,10 +141,10 @@ class _WalkScreenState extends State<WalkScreen> {
 
   Future<void> _fetchVenues() async {
     try {
-      final rows = await Supabase.instance.client
-          .from('venues')
-          .select('partner_id, venue_name, closing_time, coordinates, venue_details')
-          .order('venue_name');
+      // select() with no column list = every column. VenueInfo.fromJson picks
+      // out what it needs (incl. optional latitude/longitude/points), so this
+      // keeps working before and after those columns are added.
+      final rows = await Supabase.instance.client.from('venues').select();
 
       if (!mounted) return;
       setState(() {
@@ -147,8 +162,16 @@ class _WalkScreenState extends State<WalkScreen> {
       });
     }
   }
+  void _retryVenues() {
+    setState(() {
+      _loadingVenues = true;
+      _venueError = null;
+    });
+    _fetchVenues();
+  }
 
-
+  /// Opens that venue's own detail page. Its "Start walk to …" button comes
+  /// back here so the walk can head for the venue's coordinates.
   void _openVenue(VenueInfo venue) {
     Navigator.push(
       context,
@@ -156,7 +179,7 @@ class _WalkScreenState extends State<WalkScreen> {
         builder: (_) => VenueDetailScreen(
           venue: venue,
           userLocation: _currentPosition,
-          onStartWalk: () => _startWalk(destination: venue.location)
+          onStartWalk: () => _startWalk(destination: venue.location),
         ),
       ),
     );
@@ -261,8 +284,26 @@ class _WalkScreenState extends State<WalkScreen> {
       }
 
       final routeDestination = destination ?? _droppedPin;
+
+      // GPS may not have resolved yet if the user tapped quickly. Wait for
+      // it so the planned route isn't silently dropped.
+      if (routeDestination != null && _currentPosition == null) {
+        await _locateUser();
+        if (!mounted) return;
+      }
+
       final hasPlannedRoute =
           _currentPosition != null && routeDestination != null;
+
+      if (routeDestination != null && !hasPlannedRoute) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Couldn’t get your location, so the route won’t be shown.',
+            ),
+          ),
+        );
+      }
 
       Navigator.push(
         context,
@@ -537,13 +578,19 @@ class _WalkScreenState extends State<WalkScreen> {
                     else if (_venueError != null)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
-                        child: Center(
-                          child: Text(
-                            _venueError!,
-                            style: TextStyle(
-                              color: colorScheme.onSurfaceVariant,
+                        child: Column(
+                          children: [
+                            Text(
+                              _venueError!,
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                             ),
-                          ),
+                            TextButton(
+                              onPressed: _retryVenues,
+                              child: const Text('Try again'),
+                            ),
+                          ],
                         ),
                       )
                     else if (_visibleVenues.isEmpty)
@@ -760,3 +807,7 @@ class _VenueCard extends StatelessWidget {
     );
   }
 }
+
+
+// Command: E:\user\Android_Studio\SDK\platform-tools\adb.exe -s emulator-5554 shell am force-stop com.example.vitail
+// Flutter: Installing build\app\outputs\flutter-apk\app-debug.apk...

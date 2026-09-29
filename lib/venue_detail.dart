@@ -5,9 +5,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
-
 import 'rewards_screen.dart';
 
+/// One row of the `venues` table.
+///
+/// Reads: partner_id, venue_name, closing_time, venue_details, points, and the
+/// location from EITHER numeric `latitude` + `longitude` columns (preferred)
+/// OR the older text `coordinates` column. Missing columns are fine — they
+/// just come through as null.
 class VenueInfo {
   const VenueInfo({
     required this.partnerId,
@@ -15,14 +20,16 @@ class VenueInfo {
     required this.closingTime,
     required this.location,
     required this.details,
+    this.points,
   });
 
   factory VenueInfo.fromJson(Map<String, dynamic> row) => VenueInfo(
     partnerId: row['partner_id']?.toString() ?? '',
     name: row['venue_name']?.toString() ?? 'Venue',
     closingTime: row['closing_time']?.toString(),
-    location: _parseCoordinates(row['coordinates']),
+    location: _locationFromRow(row),
     details: row['venue_details']?.toString() ?? '',
+    points: _asInt(row['points']),
   );
 
   final String partnerId;
@@ -30,6 +37,9 @@ class VenueInfo {
   final String? closingTime;
   final LatLng? location;
   final String details;
+
+  /// Points a walker can earn by visiting (`points` column, int4).
+  final int? points;
 
   String get hoursLabel {
     final value = closingTime?.trim();
@@ -48,23 +58,60 @@ class VenueInfo {
     return 'Closes ${time.toLowerCase()}';
   }
 
-  String distanceLabelFrom(LatLng? userLocation) {
+  /// Straight-line distance in metres, or null if either point is unknown.
+  double? distanceMetersFrom(LatLng? userLocation) {
     final venueLocation = location;
-    if (userLocation == null || venueLocation == null) {
-      return 'Distance unavailable';
-    }
-
-    final meters = Geolocator.distanceBetween(
+    if (userLocation == null || venueLocation == null) return null;
+    return Geolocator.distanceBetween(
       userLocation.latitude,
       userLocation.longitude,
       venueLocation.latitude,
       venueLocation.longitude,
     );
+  }
+
+  String distanceLabelFrom(LatLng? userLocation) {
+    final meters = distanceMetersFrom(userLocation);
+    if (meters == null) return 'Distance unavailable';
 
     if (meters < 1000) return '${meters.round()} m away';
     return '${(meters / 1000).toStringAsFixed(1)} km away';
   }
 
+  // --- Parsing helpers --------------------------------------------------------
+
+  static double? _asDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value.trim());
+    return null;
+  }
+
+  static int? _asInt(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value.trim());
+    return null;
+  }
+
+  /// Null for values that can't be real coordinates (e.g. swapped or junk).
+  static LatLng? _validLatLng(double latitude, double longitude) {
+    if (latitude.abs() > 90 || longitude.abs() > 180) return null;
+    return LatLng(latitude, longitude);
+  }
+
+  /// Prefers the numeric latitude/longitude columns, then falls back to the
+  /// text `coordinates` column, so either schema works.
+  static LatLng? _locationFromRow(Map<String, dynamic> row) {
+    final latitude = _asDouble(row['latitude']);
+    final longitude = _asDouble(row['longitude']);
+    if (latitude != null && longitude != null) {
+      return _validLatLng(latitude, longitude);
+    }
+    return _parseCoordinates(row['coordinates']);
+  }
+
+  /// Understands: GeoJSON-style maps/lists (longitude first), {lat, lng} maps,
+  /// JSON text, "POINT(lng lat)", and plain text pairs such as
+  /// "-37.8136, 144.9631", "-37.8136 144.9631" or "(-37.8136, 144.9631)".
   static LatLng? _parseCoordinates(dynamic raw) {
     if (raw == null) return null;
 
@@ -75,10 +122,10 @@ class VenueInfo {
         return _geoJsonPoint(nestedCoordinates);
       }
 
-      final latitude = map['latitude'] ?? map['lat'];
-      final longitude = map['longitude'] ?? map['lng'] ?? map['lon'];
-      if (latitude is num && longitude is num) {
-        return LatLng(latitude.toDouble(), longitude.toDouble());
+      final latitude = _asDouble(map['latitude'] ?? map['lat']);
+      final longitude = _asDouble(map['longitude'] ?? map['lng'] ?? map['lon']);
+      if (latitude != null && longitude != null) {
+        return _validLatLng(latitude, longitude);
       }
       return null;
     }
@@ -92,7 +139,7 @@ class VenueInfo {
       try {
         return _parseCoordinates(jsonDecode(value));
       } catch (_) {
-        return null;
+        // Not JSON after all — fall through to the plain-text patterns.
       }
     }
 
@@ -105,17 +152,22 @@ class VenueInfo {
       final longitude = double.tryParse(point.group(1)!);
       final latitude = double.tryParse(point.group(2)!);
       if (latitude != null && longitude != null) {
-        return LatLng(latitude, longitude);
+        return _validLatLng(latitude, longitude);
       }
     }
 
-    // Also accept a plain "latitude,longitude" string.
-    final values = value.split(',');
-    if (values.length == 2) {
-      final latitude = double.tryParse(values[0].trim());
-      final longitude = double.tryParse(values[1].trim());
-      if (latitude != null && longitude != null) {
-        return LatLng(latitude, longitude);
+    // Plain text pair. Latitude is assumed first; if the first number can't
+    // be a latitude (|x| > 90) the pair is read as "longitude, latitude".
+    final pair = RegExp(
+      r'^[\(\[]?\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*[\)\]]?$',
+    ).firstMatch(value);
+    if (pair != null) {
+      final first = double.tryParse(pair.group(1)!);
+      final second = double.tryParse(pair.group(2)!);
+      if (first != null && second != null) {
+        return first.abs() > 90
+            ? _validLatLng(second, first)
+            : _validLatLng(first, second);
       }
     }
 
@@ -123,30 +175,101 @@ class VenueInfo {
   }
 
   static LatLng? _geoJsonPoint(List coordinates) {
-    final longitude = coordinates[0];
-    final latitude = coordinates[1];
-    if (latitude is! num || longitude is! num) return null;
-    return LatLng(latitude.toDouble(), longitude.toDouble());
+    final longitude = _asDouble(coordinates[0]);
+    final latitude = _asDouble(coordinates[1]);
+    if (latitude == null || longitude == null) return null;
+    return _validLatLng(latitude, longitude);
   }
 }
 
-class VenueDetailScreen extends StatelessWidget {
+class VenueDetailScreen extends StatefulWidget {
   const VenueDetailScreen({
     super.key,
     required this.venue,
-    required this.userLocation,
-    required this.onStartWalk,
+    this.userLocation,
+    this.onStartWalk,
   });
 
   final VenueInfo venue;
+
+  /// The user's position if the caller already has it. If null, this screen
+  /// looks it up itself so the distance still fills in.
   final LatLng? userLocation;
-  final VoidCallback onStartWalk;
+
+  /// Called by the "Start walk to …" button. If null, the button is hidden.
+  final Future<void> Function()? onStartWalk;
+
+  @override
+  State<VenueDetailScreen> createState() => _VenueDetailScreenState();
+}
+
+class _VenueDetailScreenState extends State<VenueDetailScreen> {
+  LatLng? _userLocation;
+  bool _locating = false;
+  bool _startingWalk = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _userLocation = widget.userLocation;
+    if (_userLocation == null) {
+      _locating = true;
+      _locateUser();
+    }
+  }
+
+  Future<void> _locateUser() async {
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+      setState(() {
+        _userLocation = LatLng(position.latitude, position.longitude);
+      });
+    } catch (_) {
+      // The distance simply stays unavailable.
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _startWalk() async {
+    final onStartWalk = widget.onStartWalk;
+    if (onStartWalk == null || _startingWalk) return;
+    setState(() => _startingWalk = true);
+    try {
+      await onStartWalk();
+    } finally {
+      if (mounted) setState(() => _startingWalk = false);
+    }
+  }
+
+  String get _distanceLabel {
+    final venue = widget.venue;
+    if (venue.location == null) return 'Distance unavailable';
+    if (_userLocation == null) {
+      return _locating ? 'Locating…' : 'Distance unavailable';
+    }
+    return venue.distanceLabelFrom(_userLocation);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final venue = widget.venue;
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
+    final points = venue.points;
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -251,7 +374,7 @@ class VenueDetailScreen extends StatelessWidget {
                         Expanded(
                           child: _VenueInfoColumn(
                             label: 'DISTANCE',
-                            value: venue.distanceLabelFrom(userLocation),
+                            value: _distanceLabel,
                           ),
                         ),
                       ],
@@ -278,30 +401,80 @@ class VenueDetailScreen extends StatelessWidget {
                     color: colors.onSurfaceVariant,
                   ),
                 ),
+                // Points card: only the points that can be earned here, and
+                // only when the venue actually offers some.
+                if (points != null && points > 0) ...[
+                  const SizedBox(height: 28),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 22,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                  ),
+                ],
               ]),
             ),
           ),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        minimum: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-        child: SizedBox(
-          height: 60,
-          child: FilledButton(
-            onPressed: onStartWalk,
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.primary,
-              foregroundColor: colors.onPrimary,
-              shape: const StadiumBorder(),
-              textStyle: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+      bottomNavigationBar: widget.onStartWalk == null
+          ? null
+          : SafeArea(
+              minimum: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+              child: SizedBox(
+                height: 60,
+                child: FilledButton(
+                  onPressed: _startingWalk ? null : _startWalk,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: colors.primary,
+                    foregroundColor: colors.onPrimary,
+                    disabledBackgroundColor: colors.primary.withValues(
+                      alpha: 0.6,
+                    ),
+                    disabledForegroundColor: colors.onPrimary,
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: _startingWalk
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'Start walk to ${venue.name}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                ),
               ),
             ),
-            child: Text('Start walk to ${venue.name}'),
-          ),
-        ),
-      ),
     );
   }
 }
