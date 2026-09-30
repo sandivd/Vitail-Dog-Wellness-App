@@ -52,7 +52,9 @@ No live points, catalogue entries or saved codes were changed during implementat
 
 GO HERE loads the linked `partnered_venues` entry and opens the same venue details
 used by Explore. CHECK REWARDS returns to the originating reward without losing
-redemption state. From Explore, CHECK REWARDS lists offers matched to that venue.
+redemption state. From Explore, CHECK REWARDS opens the lowest-cost matched reward directly
+(ties use reward ID), preserving any active redemption. If none match, it shows
+a message on the venue page.
 Venue details can start the existing walk tracker with the venue coordinates as
 its destination; missing coordinates hide this action. Location permission,
 a signed-in account and a registered dog are required for a destination walk.
