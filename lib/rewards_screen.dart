@@ -7,10 +7,12 @@ import 'rewards_data.dart';
 import 'reward_image_placeholder.dart';
 
 class RewardsScreen extends StatefulWidget {
-  const RewardsScreen({super.key, this.repository, this.isActive = true});
+  const RewardsScreen({super.key, this.repository, this.isActive = true, this.partnerId, this.venueName});
 
   final RewardsRepository? repository;
   final bool isActive;
+  final String? partnerId;
+  final String? venueName;
 
   @override
   State<RewardsScreen> createState() => _RewardsScreenState();
