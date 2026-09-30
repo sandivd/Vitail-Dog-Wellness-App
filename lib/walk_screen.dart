@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'venue_detail.dart';
 import 'walk_in_progress.dart';
 import 'venues_screen.dart';
+import 'vitail_snack.dart';
 
 enum _RouteMode { last, longest }
 
@@ -275,11 +276,8 @@ class _WalkScreenState extends State<WalkScreen> {
       if (!mounted) return;
 
       if (dog == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No dog found. Please register a dog first.'),
-          ),
-        );
+        showVitailSnack(context, 'No dog found. Please register a dog first.',
+            type: VitailSnackType.error);
         return;
       }
 
@@ -296,12 +294,10 @@ class _WalkScreenState extends State<WalkScreen> {
           _currentPosition != null && routeDestination != null;
 
       if (routeDestination != null && !hasPlannedRoute) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Couldn’t get your location, so the route won’t be shown.',
-            ),
-          ),
+        showVitailSnack(
+          context,
+          'Couldn’t get your location, so the route won’t be shown.',
+          type: VitailSnackType.info,
         );
       }
 
@@ -316,11 +312,10 @@ class _WalkScreenState extends State<WalkScreen> {
           ),
         ),
       );
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not start walk: $e')),
-        );
+        showVitailSnack(context, 'Could not start the walk. Please try again.',
+            type: VitailSnackType.error);
       }
     } finally {
       if (mounted) setState(() => _isStartingWalk = false);

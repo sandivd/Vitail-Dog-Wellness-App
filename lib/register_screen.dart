@@ -4,6 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'password_field.dart';
 import 'signup_view.dart';
 import 'auth_routing.dart';
+import 'vitail_snack.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -30,11 +31,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _signUp() async {
     if (!PasswordField.isValid(_passwordController.text) || !PasswordField.isValid(_confirmPasswordController.text)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password must be 6–64 characters.')));
+      showVitailSnack(context, 'Password must be 6–64 characters.',
+          type: VitailSnackType.error);
       return;
     }
     if (_passwordController.text.trim() != _confirmPasswordController.text.trim()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Passwords do not match!'), backgroundColor: Colors.red));
+      showVitailSnack(context, 'Passwords do not match!', type: VitailSnackType.error);
       return;
     }
 
@@ -49,6 +51,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       // no client-side upsert needed (or allowed, for the points columns).
       await _navigateAfterAuth();
     } catch (e) {
+      if (!mounted) return;
       String errorMessage = 'An error occurred. Please try again.';
       String errorStr = e.toString().toLowerCase();
 
@@ -62,7 +65,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         errorMessage = 'Password must be at least 6 characters.';
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage), backgroundColor: Colors.red));
+      showVitailSnack(context, errorMessage, type: VitailSnackType.error);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -88,9 +91,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       await _navigateAfterAuth();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
+    } catch (_) {
+      if (!mounted) return;
+      showVitailSnack(
+        context,
+        'Could not sign in with Google. Please try again.',
+        type: VitailSnackType.error,
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);

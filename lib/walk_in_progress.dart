@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import 'walk_summary.dart';
+import 'vitail_snack.dart';
 
 // ---------------------------------------------------------------------------
 // Design tokens from the Figma spec for this screen. Hardcoded on purpose:
@@ -106,10 +107,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
     final hasPermission = await _checkPermissions();
     if (!hasPermission) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission is required to track your walk.'),
-          ),
+        showVitailSnack(
+          context,
+          'Location permission is required to track your walk.',
+          type: VitailSnackType.error,
         );
       }
       return;
