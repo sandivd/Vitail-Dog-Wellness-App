@@ -8,8 +8,25 @@ class ExerciseCalculator {
       "large": {"min_weight_kg": 25.0, "multiplier": 1.2, "pace_kmh": 5.0}
     },
     "brachycephalic_rules": {"factor_multiplier": 0.75, "pace_cap_kmh": 3.0},
+    "health_condition_multipliers": {
+      "no_condition": {"multiplier": 1.0, "force_pace_cap": false},
+      "doesnt_affect": {"multiplier": 1.0, "force_pace_cap": false},
+      "moderately_affects": {"multiplier": 0.75, "force_pace_cap": false},
+      "heavily_affects": {"multiplier": 0.50, "force_pace_cap": true}
+    },
     "age_factors": {"puppy": 0.7, "adult": 1.0, "senior": 0.6},
     "owner_activity_multipliers": {"low": 0.8, "moderate": 1.0, "high": 1.2}
+  };
+
+  /// Onboarding shows friendly labels (onboarding_view.dart's
+  /// healthOptions); the calculator and dogs.health_condition store these
+  /// keys. ⚠️ The label strings must match healthOptions EXACTLY — the
+  /// dropdown can only ever produce those four, so the lookup is safe.
+  static const Map<String, String> healthConditionKeys = {
+    'No condition': 'no_condition',
+    "Doesn't affect activity": 'doesnt_affect',
+    'Moderately affects activity': 'moderately_affects',
+    'Heavily affects activity': 'heavily_affects',
   };
 
   static const Map<String, Map<String, dynamic>> breedData = {
@@ -155,7 +172,6 @@ class ExerciseCalculator {
     "Spanish Water Dog": {"is_brachycephalic": false, "breed_energy": 80},
     "Spinone Italiano": {"is_brachycephalic": false, "breed_energy": 80},
     "Staffordshire Bull Terrier": {"is_brachycephalic": true, "breed_energy": 80},
-    "Standard Poodle": {"is_brachycephalic": false, "breed_energy": 80},
     "Standard Schnauzer": {"is_brachycephalic": false, "breed_energy": 80},
     "Sussex Spaniel": {"is_brachycephalic": false, "breed_energy": 65},
     "Swedish Vallhund": {"is_brachycephalic": false, "breed_energy": 80},
@@ -179,6 +195,7 @@ class ExerciseCalculator {
     required double weightKg,
     required double ageYears,
     required String ownerActivityLevel, // 'low', 'moderate', 'high'
+    String healthCondition = 'no_condition', // key from healthConditionKeys
   }) {
     // 1. Determine Age Stage
     String ageStage = 'adult';
@@ -212,27 +229,46 @@ class ExerciseCalculator {
       paceKmh = constants['size_rules']['medium']['pace_kmh'];
     }
 
-    // 4. Apply Brachycephalic Overrides
+    // 4. Brachycephalic factor (the pace cap is applied below, combined
+    //    with the health condition).
     double brachyFactor = 1.0;
     if (isBrachy) {
       brachyFactor = constants['brachycephalic_rules']['factor_multiplier'];
-      paceKmh = constants['brachycephalic_rules']['pace_cap_kmh']; // CRITICAL OVERRIDE
     }
 
-    // 5. Get Age & Owner Activity Multipliers
+    // 5. Health condition: scales the target, and can force a gentle
+    //    pace. Unknown keys fall back to "no effect" rather than failing.
+    final health = constants['health_condition_multipliers'][healthCondition] ??
+        {"multiplier": 1.0, "force_pace_cap": false};
+    double healthFactor = (health['multiplier'] as num).toDouble();
+    bool forcePaceCap = health['force_pace_cap'] == true;
+
+    // SAFETY PACE CAP: gentle stroll (3 km/h) if brachycephalic OR the
+    // condition heavily affects activity — regardless of size.
+    if (isBrachy || forcePaceCap) {
+      paceKmh = constants['brachycephalic_rules']['pace_cap_kmh'];
+    }
+
+    // 6. Get Age & Owner Activity Multipliers
     double ageFactor = constants['age_factors'][ageStage];
     double ownerFactor = constants['owner_activity_multipliers'][ownerActivityLevel] ?? 1.0;
 
-    // 6. Calculate Target Minutes
-    // target_minutes = size_multiplier * breed_energy * age_factor * brachycephalic_factor * owner_activity_multiplier
-    double targetMinutes = sizeMultiplier * breedEnergy * ageFactor * brachyFactor * ownerFactor;
+    // 7. Calculate Target Minutes
+    // target_minutes = size_mult * breed_energy * age_factor
+    //                * brachy_factor * owner_mult * health_mult
+    double targetMinutes =
+        sizeMultiplier * breedEnergy * ageFactor * brachyFactor * ownerFactor * healthFactor;
 
-    // 7. Calculate Target Distance (km)
-    // km_target = (target_minutes / 60) * pace_kmh
+    // 8. Calculate Target Distance (km)
+    // Floor to the nearest 0.5 km — the app must never overestimate how
+    // far a tired or unwell dog should walk.
     double kmTarget = (targetMinutes / 60.0) * paceKmh;
+    kmTarget = (kmTarget * 2).floor() / 2;
 
-    // 8. Round km_target to nearest 0.5 km
-    kmTarget = (kmTarget * 2).round() / 2;
+    // A 0.5 km gentle stroll is the smallest sensible daily target —
+    // floor alone can reach 0.0 for senior brachy dogs with heavy
+    // conditions, which shows as a permanently-full 0-km ring on Home.
+    if (kmTarget <= 0) kmTarget = 0.5;
 
     return {
       'targetMinutes': targetMinutes.round(),

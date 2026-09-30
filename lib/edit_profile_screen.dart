@@ -257,6 +257,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ageYears: ageYears,
         ownerActivityLevel:
             (dog['owner_activity_level'] as String?) ?? 'moderate',
+        healthCondition:
+            (dog['health_condition'] as String?) ?? 'no_condition',
       );
 
       // 4. Persist everything to the dogs table.

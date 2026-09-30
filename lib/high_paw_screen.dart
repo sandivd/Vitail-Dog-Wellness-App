@@ -33,6 +33,17 @@ class _HighPawScreenState extends State<HighPawScreen> {
   static const Color _noteCard = Color(0xFFFBF9F5);
   static const Color _noteBorder = Color(0xFFE5E0D7);
 
+  // Disclaimer box: same "note" anatomy as _noteCard, but a very light
+  // red tint so it reads as an advisory.
+  static const Color _disclaimerCardBg = Color(0xFFFBEFED);
+  static const Color _disclaimerBorder = Color(0xFFF0D9D5);
+
+  static const String _disclaimer =
+      'This guidance is for general wellbeing only and does not '
+      'replace professional veterinary advice. Every dog is unique, '
+      'so always consider your dog’s age, breed, health, and '
+      'individual needs alongside advice from your vet.';
+
   static const List<String> _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   late int _minutes;
@@ -125,6 +136,8 @@ class _HighPawScreenState extends State<HighPawScreen> {
                                 style: OnboardingStyle.text(16,
                                     color: Colors.white)),
                           ),
+                          const SizedBox(height: 20),
+                          _disclaimerCard(),
                         ],
                       ),
                     ),
@@ -317,6 +330,26 @@ class _HighPawScreenState extends State<HighPawScreen> {
         child: Text(
           'Miss a day? No stress — your weekly goal still counts, so you can catch up any day before the week resets.',
           style: OnboardingStyle.text(13,
+              color: OnboardingStyle.muted,
+              weight: FontWeight.w500,
+              height: 1.5),
+        ),
+      );
+
+  /// Vet-advice disclaimer: same "note" box shape as [_note], with a very
+  /// light red background so it reads as an advisory.
+  Widget _disclaimerCard() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _disclaimerCardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _disclaimerBorder),
+        ),
+        child: Text(
+          _disclaimer,
+          textAlign: TextAlign.center,
+          style: OnboardingStyle.text(11,
               color: OnboardingStyle.muted,
               weight: FontWeight.w500,
               height: 1.5),

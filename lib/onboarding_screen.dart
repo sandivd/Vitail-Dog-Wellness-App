@@ -89,6 +89,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (!_dogSaved) {
         final userId = Supabase.instance.client.auth.currentUser!.id;
 
+        // NEW: onboarding label -> stored key (see ExerciseCalculator).
+        final healthKey =
+            ExerciseCalculator.healthConditionKeys[_healthImpact] ?? 'no_condition';
+
         double age = 0.0;
         final today = DateTime.now();
         int years = today.year - _birthday!.year;
@@ -113,6 +117,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           weightKg: weight,
           ageYears: age,
           ownerActivityLevel: _ownerActivityLevel,
+          healthCondition: healthKey,
         );
 
         _dailyGoalMins = target['targetMinutes'];
@@ -129,6 +134,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'daily_goal_minutes': _dailyGoalMins,
           'daily_goal_km': _dailyGoalKm,
           'owner_activity_level': _ownerActivityLevel,
+          'health_condition': healthKey,
         }).select().single();
 
         await Supabase.instance.client.from('weight_history').insert({
