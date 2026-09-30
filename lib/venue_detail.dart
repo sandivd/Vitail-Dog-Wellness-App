@@ -6,8 +6,9 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
 import 'rewards_screen.dart';
+import 'venue_walk.dart';
 
-/// One row of the `venues` table.
+/// One row of the `partnered_venues` table.
 ///
 /// Reads: partner_id, venue_name, closing_time, venue_details, points, and the
 /// location from EITHER numeric `latitude` + `longitude` columns (preferred)
@@ -188,15 +189,17 @@ class VenueDetailScreen extends StatefulWidget {
     required this.venue,
     this.userLocation,
     this.onStartWalk,
+    this.onCheckRewards,
   });
 
+  final VoidCallback? onCheckRewards;
   final VenueInfo venue;
 
   /// The user's position if the caller already has it. If null, this screen
   /// looks it up itself so the distance still fills in.
   final LatLng? userLocation;
 
-  /// Called by the "Start walk to …" button. If null, the button is hidden.
+  /// Optional override for the destination walk.
   final Future<void> Function()? onStartWalk;
 
   @override
@@ -244,8 +247,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   }
 
   Future<void> _startWalk() async {
-    final onStartWalk = widget.onStartWalk;
-    if (onStartWalk == null || _startingWalk) return;
+    final location = widget.venue.location;
+    if (location == null || _startingWalk) return;
+    final onStartWalk =
+        widget.onStartWalk ?? () => startVenueWalk(context, location);
     setState(() => _startingWalk = true);
     try {
       await onStartWalk();
@@ -322,17 +327,19 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: FilledButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RewardsScreen(
-                            partnerId: venue.partnerId,
-                            venueName: venue.name,
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed:
+                        widget.onCheckRewards ??
+                        () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RewardsScreen(
+                                partnerId: venue.partnerId,
+                                venueName: venue.name,
+                              ),
+                            ),
+                          );
+                        },
                     style: FilledButton.styleFrom(
                       backgroundColor: colors.tertiary,
                       foregroundColor: const Color(0xFF241C24),
@@ -369,7 +376,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         VerticalDivider(
                           width: 28,
                           thickness: 1,
-                          color: dark ? colors.outline : const Color(0xFFDEDAD4),
+                          color: dark
+                              ? colors.outline
+                              : const Color(0xFFDEDAD4),
                         ),
                         Expanded(
                           child: _VenueInfoColumn(
@@ -437,7 +446,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: widget.onStartWalk == null
+      bottomNavigationBar: widget.venue.location == null
           ? null
           : SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 12, 24, 20),

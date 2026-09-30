@@ -3,9 +3,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import 'rewards_data.dart';
+import 'venue_detail.dart';
 import 'reward_image_placeholder.dart';
 
-/// Offer details from Figma 630:1144. Location data is not yet confirmed.
+/// Offer details with the linked Explore venue.
 class RewardDetailsScreen extends StatelessWidget {
   const RewardDetailsScreen({
     super.key,
@@ -15,8 +16,16 @@ class RewardDetailsScreen extends StatelessWidget {
     this.redemption,
     this.onCheckIn,
     this.onShowCode,
+    this.venue,
+    this.onGoHere,
+    this.venueStatus,
+    this.distanceLabel,
   });
 
+  final String? distanceLabel;
+  final VenueInfo? venue;
+  final VoidCallback? onGoHere;
+  final String? venueStatus;
   final RewardOffer offer;
   final bool canRedeem;
   final VoidCallback onRedeem;
@@ -121,7 +130,7 @@ class RewardDetailsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    offer.partnerName,
+                    venue?.name ?? offer.partnerName,
                     style: TextStyle(
                       fontSize: 20,
                       height: 1.4,
@@ -131,13 +140,7 @@ class RewardDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Directions coming soon — we’re confirming this location.',
-                        ),
-                      ),
-                    ),
+                    onPressed: onGoHere,
                     style: OutlinedButton.styleFrom(
                       backgroundColor: colors.tertiary,
                       foregroundColor: const Color(0xFF241C24),
@@ -156,6 +159,14 @@ class RewardDetailsScreen extends StatelessWidget {
                     ),
                     child: const Text('GO HERE'),
                   ),
+                  if (venueStatus != null) ...[
+                    const SizedBox(height: 8),
+                    Text(venueStatus!),
+                  ],
+                  if (venue != null && venue!.details.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(venue!.details.trim()),
+                  ],
                   const SizedBox(height: 18),
                   Container(
                     width: double.infinity,
@@ -173,7 +184,11 @@ class RewardDetailsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
-                            child: _info(context, 'HOURS', 'Not provided'),
+                            child: _info(
+                              context,
+                              'HOURS',
+                              venue?.hoursLabel ?? 'Not provided',
+                            ),
                           ),
                           VerticalDivider(
                             width: 32,
@@ -181,7 +196,11 @@ class RewardDetailsScreen extends StatelessWidget {
                             color: borderColor,
                           ),
                           Expanded(
-                            child: _info(context, 'DISTANCE', 'Not confirmed'),
+                            child: _info(
+                              context,
+                              'DISTANCE',
+                              distanceLabel ?? 'Not confirmed',
+                            ),
                           ),
                         ],
                       ),

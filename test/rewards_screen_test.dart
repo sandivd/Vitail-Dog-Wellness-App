@@ -348,7 +348,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('GO HERE'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Directions coming soon'), findsOneWidget);
+      expect(find.textContaining('Could not load the venue'), findsOneWidget);
       await tester.tap(find.text('REDEEM'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Redeem Offer'));

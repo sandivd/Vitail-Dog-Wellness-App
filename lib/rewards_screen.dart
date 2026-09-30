@@ -3,11 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'reward_flow.dart';
+import 'reward_venues.dart';
 import 'rewards_data.dart';
 import 'reward_image_placeholder.dart';
 
 class RewardsScreen extends StatefulWidget {
-  const RewardsScreen({super.key, this.repository, this.isActive = true, this.partnerId, this.venueName});
+  const RewardsScreen({
+    super.key,
+    this.repository,
+    this.isActive = true,
+    this.partnerId,
+    this.venueName,
+  });
 
   final RewardsRepository? repository;
   final bool isActive;
@@ -58,11 +65,19 @@ class _RewardsScreenState extends State<RewardsScreen> {
     try {
       final catalogue = await _repository.loadCatalogue();
       if (!mounted || request != _catalogueRequest) return;
-      final sortedOffers = List<RewardOffer>.of(catalogue.offers)
-        ..sort((a, b) {
-          final costOrder = a.pointsCost.compareTo(b.pointsCost);
-          return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
-        });
+      final venues = widget.partnerId == null ? null : await loadRewardVenues();
+      if (!mounted || request != _catalogueRequest) return;
+      final sortedOffers =
+          List<RewardOffer>.of(
+            catalogue.offers.where(
+              (offer) =>
+                  venues == null ||
+                  venueForReward(offer, venues)?.partnerId == widget.partnerId,
+            ),
+          )..sort((a, b) {
+            final costOrder = a.pointsCost.compareTo(b.pointsCost);
+            return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
+          });
       setState(
         () => _catalogue = RewardsCatalogue(
           points: catalogue.points,
@@ -183,7 +198,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => RewardFlow(
-          offer: offer,
+          offer:
+              (_catalogue?.offers
+                  .where((entry) => entry.id == offer.id)
+                  .firstOrNull) ??
+              offer,
           repository: _repository,
           canRedeem:
               !_loadingCatalogue &&
@@ -203,7 +222,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     if (_isLoading) {
       return const Scaffold(body: Center(child: VitailLoading()));
     }
-    
+
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: colors.surface,
