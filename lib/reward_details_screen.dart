@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import 'rewards_data.dart';
 import 'reward_image_placeholder.dart';
+import 'vitail_snack.dart';
 
 /// Offer details from Figma 630:1144. Location data is not yet confirmed.
 class RewardDetailsScreen extends StatelessWidget {
@@ -131,13 +132,10 @@ class RewardDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Directions coming soon — we’re confirming this location.',
-                        ),
-                      ),
-                    ),
+                    onPressed: () => showVitailSnack(
+                      context,
+                      'Directions coming soon — we’re confirming this location.',
+                      type: VitailSnackType.info),
                     style: OutlinedButton.styleFrom(
                       backgroundColor: colors.tertiary,
                       foregroundColor: const Color(0xFF241C24),

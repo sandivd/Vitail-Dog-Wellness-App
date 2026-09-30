@@ -9,6 +9,7 @@ import 'dog_photo_sheet.dart';
 import 'exercise_data.dart';
 import 'high_paw_screen.dart';
 import 'onboarding_goal_screen.dart';
+import 'vitail_snack.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -75,12 +76,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (_healthImpact == null) 'health condition',
     ];
     if (missing.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please fill in: ${missing.join(', ')}'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      showVitailSnack(context, 'Please fill in: ${missing.join(', ')}',
+          type: VitailSnackType.error);
       return;
     }
 
@@ -160,8 +157,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           );
         },
       );
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Database Error: $e')));
+    } catch (_) {
+      if (mounted) {
+        showVitailSnack(
+            context, "Couldn't save your dog's profile. Please try again.",
+            type: VitailSnackType.error);
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

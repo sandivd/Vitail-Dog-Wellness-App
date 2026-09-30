@@ -8,6 +8,7 @@ import 'check_in_screen.dart';
 import 'reward_details_screen.dart';
 import 'reward_image_placeholder.dart';
 import 'rewards_data.dart';
+import 'vitail_snack.dart';
 
 class RewardFlow extends StatefulWidget {
   const RewardFlow({
@@ -235,8 +236,10 @@ class _RewardFlowState extends State<RewardFlow> {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: reward.promoCode));
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Code copied to clipboard!')),
+              showVitailSnack(
+                context,
+                'Code copied to clipboard!',
+                type: VitailSnackType.success,
               );
             },
             child: const Text('Copy code'),

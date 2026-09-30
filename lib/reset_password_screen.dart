@@ -5,6 +5,7 @@ import 'auth_routing.dart';
 import 'auth_style.dart';
 import 'home_screen.dart';
 import 'password_field.dart';
+import 'vitail_snack.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -25,17 +26,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     super.dispose();
   }
 
-  void _snack(String message) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red));
-
   Future<void> _saveNewPassword() async {
     if (_isSaving) return;
     if (!PasswordField.isValid(_passwordController.text)) {
-      _snack('Password must be 6–64 characters.');
+      showVitailSnack(context, 'Password must be 6–64 characters.',
+          type: VitailSnackType.error);
       return;
     }
     if (_passwordController.text.trim() != _confirmController.text.trim()) {
-      _snack('Passwords do not match!');
+      showVitailSnack(context, 'Passwords do not match!', type: VitailSnackType.error);
       return;
     }
 
@@ -48,9 +47,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password updated — welcome back!')),
-      );
+      showVitailSnack(context, 'Password updated — welcome back!',
+          type: VitailSnackType.success);
 
       // The user now has a valid session, so route like a normal sign-in.
       Widget destination;
@@ -68,12 +66,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     } on AuthException catch (e) {
       if (mounted) {
         setState(() => _isSaving = false);
-        _snack('Could not update password: ${e.message}');
+        showVitailSnack(context, 'Could not update password: ${e.message}',
+            type: VitailSnackType.error);
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
-        _snack('Network error: could not update. Check your connection.');
+        showVitailSnack(
+            context, 'Network error: could not update. Check your connection.',
+            type: VitailSnackType.error);
       }
     }
   }

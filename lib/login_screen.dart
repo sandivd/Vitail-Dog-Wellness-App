@@ -5,6 +5,7 @@ import 'login_view.dart';
 import 'register_screen.dart';
 import 'auth_routing.dart';
 import 'forgot_password_screen.dart';
+import 'vitail_snack.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -46,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (e.toString().contains('network') || e.toString().contains('Failed host lookup')) {
         errorMessage = 'No internet connection.';
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage), backgroundColor: Colors.red));
+      showVitailSnack(context, errorMessage, type: VitailSnackType.error);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -72,10 +73,12 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       await _navigateAfterAuth();
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
+      showVitailSnack(
+        context,
+        'Could not sign in with Google. Please try again.',
+        type: VitailSnackType.error,
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
