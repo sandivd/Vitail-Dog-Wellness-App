@@ -5,6 +5,11 @@ import 'password_field.dart';
 import 'signup_view.dart';
 import 'auth_routing.dart';
 
+import 'dog_sharing.dart';
+import 'join_with_code_screen.dart';
+import 'onboarding_goal_screen.dart';
+import 'verify_email_screen.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key, this.pendingShareCode});
 
@@ -12,6 +17,8 @@ class RegisterScreen extends StatefulWidget {
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
+
+  
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
@@ -19,6 +26,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
+  String? _pendingCode;
+
+  @override
+  void initState() {
+    super.initState();
+    _pendingCode = widget.pendingShareCode;
+  }
 
   // Shared "where do I go after signing in?" step.
   Future<void> _navigateAfterAuth() async {
@@ -28,6 +42,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context,
       MaterialPageRoute(builder: (context) => destination),
     );
+  }
+
+    Future<void> _continueWithCode() async {
+    final code = await Navigator.push<String>(
+      context,
+      onboardingFadeRoute<String>(const JoinWithCodeScreen()),
+    );
+    if (code == null || !mounted) return;
+    setState(() => _pendingCode = code);
+  }
+
+  Future<void> _afterAuthWithPossibleCode() async {
+    if (_pendingCode != null) {
+      final joined = await joinWithCode(_pendingCode!);
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => VerifyEmailScreen(dog: joined.dog)),
+      );
+      return;
+    }
+    await _navigateAfterAuth();
   }
 
   Future<void> _signUp() async {
@@ -49,7 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // The profiles row is created automatically by the DB trigger now —
       // no client-side upsert needed (or allowed, for the points columns).
-      await _navigateAfterAuth();
+      await _afterAuthWithPossibleCode();
     } catch (e) {
       String errorMessage = 'An error occurred. Please try again.';
       String errorStr = e.toString().toLowerCase();
@@ -89,7 +125,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         accessToken: googleAuth.accessToken,
       );
 
-      await _navigateAfterAuth();
+      await _afterAuthWithPossibleCode();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google Sign-In Error: $e'), backgroundColor: Colors.red),
