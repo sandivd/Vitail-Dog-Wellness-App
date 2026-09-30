@@ -6,7 +6,9 @@ import 'signup_view.dart';
 import 'auth_routing.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  const RegisterScreen({super.key, this.pendingShareCode});
+
+  final String? pendingShareCode;
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();

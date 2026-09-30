@@ -5,6 +5,8 @@ import 'login_view.dart';
 import 'register_screen.dart';
 import 'auth_routing.dart';
 import 'forgot_password_screen.dart';
+import 'join_with_code_screen.dart';
+import 'onboarding_goal_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -82,6 +84,18 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+    Future<void> _continueWithCode() async {
+    final code = await Navigator.push<String>(
+      context,
+      onboardingFadeRoute<String>(const JoinWithCodeScreen()),
+    );
+    if (code == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => RegisterScreen(pendingShareCode: code)),
+    );
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -103,6 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       onSignUp: () => Navigator.push(context,
         MaterialPageRoute(builder: (context) => const RegisterScreen())),
+      onContinueWithCode: _continueWithCode
     );
   }
 }

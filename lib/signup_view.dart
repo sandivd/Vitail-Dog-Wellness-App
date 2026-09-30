@@ -8,7 +8,7 @@ class SignupView extends StatelessWidget {
   const SignupView({super.key, required this.emailController,
     required this.passwordController, required this.confirmPasswordController, required this.isLoading,
     required this.onSignUp, required this.onGoogleLogin,
-    required this.onSignIn});
+    required this.onSignIn, this.onContinueWithCode});
 
   final TextEditingController emailController;
   final TextEditingController passwordController;
@@ -17,6 +17,7 @@ class SignupView extends StatelessWidget {
   final VoidCallback onSignUp;
   final VoidCallback onGoogleLogin;
   final VoidCallback onSignIn;
+  final VoidCallback? onContinueWithCode;
 
   Widget _lucideIcon(BuildContext context, String name) {
     final colorScheme = Theme.of(context).colorScheme;
