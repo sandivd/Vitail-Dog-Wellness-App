@@ -180,7 +180,6 @@ class _WalkScreenState extends State<WalkScreen> {
         builder: (_) => VenueDetailScreen(
           venue: venue,
           userLocation: _currentPosition,
-          onStartWalk: () => _startWalk(destination: venue.location),
         ),
       ),
     );

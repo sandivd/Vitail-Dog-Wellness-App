@@ -50,9 +50,27 @@ No live points, catalogue entries or saved codes were changed during implementat
 6. My rewards opens saved reward details. View code still displays/copies the
    original promo code. Collected and ready-to-collect entries are distinguished.
 
-The details page retains the GO HERE placeholder; it does not request GPS or open
-maps. Hours and distance remain explicitly unconfirmed. Figma's example partners,
-locations, prices and times are not used as live data.
+GO HERE loads the linked `partnered_venues` entry and opens the same venue details
+used by Explore. CHECK REWARDS returns to the originating reward without losing
+redemption state. From Explore, CHECK REWARDS opens the lowest-cost matched reward directly
+(ties use reward ID), preserving any active redemption. If none match, it shows
+a message on the venue page.
+Venue details can start the existing walk tracker with the venue coordinates as
+its destination; missing coordinates hide this action. Location permission,
+a signed-in account and a registered dog are required for a destination walk.
+The planned route is the existing straight-line preview, not street directions.
+
+Matching uses `rewards.partner_id` = `partnered_venues.partner_id`. For older offers
+without a partner ID, an exact name match (ignoring case and surrounding spaces)
+is used. While there is exactly one venue, unmatched offers temporarily use that
+venue. This fallback automatically stops once more venues exist. Teammates should
+populate matching partner IDs when adding venues/offers; ambiguous matches never
+choose an arbitrary venue. No database migration is needed for these links.
+
+Reward details display that venue's name, closing hours and description. Distance
+uses GPS only if permission is already granted, otherwise it stays unavailable.
+Offer titles, costs and redemption snapshots remain unchanged. Venue load errors
+can be retried with GO HERE.
 
 ## Existing redemptions
 
