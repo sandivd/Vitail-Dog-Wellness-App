@@ -10,6 +10,7 @@ import 'check_in_screen.dart';
 import 'reward_details_screen.dart';
 import 'reward_image_placeholder.dart';
 import 'rewards_data.dart';
+import 'vitail_snack.dart';
 import 'reward_venues.dart';
 import 'venue_detail.dart';
 
