@@ -69,6 +69,8 @@ final ThemeData lightTheme = ThemeData(
     tertiary: Color(0xFFAEC568),         // Green ring
     onPrimary: Colors.white,
     outline: Color(0xFFDED2D6),
+    error: Color(0xFFB3402E),            // Warm terracotta — harmonises with the coral
+    onError: Colors.white,
   ),
 );
 
@@ -83,6 +85,8 @@ final ThemeData darkTheme = ThemeData(
     secondary: Color(0xFF5F98BD),        // Blue ring
     tertiary: Color(0xFFAEC568),         // Green ring
     outline: Color(0xFF444444),
+    error: Color(0xFFF2B8B5),            // M3 dark error — soft red that reads on dark
+    onError: Color(0xFF601410),
   ),
 );
 

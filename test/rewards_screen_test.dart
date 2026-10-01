@@ -348,7 +348,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('GO HERE'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('Directions coming soon'), findsOneWidget);
+      expect(find.textContaining('Could not load the venue'), findsOneWidget);
       await tester.tap(find.text('REDEEM'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Redeem Offer'));
@@ -537,6 +537,9 @@ void main() {
       await tester.scrollUntilVisible(find.text('Council park pass'), 200);
       expect(tester.takeException(), isNull);
       await tester.scrollUntilVisible(find.text('MY REWARDS'), -200);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('MY REWARDS'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('MY REWARDS'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

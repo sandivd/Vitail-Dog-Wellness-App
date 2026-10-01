@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -8,6 +10,8 @@ import 'check_in_screen.dart';
 import 'reward_details_screen.dart';
 import 'reward_image_placeholder.dart';
 import 'rewards_data.dart';
+import 'reward_venues.dart';
+import 'venue_detail.dart';
 
 class RewardFlow extends StatefulWidget {
   const RewardFlow({
@@ -18,7 +22,9 @@ class RewardFlow extends StatefulWidget {
     required this.onChanged,
     this.redemption,
     this.openRedemption = false,
+    this.venueLoader = loadRewardVenues,
   });
+  final Future<List<VenueInfo>> Function() venueLoader;
   final RewardOffer offer;
   final RewardsRepository repository;
   final bool canRedeem;
@@ -37,12 +43,72 @@ class _RewardFlowState extends State<RewardFlow> {
     24,
     (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
   ).join();
+  VenueInfo? _venue;
+  LatLng? _userLocation;
+
+  Future<void> _loadDistance() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse)
+        return;
+      final position = await Geolocator.getCurrentPosition(
+        timeLimit: const Duration(seconds: 10),
+      );
+      if (mounted)
+        setState(
+          () => _userLocation = LatLng(position.latitude, position.longitude),
+        );
+    } catch (_) {
+      // Venue navigation remains available without location access.
+    }
+  }
+
+  bool _loadingVenue = true;
+  bool _venueFailed = false;
+
+  Future<void> _loadVenue() async {
+    setState(() {
+      _loadingVenue = true;
+      _venueFailed = false;
+    });
+    try {
+      final venues = await widget.venueLoader();
+      if (!mounted) return;
+      setState(() => _venue = venueForReward(widget.offer, venues));
+    } catch (_) {
+      if (mounted) setState(() => _venueFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingVenue = false);
+    }
+  }
+
+  void _goHere() {
+    final venue = _venue;
+    if (venue == null) {
+      _loadVenue();
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (venueContext) => VenueDetailScreen(
+          venue: venue,
+          userLocation: _userLocation,
+          onCheckRewards: () => Navigator.pop(venueContext),
+        ),
+      ),
+    );
+  }
+
   bool _busy = false;
   bool _sheetOpen = false;
 
   @override
   void initState() {
     super.initState();
+    _loadVenue();
+    _loadDistance();
     if (widget.openRedemption && _reward == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showRedemption();
@@ -235,8 +301,10 @@ class _RewardFlowState extends State<RewardFlow> {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: reward.promoCode));
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Code copied to clipboard!')),
+              showVitailSnack(
+                context,
+                'Code copied to clipboard!',
+                type: VitailSnackType.success,
               );
             },
             child: const Text('Copy code'),
@@ -253,6 +321,16 @@ class _RewardFlowState extends State<RewardFlow> {
   @override
   Widget build(BuildContext context) => RewardDetailsScreen(
     offer: widget.offer,
+    venue: _venue,
+    distanceLabel: _venue?.distanceLabelFrom(_userLocation),
+    onGoHere: _loadingVenue ? null : _goHere,
+    venueStatus: _loadingVenue
+        ? 'Loading venue…'
+        : _venueFailed
+        ? 'Could not load the venue. Tap GO HERE to retry.'
+        : _venue == null
+        ? 'No linked venue available yet. Tap GO HERE to refresh.'
+        : null,
     canRedeem: widget.canRedeem,
     onRedeem: _showRedemption,
     redemption: _reward,
