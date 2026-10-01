@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
+import 'vitail_snack.dart';
 
 String? microchipNumberError(String raw) {
   final String value = raw.trim();
@@ -393,8 +394,10 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File picking is not wired up yet.')),
+        showVitailSnack(
+          context,
+          'File picking is not wired up yet.',
+          type: VitailSnackType.info,
         );
       },
       child: dashed

@@ -33,6 +33,17 @@ class _HighPawScreenState extends State<HighPawScreen> {
   static const Color _noteCard = Color(0xFFFBF9F5);
   static const Color _noteBorder = Color(0xFFE5E0D7);
 
+  // Disclaimer box: same "note" anatomy as _noteCard, but a very light
+  // red tint so it reads as an advisory.
+  static const Color _disclaimerCardBg = Color(0xFFFBEFED);
+  static const Color _disclaimerBorder = Color(0xFFF0D9D5);
+
+  static const String _disclaimer =
+      'This guidance is for general wellbeing only and does not '
+      'replace professional veterinary advice. Every dog is unique, '
+      'so always consider your dog’s age, breed, health, and '
+      'individual needs alongside advice from your vet.';
+
   static const List<String> _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   late int _minutes;
@@ -83,13 +94,15 @@ class _HighPawScreenState extends State<HighPawScreen> {
                 ),
               ),
             ),
+            // The plan content scrolls only if it genuinely can't fit
+            // (small screens, large text scale)...
             Expanded(
               child: SingleChildScrollView(
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 460),
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(28, 0, 28, 32),
+                      padding: const EdgeInsets.fromLTRB(28, 0, 28, 20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -99,35 +112,52 @@ class _HighPawScreenState extends State<HighPawScreen> {
                             style: OnboardingStyle.text(22,
                                 weight: FontWeight.w700),
                           ),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
                           _banner(),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 22),
                           _sectionLabel('Walk goal', _guidance),
                           const SizedBox(height: 12),
                           _goalCard(progress),
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 22),
                           _sectionLabel(
                             'This week',
                             '${_days.length} of 7 days picked — miss one and catch up before Sunday.',
                           ),
                           const SizedBox(height: 12),
                           _weekCard(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _note(),
-                          const SizedBox(height: 28),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pushReplacement(
-                              context,
-                              onboardingFadeRoute(const MicrochipScreen()),
-                            ),
-                            style: OnboardingStyle.primaryButton,
-                            child: Text('Continue',
-                                style: OnboardingStyle.text(16,
-                                    color: Colors.white)),
-                          ),
                         ],
                       ),
                     ),
+                  ),
+                ),
+              ),
+            ),
+            // ...but the Continue button and the disclaimer are PINNED:
+            // never pushed off-screen, always fully visible.
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ElevatedButton(
+                        onPressed: () => Navigator.pushReplacement(
+                          context,
+                          onboardingFadeRoute(const MicrochipScreen()),
+                        ),
+                        style: OnboardingStyle.primaryButton,
+                        child: Text('Continue',
+                            style: OnboardingStyle.text(16,
+                                color: Colors.white)),
+                      ),
+                      const SizedBox(height: 12),
+                      _disclaimerCard(),
+                    ],
                   ),
                 ),
               ),
@@ -320,6 +350,27 @@ class _HighPawScreenState extends State<HighPawScreen> {
               color: OnboardingStyle.muted,
               weight: FontWeight.w500,
               height: 1.5),
+        ),
+      );
+
+  /// Vet-advice disclaimer: same "note" box shape as [_note], with a very
+  /// light red background. Lives in the pinned footer, so it is always
+  /// fully visible — compact padding/line-height to keep the footer short.
+  Widget _disclaimerCard() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _disclaimerCardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _disclaimerBorder),
+        ),
+        child: Text(
+          _disclaimer,
+          textAlign: TextAlign.center,
+          style: OnboardingStyle.text(11,
+              color: OnboardingStyle.muted,
+              weight: FontWeight.w500,
+              height: 1.45),
         ),
       );
 }

@@ -301,8 +301,10 @@ class _RewardFlowState extends State<RewardFlow> {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: reward.promoCode));
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Code copied to clipboard!')),
+              showVitailSnack(
+                context,
+                'Code copied to clipboard!',
+                type: VitailSnackType.success,
               );
             },
             child: const Text('Copy code'),

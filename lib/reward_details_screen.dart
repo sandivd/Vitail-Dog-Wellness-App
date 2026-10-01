@@ -6,6 +6,7 @@ import 'rewards_data.dart';
 import 'detail_image_header.dart';
 import 'venue_detail.dart';
 import 'reward_image_placeholder.dart';
+import 'vitail_snack.dart';
 
 /// Offer details with the linked Explore venue.
 class RewardDetailsScreen extends StatelessWidget {

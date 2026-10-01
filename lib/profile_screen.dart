@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'edit_profile_screen.dart';
+import 'vitail_snack.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -244,13 +245,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _fetchProfile(); // Refresh UI
 
                       if (pointsEarned > 0) {
-                        messenger.showSnackBar(
-                          SnackBar(content: Text('Weight logged · +$pointsEarned pts')),
+                        showVitailSnackVia(
+                          messenger,
+                          'Weight logged · +$pointsEarned pts',
+                          type: VitailSnackType.success,
                         );
                       }
-                    } on PostgrestException catch (e) {
-                      messenger.showSnackBar(
-                        SnackBar(content: Text('Could not save weight: ${e.message}')),
+                    } on PostgrestException {
+                      showVitailSnackVia(
+                        messenger,
+                        'Could not save weight. Please try again.',
+                        type: VitailSnackType.error,
                       );
                     }
                   },
