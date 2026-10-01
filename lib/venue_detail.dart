@@ -21,6 +21,7 @@ class VenueInfo {
     required this.location,
     required this.details,
     this.points,
+    this.photoUrl,
   });
 
   factory VenueInfo.fromJson(Map<String, dynamic> row) => VenueInfo(
@@ -30,6 +31,7 @@ class VenueInfo {
     location: _locationFromRow(row),
     details: row['venue_details']?.toString() ?? '',
     points: _asInt(row['points']),
+    photoUrl: _asPhotoUrl(row['photo_url']),
   );
 
   final String partnerId;
@@ -40,6 +42,9 @@ class VenueInfo {
 
   /// Points a walker can earn by visiting (`points` column, int4).
   final int? points;
+
+  /// Venue photo (`photo_url` column, text). Null when empty or not a web URL.
+  final String? photoUrl;
 
   String get hoursLabel {
     final value = closingTime?.trim();
@@ -84,6 +89,17 @@ class VenueInfo {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value.trim());
     return null;
+  }
+
+  /// Only full http(s) URLs are usable by Image.network; anything else
+  /// (blank, a bare storage path, junk) is treated as "no photo".
+  static String? _asPhotoUrl(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    final uri = Uri.tryParse(text);
+    final isWebUrl =
+        uri != null && uri.hasAuthority && (uri.scheme == 'http' || uri.scheme == 'https');
+    return isWebUrl ? text : null;
   }
 
   static int? _asInt(dynamic value) {
@@ -475,6 +491,53 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Full-bleed venue photo drawn over the header. Invisible until it has
+/// loaded (and stays invisible on error), so the placeholder header underneath
+/// is what the user sees in those cases. Carries its own back button because
+/// the photo covers the header's.
+class _VenuePhoto extends StatelessWidget {
+  const _VenuePhoto({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final backButton = Positioned(
+      top: MediaQuery.paddingOf(context).top + 12,
+      left: 20,
+      child: Material(
+        color: dark ? const Color(0xFF242321) : Colors.white,
+        elevation: 2,
+        shadowColor: Colors.black.withValues(alpha: 0.15),
+        shape: const CircleBorder(),
+        child: IconButton(
+          tooltip: 'Back',
+          onPressed: () => Navigator.pop(context),
+          icon: Icon(Icons.chevron_left, color: colors.onSurface),
+        ),
+      ),
+    );
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        final loaded = wasSynchronouslyLoaded || frame != null;
+        return AnimatedOpacity(
+          opacity: loaded ? 1 : 0,
+          duration: wasSynchronouslyLoaded
+              ? Duration.zero
+              : const Duration(milliseconds: 300),
+          child: Stack(fit: StackFit.expand, children: [child, backButton]),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }

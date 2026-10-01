@@ -612,6 +612,7 @@ class _WalkScreenState extends State<WalkScreen> {
                           subtitle: venue.distanceLabelFrom(_currentPosition),
                           tag: venue.hoursLabel,
                           tagColor: colorScheme.tertiary.withValues(alpha: 0.3),
+                          photoUrl: venue.photoUrl,
                           onTap: () => _openVenue(venue),
                         ),
                       ),
@@ -729,6 +730,7 @@ class _VenueCard extends StatelessWidget {
     required this.tag,
     required this.tagColor,
     required this.onTap,
+    this.photoUrl,
   });
 
   final String name;
@@ -736,6 +738,9 @@ class _VenueCard extends StatelessWidget {
   final String tag;
   final Color tagColor;
   final VoidCallback onTap;
+
+  /// Venue photo; the grey square shows when null, loading, or on error.
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -761,6 +766,27 @@ class _VenueCard extends StatelessWidget {
                 color: colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(14),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: photoUrl == null
+                  ? null
+                  : Image.network(
+                      photoUrl!,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      // Decode at thumbnail size, not full resolution.
+                      cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).round(),
+                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 250),
+                          child: child,
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
