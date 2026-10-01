@@ -364,7 +364,17 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       backgroundColor: colors.surface,
       body: CustomScrollView(
         slivers: [
-          const SliverToBoxAdapter(child: DetailImageHeader()),
+          SliverToBoxAdapter(
+            child: Stack(
+              children: [
+                // Existing header: sizes the area and is what shows while the
+                // photo loads, if it fails, or if the venue has no photo.
+                const DetailImageHeader(),
+                if (venue.photoUrl != null)
+                  Positioned.fill(child: _VenuePhoto(url: venue.photoUrl!)),
+              ],
+            ),
+          ),
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
             sliver: SliverList(
