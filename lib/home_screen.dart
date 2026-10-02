@@ -7,6 +7,8 @@ import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'walk_history_screen.dart';
+import 'dog_sharing.dart';
+import 'join_requests_banner.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,14 +44,10 @@ class _HomeScreenState extends State<HomeScreen> {
           .from('profiles')
           .select('total_points, daily_streak') 
           .eq('id', userId)
-          .single();
-      
-      final dogRes = await Supabase.instance.client
-          .from('dogs')
-          .select('dog_name, photo_url, daily_goal_km, daily_goal_minutes')
-          .eq('owner_id', userId)
-          .limit(1)
           .maybeSingle();
+      
+      final DogShare? link = await primaryDogForCurrentUser();
+      final Map<String, dynamic>? dogRes = link?.dog;
 
       final today = DateTime.now().toIso8601String().split('T')[0];
       final walksRes = await Supabase.instance.client
@@ -66,8 +64,8 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       setState(() {
-        _totalPoints = profileRes['total_points'] ?? 0;
-        _dailyStreak = profileRes['daily_streak'] ?? 0;
+        _totalPoints = profileRes?['total_points'] ?? 0;
+        _dailyStreak = profileRes?['daily_streak'] ?? 0;
         _dogName = dogRes?['dog_name'] ?? 'Dog';
         _dogPhotoUrl = dogRes?['photo_url'];
         _dailyGoalKm = (dogRes?['daily_goal_km'] ?? 3.0).toDouble();
@@ -150,6 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+              const JoinRequestsBanner(),
               const SizedBox(height: 32),
               
               Center(

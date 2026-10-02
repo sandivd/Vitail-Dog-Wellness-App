@@ -84,15 +84,10 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-    Future<void> _continueWithCode() async {
-    final code = await Navigator.push<String>(
-      context,
-      onboardingFadeRoute<String>(const JoinWithCodeScreen()),
-    );
-    if (code == null || !mounted) return;
+  void _continueWithCode() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => RegisterScreen(pendingShareCode: code)),
+      onboardingFadeRoute<void>(const JoinWithCodeScreen()),
     );
   }
 
