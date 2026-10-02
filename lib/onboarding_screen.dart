@@ -9,6 +9,7 @@ import 'dog_photo_sheet.dart';
 import 'exercise_data.dart';
 import 'high_paw_screen.dart';
 import 'onboarding_goal_screen.dart';
+import 'share_code_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -33,6 +34,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _healthImpact;
 
   bool _dogSaved = false;
+  String? _dogId;
   int? _dailyGoalMins;
   double? _dailyGoalKm;
 
@@ -63,7 +65,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-    Future<void> _saveToDatabase() async {
+  Future<void> _saveToDatabase() async {
         final missing = <String>[
       if (_dogNameController.text.trim().isEmpty) 'name',
       if (!['Male', 'Female'].contains(_selectedSex)) 'sex',
@@ -137,28 +139,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'recorded_date': DateTime.now().toIso8601String(),
         });
 
+        _dogId = dogResponse['id'].toString();
         _dogSaved = true;
       }
 
       if (!mounted) return;
 
-      startOnboardingGoals(
+      Navigator.push<void>(
         context,
-        nextScreenBuilder: (goals) {
-          debugPrint('Onboarding goals: $goals');
-          return HighPawScreen(
+        onboardingFadeRoute<void>(
+          ShareCodeScreen(
+            dogId: _dogId!,
             dogName: _dogNameController.text.trim(),
-            dailyGoalMins: _dailyGoalMins!,
-            dailyGoalKm: _dailyGoalKm!,
-            breed: _selectedBreed,
-          );
-        },
+            onDone: _startGoals,
+          ),
+        ),
       );
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Database Error: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _startGoals() {
+    if (!mounted) return;
+    startOnboardingGoals(
+      context,
+      nextScreenBuilder: (goals) {
+        debugPrint('Onboarding goals: $goals');
+        return HighPawScreen(
+          dogName: _dogNameController.text.trim(),
+          dailyGoalMins: _dailyGoalMins!,
+          dailyGoalKm: _dailyGoalKm!,
+          breed: _selectedBreed,
+        );
+      },
+    );
   }
 
   @override
