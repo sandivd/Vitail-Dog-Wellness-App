@@ -9,6 +9,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'certificate_reader.dart';
+import 'certificate_scanner.dart';
 
 String? microchipNumberError(String raw) {
   final String value = raw.trim();
@@ -42,6 +44,55 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
   PlatformFile? _certificate;
   bool _uploading = false;
+
+    bool _scanning = false;
+  CertificateReading? _reading;
+  String? _dogName;
+  DateTime? _dogBirthday;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDog();
+  }
+
+  Future<void> _loadDog() async {
+    final String? dogId = widget.dogId;
+    if (dogId == null) return;
+    try {
+      final Map<String, dynamic>? dog = await Supabase.instance.client
+          .from('dogs')
+          .select('dog_name, birthday')
+          .eq('id', dogId)
+          .maybeSingle();
+      if (dog == null) return;
+      _dogName = dog['dog_name'] as String?;
+      final String? birthday = dog['birthday'] as String?;
+      _dogBirthday = birthday == null ? null : DateTime.tryParse(birthday);
+    } catch (e) {
+      debugPrint('Could not load dog details: ${e.runtimeType}');
+    }
+  }
+
+  Future<void> _readCertificate(PlatformFile file) async {
+    try {
+      final String text = await extractCertificateText(file);
+      final CertificateReading reading = readCertificateText(
+        text,
+        dogName: _dogName,
+        dogBirthday: _dogBirthday,
+      );
+      if (mounted && identical(_certificate, file)) {
+        setState(() => _reading = reading);
+      }
+    } catch (e) {
+      debugPrint('Certificate reader failed: ${e.runtimeType}');
+    } finally {
+      if (mounted && identical(_certificate, file)) {
+        setState(() => _scanning = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -105,12 +156,18 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       _showMessage('That file is over 10 MB. Try a smaller scan or photo.');
       return;
     }
-    setState(() => _certificate = file);
+    setState(() {
+      _certificate = file;
+      _reading = null;
+      _scanning = true;
+    });
+    await _readCertificate(file);
   }
 
   Future<void> _submitCertificate() async {
     final PlatformFile? file = _certificate;
     final String? dogId = widget.dogId;
+    final CertificateReading? reading = _reading;
     if (file == null) {
       _showMessage('Choose your certificate first.');
       return;
@@ -137,6 +194,10 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         await client.from('microchip_submissions').insert({
           'dog_id': dogId,
           'file_path': storagePath,
+          'extracted_microchip': reading?.microchipNumber,
+          'reader_flags': reading == null
+              ? <String>['reader_failed']
+              : reading.issues.map((issue) => issue.name).toList(),
         });
       } catch (_) {
         await client.storage.from('microchip_certificates').remove([storagePath]);
@@ -156,7 +217,12 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
   }
 
   Widget _submitButton() => ElevatedButton(
-        onPressed: _certificate == null || _uploading ? null : _submitCertificate,
+        onPressed: _certificate == null ||
+                _uploading ||
+                _scanning ||
+                _reading?.canSubmit == false
+            ? null
+            : _submitCertificate,
         style: OnboardingStyle.primaryButton,
         child: _uploading
             ? const SizedBox(
@@ -391,6 +457,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           ),
           const SizedBox(height: 20),
           _uploadBox(dashed: false),
+          _readingSummary(),
           const SizedBox(height: 20),
           _submitButton(),
           const SizedBox(height: 8),
@@ -411,6 +478,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           ),
           const SizedBox(height: 24),
           _uploadBox(dashed: true),
+          _readingSummary(),
           const SizedBox(height: 20),
           _submitButton(),
           const SizedBox(height: 14),
@@ -506,6 +574,77 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           : inner,
     );
   }
+
+    Widget _readingSummary() {
+    if (_certificate == null) return const SizedBox.shrink();
+    if (_scanning) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: OnboardingStyle.coral),
+            ),
+            const SizedBox(width: 10),
+            Text('Reading your certificate…',
+                style: OnboardingStyle.text(12,
+                    color: OnboardingStyle.muted, weight: FontWeight.w500)),
+          ],
+        ),
+      );
+    }
+    final CertificateReading? reading = _reading;
+    final List<Widget> rows = <Widget>[];
+    if (reading == null) {
+      rows.add(_readingRow(
+        Icons.info_outline,
+        "We couldn't read this file automatically. You can still submit it and our team will check it.",
+        OnboardingStyle.muted,
+      ));
+    } else {
+      final String? number = reading.microchipNumber;
+      if (number != null) {
+        rows.add(_readingRow(Icons.check_circle_outline,
+            'Microchip number found: ${_groupDigits(number)}', OnboardingStyle.ink));
+      }
+      for (final CertificateIssue issue in reading.issues) {
+        rows.add(_readingRow(
+          issue.blocksSubmit ? Icons.error_outline : Icons.info_outline,
+          issue.message,
+          issue.blocksSubmit ? OnboardingStyle.coral : OnboardingStyle.muted,
+        ));
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
+    );
+  }
+
+  Widget _readingRow(IconData icon, String text, Color color) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(text,
+                  style: OnboardingStyle.text(12,
+                      color: color, weight: FontWeight.w500, height: 1.4)),
+            ),
+          ],
+        ),
+      );
+
+  String _groupDigits(String digits) => [
+        for (int i = 0; i < digits.length; i += 3)
+          digits.substring(i, i + 3 > digits.length ? digits.length : i + 3),
+      ].join(' ');
 
   OutlineInputBorder _fieldBorder(Color color) => OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
