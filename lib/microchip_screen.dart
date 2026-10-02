@@ -5,6 +5,11 @@ import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
 
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 String? microchipNumberError(String raw) {
   final String value = raw.trim();
   if (value.isEmpty) return 'Enter your dog\'s 15-digit microchip number.';
@@ -20,7 +25,9 @@ String? microchipNumberError(String raw) {
 enum _View { form, verified, failed, submitted }
 
 class MicrochipScreen extends StatefulWidget {
-  const MicrochipScreen({super.key});
+  const MicrochipScreen({super.key, this.dogId});
+
+  final String? dogId;
 
   @override
   State<MicrochipScreen> createState() => _MicrochipScreenState();
@@ -31,6 +38,10 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
   _View _view = _View.form;
   bool _uploadTab = false;
+  static const int _maxBytes = 10 * 1024 * 1024;
+
+  PlatformFile? _certificate;
+  bool _uploading = false;
 
   @override
   void dispose() {
@@ -62,7 +73,103 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     }
   }
 
-    @override
+    void _showMessage(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  String _contentType(String extension) {
+    switch (extension) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'png':
+        return 'image/png';
+      default:
+        return 'image/jpeg';
+    }
+  }
+
+    Future<void> _pickCertificate() async {
+    if (_uploading) return;
+    final PlatformFile? file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
+    );
+    if (file == null || !mounted) return;
+    final int? bytes = await file.length();
+    if (!mounted) return;
+    if (bytes == null || bytes == 0) {
+      _showMessage("We couldn't read that file. Try another one.");
+      return;
+    }
+    if (bytes > _maxBytes) {
+      _showMessage('That file is over 10 MB. Try a smaller scan or photo.');
+      return;
+    }
+    setState(() => _certificate = file);
+  }
+
+  Future<void> _submitCertificate() async {
+    final PlatformFile? file = _certificate;
+    final String? dogId = widget.dogId;
+    if (file == null) {
+      _showMessage('Choose your certificate first.');
+      return;
+    }
+    final SupabaseClient client = Supabase.instance.client;
+    final String? userId = client.auth.currentUser?.id;
+    if (dogId == null || file.path == null || userId == null) {
+      _showMessage('Something went wrong. Please try again.');
+      return;
+    }
+
+    final String extension = file.name.split('.').last.toLowerCase();
+    final String storagePath =
+        '$userId/$dogId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+
+    setState(() => _uploading = true);
+    try {
+      await client.storage.from('microchip_certificates').upload(
+            storagePath,
+            File(file.path!),
+            fileOptions: FileOptions(contentType: _contentType(extension)),
+          );
+      try {
+        await client.from('microchip_submissions').insert({
+          'dog_id': dogId,
+          'file_path': storagePath,
+        });
+      } catch (_) {
+        await client.storage.from('microchip_certificates').remove([storagePath]);
+        rethrow;
+      }
+      if (!mounted) return;
+      setState(() {
+        _certificate = null;
+        _view = _View.submitted;
+      });
+    } catch (e) {
+      debugPrint('Certificate upload failed: $e');
+      if (mounted) _showMessage("Couldn't upload your certificate. Please try again.");
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Widget _submitButton() => ElevatedButton(
+        onPressed: _certificate == null || _uploading ? null : _submitCertificate,
+        style: OnboardingStyle.primaryButton,
+        child: _uploading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.5, color: OnboardingStyle.muted),
+              )
+            : Text('Submit certificate',
+                style: OnboardingStyle.text(16, color: Colors.white)),
+      );
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: OnboardingStyle.background,
@@ -135,11 +242,12 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         );
       case _View.failed:
         return _failed();
-      case _View.submitted:
+            case _View.submitted:
         return _result(
           title: 'Certificate submitted',
           message:
               'We\'ve received your certificate. We\'ll verify it and get back to you within 24 hours.',
+          icon: Icons.schedule,
           onContinue: _finish,
         );
     }
@@ -279,17 +387,12 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           _tabs(),
           const SizedBox(height: 14),
           _helper(
-            'Optional: Needed only to redeem reward coupons. You can still track walks and keep a journal without it.',
+            'Optional: upload your dog\'s microchip certificate and we\'ll verify it for you.',
           ),
           const SizedBox(height: 20),
           _uploadBox(dashed: false),
           const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => setState(() => _view = _View.submitted),
-            style: OnboardingStyle.primaryButton,
-            child: Text('Submit certificate',
-                style: OnboardingStyle.text(16, color: Colors.white)),
-          ),
+          _submitButton(),
           const SizedBox(height: 8),
           _skipLink(),
         ],
@@ -309,12 +412,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           const SizedBox(height: 24),
           _uploadBox(dashed: true),
           const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => setState(() => _view = _View.submitted),
-            style: OnboardingStyle.primaryButton,
-            child: Text('Submit certificate',
-                style: OnboardingStyle.text(16, color: Colors.white)),
-          ),
+          _submitButton(),
           const SizedBox(height: 14),
           Text(
             'We\'ll review your certificate and get back to you within 1\u20132 business days.',
@@ -331,6 +429,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     required String title,
     required String message,
     required VoidCallback onContinue,
+    IconData icon = Icons.verified_outlined,
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -338,7 +437,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           const SizedBox(height: 8),
           _title(title),
           const SizedBox(height: 28),
-          const Center(child: OnboardingBadge(icon: Icons.verified_outlined)),
+          Center(child: OnboardingBadge(icon: icon)),          
           const SizedBox(height: 24),
           Text(
             message,
@@ -356,16 +455,15 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         ],
       );
 
-  Widget _uploadBox({required bool dashed}) {
+    Widget _uploadBox({required bool dashed}) {
+    final PlatformFile? file = _certificate;
     final Widget inner = Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: dashed
-            ? null
-            : Border.all(color: OnboardingStyle.border),
+        border: dashed ? null : Border.all(color: OnboardingStyle.border),
       ),
       child: Column(
         children: [
@@ -376,29 +474,35 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
               color: Color(0xFFF2EFE9),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.arrow_upward,
-                size: 18, color: OnboardingStyle.muted),
+            child: Icon(
+              file == null ? Icons.arrow_upward : Icons.description_outlined,
+              size: 18,
+              color: OnboardingStyle.muted,
+            ),
           ),
           const SizedBox(height: 12),
-          Text('Upload microchip certificate',
-              style: OnboardingStyle.text(14, weight: FontWeight.w600)),
+          Text(
+            file == null ? 'Upload microchip certificate' : file.name,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: OnboardingStyle.text(14, weight: FontWeight.w600),
+          ),
           const SizedBox(height: 4),
-          Text('PDF, JPG or PNG',
-              style: OnboardingStyle.text(12,
-                  color: OnboardingStyle.muted, weight: FontWeight.w500)),
+          Text(
+            file == null ? 'PDF, JPG or PNG' : 'Tap to choose a different file',
+            style: OnboardingStyle.text(12,
+                color: OnboardingStyle.muted, weight: FontWeight.w500),
+          ),
         ],
       ),
     );
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('File picking is not wired up yet.')),
-        );
-      },
+      onTap: _uploading ? null : _pickCertificate,
       child: dashed
-          ? CustomPaint(painter: _DashedBorderPainter(), child: inner)
+          ? CustomPaint(painter: const _DashedBorderPainter(), child: inner)
           : inner,
     );
   }

@@ -173,6 +173,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           dailyGoalMins: _dailyGoalMins!,
           dailyGoalKm: _dailyGoalKm!,
           breed: _selectedBreed,
+          dogId: _dogId,
         );
       },
     );
