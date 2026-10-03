@@ -188,7 +188,17 @@ class RewardDetailsScreen extends StatelessWidget {
                                       color: colors.onSurface,
                                     ),
                                   ),
-                                  if (offer.category.isNotEmpty) ...[
+                                  if (offer.description.trim().isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      offer.description.trim(),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.4,
+                                        color: colors.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ] else if (offer.category.isNotEmpty) ...[
                                     const SizedBox(height: 6),
                                     Text(
                                       offer.category,
