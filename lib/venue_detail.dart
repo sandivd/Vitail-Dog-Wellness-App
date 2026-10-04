@@ -282,7 +282,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
         ),
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -290,7 +290,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             ),
           ),
         );
-    } finally {
+    }} finally {
       if (mounted) setState(() => _loadingReward = false);
     }
   }

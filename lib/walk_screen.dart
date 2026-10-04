@@ -5,10 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'venue_detail.dart';
 import 'walk_in_progress.dart';
-import 'venues_screen.dart';
 import 'vitail_snack.dart';
 
-enum _RouteMode { last, longest }
+enum _RouteMode { longest }
 
 class WalkScreen extends StatefulWidget {
   const WalkScreen({super.key});
@@ -34,13 +33,11 @@ class _WalkScreenState extends State<WalkScreen> {
       DraggableScrollableController();
   final TextEditingController _searchController = TextEditingController();
 
-  _RouteMode _routeMode = _RouteMode.last;
+  _RouteMode _routeMode = _RouteMode.longest;
 
   LatLng? _currentPosition;
   LatLng? _droppedPin;
 
-  Map<String, dynamic>? _lastWalk;
-  bool _loadingLastWalk = true;
   bool _isStartingWalk = false;
 
   // Partner venues loaded from the Supabase 'partnered_venues' table.
@@ -78,7 +75,6 @@ class _WalkScreenState extends State<WalkScreen> {
   void initState() {
     super.initState();
     _locateUser();
-    _fetchLastWalk();
     _fetchVenues();
   }
 
@@ -111,32 +107,6 @@ class _WalkScreenState extends State<WalkScreen> {
       _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
     } catch (_) {
       // Keep the default camera position if location isn't available yet.
-    }
-  }
-
-  Future<void> _fetchLastWalk() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        if (mounted) setState(() => _loadingLastWalk = false);
-        return;
-      }
-
-      final response = await Supabase.instance.client
-          .from('walks')
-          .select('distance_meters, duration_seconds, walk_date')
-          .eq('user_id', userId)
-          .order('walk_date', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (!mounted) return;
-      setState(() {
-        _lastWalk = response;
-        _loadingLastWalk = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loadingLastWalk = false);
     }
   }
 
@@ -234,14 +204,6 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   String get _routeSummaryText {
-    if (_routeMode == _RouteMode.last) {
-      if (_loadingLastWalk) return '···';
-      if (_lastWalk == null) return 'No past walks yet';
-      final meters = (_lastWalk!['distance_meters'] as num).toDouble();
-      final seconds = (_lastWalk!['duration_seconds'] as num?)?.toInt() ?? 0;
-      return '${(meters / 1000).toStringAsFixed(1)} km · ${(seconds / 60).round()} min';
-    }
-
     if (_currentPosition == null || _droppedPin == null) {
       return 'Search or drop a pin for a route';
     }
@@ -538,28 +500,28 @@ class _WalkScreenState extends State<WalkScreen> {
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const VenuesScreen(),
-                              ),
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 0),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'See all',
-                            style: TextStyle(
-                              color: colorScheme.secondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                        // TextButton(
+                        //   onPressed: () {
+                        //     Navigator.push(
+                        //       context,
+                        //       MaterialPageRoute(
+                        //         builder: (context) => const VenuesScreen(),
+                        //       ),
+                        //     );
+                        //   },
+                        //   style: TextButton.styleFrom(
+                        //     padding: EdgeInsets.zero,
+                        //     minimumSize: const Size(0, 0),
+                        //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        //   ),
+                        //   child: Text(
+                        //     'See all',
+                        //     style: TextStyle(
+                        //       color: colorScheme.secondary,
+                        //       fontWeight: FontWeight.w600,
+                        //     ),
+                        //   ),
+                        // ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -648,26 +610,6 @@ class _RouteModeToggle extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 8,
             offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _RouteModeSegment(
-              label: 'Last route',
-              selected: mode == _RouteMode.last,
-              selectedColor: _kGreen,
-              onTap: () => onChanged(_RouteMode.last),
-            ),
-          ),
-          Expanded(
-            child: _RouteModeSegment(
-              label: 'Longest route',
-              selected: mode == _RouteMode.longest,
-              selectedColor: _kGreen,
-              onTap: () => onChanged(_RouteMode.longest),
-            ),
           ),
         ],
       ),
