@@ -24,42 +24,41 @@ RewardOffer offer({String? id, String name = 'Other'}) => RewardOffer(
 );
 
 void main() {
-  testWidgets(
-    'Explore opens a specific reward directly and Back returns to venue',
-    (tester) async {
-      final repository = FakeRewardsRepository()
-        ..catalogue = [
-          const RewardOffer(
-            id: 'expensive',
-            title: 'Expensive offer',
-            partnerName: 'Cafe',
-            pointsCost: 900,
-            category: '',
-            partnerId: 'a',
-          ),
-          offer(id: 'a'),
-        ];
-      await tester.pumpWidget(
-        MaterialApp(
-          home: VenueDetailScreen(
-            venue: venue('a', 'Cafe'),
-            rewardsRepository: repository,
-            venueLoader: () async => [venue('a', 'Cafe'), venue('b', 'Park')],
-          ),
+  testWidgets('Explore opens all venue offers and Back returns to venue', (
+    tester,
+  ) async {
+    final repository = FakeRewardsRepository()
+      ..catalogue = [
+        const RewardOffer(
+          id: 'expensive',
+          title: 'Expensive offer',
+          partnerName: 'Cafe',
+          pointsCost: 900,
+          category: '',
+          partnerId: 'a',
         ),
-      );
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('CHECK REWARDS'));
-      await tester.tap(find.text('CHECK REWARDS'));
-      await tester.pumpAndSettle();
-      expect(find.byType(RewardDetailsScreen), findsOneWidget);
-      expect(find.text('Treat'), findsOneWidget);
-      expect(find.text('Expensive offer'), findsNothing);
-      await tester.tap(find.byTooltip('Back'));
-      await tester.pumpAndSettle();
-      expect(find.byType(VenueDetailScreen), findsOneWidget);
-    },
-  );
+        offer(id: 'a'),
+      ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VenueDetailScreen(
+          venue: venue('a', 'Cafe'),
+          rewardsRepository: repository,
+          venueLoader: () async => [venue('a', 'Cafe'), venue('b', 'Park')],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('CHECK REWARDS'));
+    await tester.tap(find.text('CHECK REWARDS'));
+    await tester.pumpAndSettle();
+    expect(find.byType(RewardDetailsScreen), findsOneWidget);
+    expect(find.text('Treat'), findsOneWidget);
+    expect(find.text('Expensive offer'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(VenueDetailScreen), findsOneWidget);
+  });
 
   testWidgets('venue without rewards stays on details', (tester) async {
     await tester.pumpWidget(

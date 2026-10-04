@@ -5,7 +5,9 @@ import 'reward_image_placeholder.dart';
 
 /// Common image fallback and back control for reward and venue details.
 class DetailImageHeader extends StatelessWidget {
-  const DetailImageHeader({super.key});
+  const DetailImageHeader({super.key, this.photoUrl});
+
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +33,16 @@ class DetailImageHeader extends StatelessWidget {
               ),
             ),
           ),
+          if (photoUrl != null && photoUrl!.isNotEmpty)
+            Image.network(
+              photoUrl!,
+              fit: BoxFit.cover,
+              frameBuilder: (context, child, frame, synchronous) =>
+                  synchronous || frame != null
+                  ? child
+                  : const SizedBox.shrink(),
+              errorBuilder: (_, error, stack) => const SizedBox.shrink(),
+            ),
           Positioned(
             top: top + 12,
             left: 16,

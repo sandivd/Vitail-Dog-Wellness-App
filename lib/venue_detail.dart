@@ -276,6 +276,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           builder: (_) => RewardFlow(
             offer: offer,
             repository: repository,
+            catalogue: catalogue,
+            receipts: receipts,
             canRedeem: catalogue.points >= offer.pointsCost,
             redemption: receipt,
             venueLoader: widget.venueLoader,
