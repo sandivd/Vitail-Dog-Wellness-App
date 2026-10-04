@@ -420,6 +420,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
         title: offer.title,
         subtitle: offer.partnerName,
         footer: '${_number.format(offer.pointsCost)} pts',
+        isPointsCost: true,
         action: redeemed
             ? 'VIEW REWARD'
             : canAfford
@@ -500,6 +501,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     required String action,
     required VoidCallback? onAction,
     required VoidCallback onDetails,
+    bool isPointsCost = false,
     Color? footerColor,
     Color? buttonColor,
   }) {
@@ -560,7 +562,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                           final label = Text(
                             footer,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isPointsCost ? 14 : 12,
                               fontWeight: FontWeight.w700,
                               color: footerColor ?? colors.primary,
                             ),

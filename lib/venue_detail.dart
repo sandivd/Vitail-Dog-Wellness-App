@@ -102,7 +102,9 @@ class VenueInfo {
     if (text == null || text.isEmpty) return null;
     final uri = Uri.tryParse(text);
     final isWebUrl =
-        uri != null && uri.hasAuthority && (uri.scheme == 'http' || uri.scheme == 'https');
+        uri != null &&
+        uri.hasAuthority &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
     return isWebUrl ? text : null;
   }
 
@@ -519,8 +521,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           ? null
           : SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-              child: SizedBox(
-                height: 60,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 60),
                 child: FilledButton(
                   onPressed: _startingWalk ? null : _startWalk,
                   style: FilledButton.styleFrom(
@@ -531,7 +533,12 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     ),
                     disabledForegroundColor: colors.onPrimary,
                     shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
                     textStyle: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -547,8 +554,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         )
                       : Text(
                           'Start walk to ${venue.name}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
                 ),
               ),
