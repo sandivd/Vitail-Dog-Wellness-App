@@ -11,6 +11,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dog_date_picker.dart';
 import 'exercise_data.dart';
 import 'onboarding_view.dart' show DogWeightInputFormatter;
+import 'vitail_snack.dart';
 
 /// Full-screen "Edit profile" editor for the dog's details (Figma design).
 /// Pushed from the pencil badge on the Profile screen; pops with `true`
@@ -155,11 +156,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return years;
   }
 
-  void _snack(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red));
-  }
-
   // ----------------------------------------------------------------- actions
 
   Future<void> _pickPhoto() async {
@@ -186,23 +182,28 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final weight = double.tryParse(_weightController.text.trim());
 
     if (name.isEmpty) {
-      _snack("Please enter your dog's name");
+      showVitailSnack(context, "Please enter your dog's name",
+            type: VitailSnackType.error);
       return;
     }
     if (_selectedSex == null) {
-      _snack('Please select a sex');
+      showVitailSnack(context, 'Please select a sex',
+            type: VitailSnackType.error);
       return;
     }
     if (_birthday == null) {
-      _snack('Please select a date of birth');
+      showVitailSnack(context, 'Please select a date of birth',
+            type: VitailSnackType.error);
       return;
     }
     if (_selectedBreed == null) {
-      _snack('Please select a breed from the list');
+      showVitailSnack(context, 'Please select a breed from the list',
+            type: VitailSnackType.error);
       return;
     }
     if (weight == null || weight <= 0) {
-      _snack('Please enter a valid weight');
+      showVitailSnack(context, 'Please enter a valid weight',
+            type: VitailSnackType.error);
       return;
     }
 
@@ -257,6 +258,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ageYears: ageYears,
         ownerActivityLevel:
             (dog['owner_activity_level'] as String?) ?? 'moderate',
+        healthCondition:
+            (dog['health_condition'] as String?) ?? 'no_condition',
       );
 
       // 4. Persist everything to the dogs table.
@@ -273,15 +276,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (!mounted) return;
       Navigator.pop(context, true);
-    } on PostgrestException catch (e) {
+    } on PostgrestException {
       if (mounted) {
         setState(() => _isSaving = false);
-        _snack('Could not save changes: ${e.message}');
+        showVitailSnack(context, 'Could not save changes. Please try again.',
+            type: VitailSnackType.error);
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
-        _snack('Network error: could not save. Check your connection.');
+        showVitailSnack(
+            context, 'Network error: could not save. Check your connection.',
+            type: VitailSnackType.error);
       }
     }
   }

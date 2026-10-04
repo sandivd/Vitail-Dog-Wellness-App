@@ -3,14 +3,23 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'reward_flow.dart';
+import 'reward_venues.dart';
 import 'rewards_data.dart';
 import 'reward_image_placeholder.dart';
 
 class RewardsScreen extends StatefulWidget {
-  const RewardsScreen({super.key, this.repository, this.isActive = true});
+  const RewardsScreen({
+    super.key,
+    this.repository,
+    this.isActive = true,
+    this.partnerId,
+    this.venueName,
+  });
 
   final RewardsRepository? repository;
   final bool isActive;
+  final String? partnerId;
+  final String? venueName;
 
   @override
   State<RewardsScreen> createState() => _RewardsScreenState();
@@ -56,11 +65,19 @@ class _RewardsScreenState extends State<RewardsScreen> {
     try {
       final catalogue = await _repository.loadCatalogue();
       if (!mounted || request != _catalogueRequest) return;
-      final sortedOffers = List<RewardOffer>.of(catalogue.offers)
-        ..sort((a, b) {
-          final costOrder = a.pointsCost.compareTo(b.pointsCost);
-          return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
-        });
+      final venues = widget.partnerId == null ? null : await loadRewardVenues();
+      if (!mounted || request != _catalogueRequest) return;
+      final sortedOffers =
+          List<RewardOffer>.of(
+            catalogue.offers.where(
+              (offer) =>
+                  venues == null ||
+                  venueForReward(offer, venues)?.partnerId == widget.partnerId,
+            ),
+          )..sort((a, b) {
+            final costOrder = a.pointsCost.compareTo(b.pointsCost);
+            return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
+          });
       setState(
         () => _catalogue = RewardsCatalogue(
           points: catalogue.points,
@@ -181,7 +198,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => RewardFlow(
-          offer: offer,
+          offer:
+              (_catalogue?.offers
+                  .where((entry) => entry.id == offer.id)
+                  .firstOrNull) ??
+              offer,
           repository: _repository,
           canRedeem:
               !_loadingCatalogue &&
@@ -201,7 +222,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     if (_isLoading) {
       return const Scaffold(body: Center(child: VitailLoading()));
     }
-    
+
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: colors.surface,
@@ -271,7 +292,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
           onTap: points == null ? null : _showTier,
           borderRadius: BorderRadius.circular(22),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -279,7 +300,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   'POINTS WALLET',
                   style: TextStyle(
                     color: Color(0xFFE1ECF3),
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -301,7 +322,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       const TextSpan(
                         text: '   pts',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           color: Color(0xFFE1ECF3),
                           fontWeight: FontWeight.w600,
                         ),
@@ -322,7 +343,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 Text(
                   caption,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 13,
                     color: Color(0xFFE1ECF3),
                     fontWeight: FontWeight.w500,
                   ),
@@ -358,7 +379,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
             onTap: () => _selectTab(mine),
             borderRadius: BorderRadius.circular(22),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 40),
+              constraints: const BoxConstraints(minHeight: 44),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,
@@ -368,7 +389,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   title,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: selected
                         ? colors.onSurface
@@ -484,7 +505,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   }) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: _cardColor,
         borderRadius: BorderRadius.circular(20),
@@ -494,15 +515,19 @@ class _RewardsScreenState extends State<RewardsScreen> {
           onTap: onDetails,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            padding: const EdgeInsets.all(12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
-                  child: RewardImagePlaceholder(),
+                  child: SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: RewardImagePlaceholder(),
+                  ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,8 +537,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                         child: Text(
                           title,
                           style: TextStyle(
-                            fontSize: 13,
-                            height: 1.4,
+                            fontSize: 16,
+                            height: 1.25,
                             fontWeight: FontWeight.w600,
                             color: colors.onSurface,
                           ),
@@ -523,8 +548,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          fontSize: 11,
-                          height: 1.4,
+                          fontSize: 13,
+                          height: 1.25,
                           fontWeight: FontWeight.w500,
                           color: colors.onSurfaceVariant,
                         ),
@@ -548,7 +573,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                                   ? _softColor
                                   : buttonColor ?? colors.primary,
                               disabledForegroundColor: colors.onSurfaceVariant,
-                              minimumSize: const Size(96, 28),
+                              minimumSize: const Size(96, 32),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 6,
@@ -556,14 +581,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               textStyle: const TextStyle(
                                 fontFamily: 'PlusJakartaSans',
-                                fontSize: 10,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             child: Text(action),
                           );
-                          if (constraints.maxWidth < 175 ||
-                              MediaQuery.textScalerOf(context).scale(12) > 16) {
+                          if (constraints.maxWidth < 200 ||
+                              MediaQuery.textScalerOf(context).scale(14) > 18) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

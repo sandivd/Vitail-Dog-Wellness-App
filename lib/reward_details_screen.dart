@@ -3,9 +3,12 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import 'rewards_data.dart';
+import 'detail_image_header.dart';
+import 'venue_detail.dart';
 import 'reward_image_placeholder.dart';
+import 'vitail_snack.dart';
 
-/// Offer details from Figma 630:1144. Location data is not yet confirmed.
+/// Offer details with the linked Explore venue.
 class RewardDetailsScreen extends StatelessWidget {
   const RewardDetailsScreen({
     super.key,
@@ -15,8 +18,16 @@ class RewardDetailsScreen extends StatelessWidget {
     this.redemption,
     this.onCheckIn,
     this.onShowCode,
+    this.venue,
+    this.onGoHere,
+    this.venueStatus,
+    this.distanceLabel,
   });
 
+  final String? distanceLabel;
+  final VenueInfo? venue;
+  final VoidCallback? onGoHere;
+  final String? venueStatus;
   final RewardOffer offer;
   final bool canRedeem;
   final VoidCallback onRedeem;
@@ -37,83 +48,11 @@ class RewardDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Stack(
-              children: [
-                Container(
-                  height: 300 + MediaQuery.paddingOf(context).top,
-                  width: double.infinity,
-                  color: dark
-                      ? const Color(0xFF393632)
-                      : const Color(0xFFD9D5CF),
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.paddingOf(context).top,
-                    ),
-                    child: Center(
-                      child: SizedBox(
-                        width: 188,
-                        height: 156,
-                        child: ClipRect(
-                          child: Stack(
-                            children: [
-                              Positioned(
-                                left: -28.4444,
-                                top: -66.3624,
-                                width: 334.8092,
-                                height: 335.6028,
-                                child: Image.asset(
-                                  'assets/brand/reward-details-dog.png',
-                                  fit: BoxFit.fill,
-                                  excludeFromSemantics: true,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + 12,
-                  left: 12,
-                  child: SizedBox(
-                    width: 48,
-                    height: 48,
-                    child: Center(
-                      child: Material(
-                        color: cardColor,
-                        elevation: 2,
-                        shadowColor: Colors.black.withValues(alpha: 0.15),
-                        shape: const CircleBorder(),
-                        child: IconButton(
-                          tooltip: 'Back',
-                          onPressed: () => Navigator.pop(context),
-                          constraints: const BoxConstraints.tightFor(
-                            width: 40,
-                            height: 40,
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          icon: SvgPicture.asset(
-                            'assets/icons/reward-details-back.svg',
-                            width: 24,
-                            height: 24,
-                            colorFilter: ColorFilter.mode(
-                              colors.onSurface,
-                              BlendMode.srcIn,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            const DetailImageHeader(),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 24,
-                16,
+                24,
                 24,
                 32 + MediaQuery.paddingOf(context).bottom,
               ),
@@ -121,9 +60,9 @@ class RewardDetailsScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    offer.partnerName,
+                    venue?.name ?? offer.partnerName,
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 24,
                       height: 1.4,
                       fontWeight: FontWeight.w700,
                       color: colors.onSurface,
@@ -131,18 +70,12 @@ class RewardDetailsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Directions coming soon — we’re confirming this location.',
-                        ),
-                      ),
-                    ),
+                    onPressed: onGoHere,
                     style: OutlinedButton.styleFrom(
                       backgroundColor: colors.tertiary,
                       foregroundColor: const Color(0xFF241C24),
                       side: BorderSide(color: borderColor, width: 1.5),
-                      minimumSize: const Size(110, 36),
+                      minimumSize: const Size(110, 48),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
                         vertical: 10,
@@ -150,18 +83,33 @@ class RewardDetailsScreen extends StatelessWidget {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       textStyle: const TextStyle(
                         fontFamily: 'PlusJakartaSans',
-                        fontSize: 12,
+                        fontSize: 14,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     child: const Text('GO HERE'),
                   ),
-                  const SizedBox(height: 18),
+                  if (venueStatus != null) ...[
+                    const SizedBox(height: 8),
+                    Text(venueStatus!),
+                  ],
+                  if (venue != null && venue!.details.trim().isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      venue!.details.trim(),
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.5,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 20,
-                      vertical: 14,
+                      vertical: 18,
                     ),
                     decoration: BoxDecoration(
                       color: cardColor,
@@ -173,15 +121,23 @@ class RewardDetailsScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(
-                            child: _info(context, 'HOURS', 'Not provided'),
+                            child: _info(
+                              context,
+                              'HOURS',
+                              venue?.hoursLabel ?? 'Not provided',
+                            ),
                           ),
                           VerticalDivider(
-                            width: 32,
+                            width: 28,
                             thickness: 1,
                             color: borderColor,
                           ),
                           Expanded(
-                            child: _info(context, 'DISTANCE', 'Not confirmed'),
+                            child: _info(
+                              context,
+                              'DISTANCE',
+                              distanceLabel ?? 'Not confirmed',
+                            ),
                           ),
                         ],
                       ),
@@ -191,7 +147,7 @@ class RewardDetailsScreen extends StatelessWidget {
                   Text(
                     'OFFERS',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: colors.onSurfaceVariant,
                     ),
@@ -226,7 +182,7 @@ class RewardDetailsScreen extends StatelessWidget {
                                   Text(
                                     offer.title,
                                     style: TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 15,
                                       height: 1.4,
                                       fontWeight: FontWeight.w600,
                                       color: colors.onSurface,
@@ -237,7 +193,7 @@ class RewardDetailsScreen extends StatelessWidget {
                                     Text(
                                       offer.category,
                                       style: TextStyle(
-                                        fontSize: 11,
+                                        fontSize: 13,
                                         color: colors.onSurfaceVariant,
                                       ),
                                     ),
@@ -255,7 +211,7 @@ class RewardDetailsScreen extends StatelessWidget {
                                         : Text(
                                             '${NumberFormat.decimalPattern('en').format(offer.pointsCost)} pts',
                                             style: TextStyle(
-                                              fontSize: 20,
+                                              fontSize: 24,
                                               fontWeight: FontWeight.w700,
                                               color: colors.primary,
                                             ),
@@ -278,10 +234,10 @@ class RewardDetailsScreen extends StatelessWidget {
                             foregroundColor: Colors.white,
                             disabledBackgroundColor: softColor,
                             disabledForegroundColor: colors.onSurfaceVariant,
-                            minimumSize: const Size(double.infinity, 44),
+                            minimumSize: const Size(double.infinity, 48),
                             textStyle: const TextStyle(
                               fontFamily: 'PlusJakartaSans',
-                              fontSize: 13,
+                              fontSize: 15,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -306,7 +262,7 @@ class RewardDetailsScreen extends StatelessWidget {
                             'You need more points to redeem this offer.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 14,
                               color: colors.onSurfaceVariant,
                             ),
                           ),
@@ -329,7 +285,7 @@ class RewardDetailsScreen extends StatelessWidget {
       Text(
         label,
         style: TextStyle(
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.w600,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),
@@ -338,7 +294,7 @@ class RewardDetailsScreen extends StatelessWidget {
       Text(
         value,
         style: TextStyle(
-          fontSize: 13,
+          fontSize: 16,
           height: 1.4,
           fontWeight: FontWeight.w700,
           color: Theme.of(context).colorScheme.onSurface,

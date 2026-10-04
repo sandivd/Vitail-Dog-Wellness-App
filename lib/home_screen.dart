@@ -39,7 +39,16 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _fetchHomeData() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-      
+      final today = DateTime.now().toIso8601String().split('T')[0];
+
+      // Recompute the derived streak (anchored on the user's local today)
+      // so missed days show as broken WITHOUT needing a new walk.
+      // Best-effort: Home still loads from the last stored value if this fails.
+      try {
+        await Supabase.instance.client
+            .rpc('recompute_streak', params: {'p_today': today});
+      } catch (_) {}
+
       final profileRes = await Supabase.instance.client
           .from('profiles')
           .select('total_points, daily_streak') 
@@ -49,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final DogShare? link = await primaryDogForCurrentUser();
       final Map<String, dynamic>? dogRes = link?.dog;
 
-      final today = DateTime.now().toIso8601String().split('T')[0];
       final walksRes = await Supabase.instance.client
           .from('walks')
           .select('distance_meters, duration_seconds')

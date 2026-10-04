@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'walk_summary.dart';
+import 'vitail_snack.dart';
 
 // ---------------------------------------------------------------------------
 // Design tokens from the Figma spec for this screen. Hardcoded on purpose:
@@ -105,10 +107,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
     final hasPermission = await _checkPermissions();
     if (!hasPermission) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission is required to track your walk.'),
-          ),
+        showVitailSnack(
+          context,
+          'Location permission is required to track your walk.',
+          type: VitailSnackType.error,
         );
       }
       return;
@@ -509,8 +511,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 backgroundColor: _kAvatarBg,
                                 backgroundImage: photoUrl != null &&
                                         photoUrl.toString().isNotEmpty
-                                    ? NetworkImage(photoUrl)
+                                    ? CachedNetworkImageProvider(photoUrl)
                                     : null,
+                                child: photoUrl == null
+                                  ? const Icon(Icons.pets, color: _kMuted)
+                                  : null,
                               ),
                               const SizedBox(width: 12),
                               Expanded(

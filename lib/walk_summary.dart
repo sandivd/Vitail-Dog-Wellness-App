@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'vitail_snack.dart';
 
 // ---------------------------------------------------------------------------
 // Design tokens from the Figma spec for this screen. Hardcoded because the
@@ -184,9 +185,8 @@ class _WalkSummaryState extends State<WalkSummary> {
     // The timer never started (e.g. location permission was denied).
     // Discard instead of saving a 0-second walk.
     if (widget.elapsedSeconds < 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Walk not started — nothing to save.')),
-      );
+      showVitailSnack(context, 'Walk not started — nothing to save.',
+          type: VitailSnackType.info);
       Navigator.popUntil(context, (route) => route.isFirst);
       return;
     }
@@ -247,25 +247,19 @@ class _WalkSummaryState extends State<WalkSummary> {
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
       }
-    } on PostgrestException catch (e) {
+    } on PostgrestException {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not save walk: ${e.message}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        showVitailSnack(context, 'Could not save walk. Please try again.',
+            type: VitailSnackType.error);
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-                Text('Network error: Could not save walk. Check your connection.'),
-            backgroundColor: Colors.red,
-          ),
+        showVitailSnack(
+          context,
+          'Network error: Could not save walk. Check your connection.',
+          type: VitailSnackType.error,
         );
       }
     }
@@ -466,6 +460,9 @@ class _WalkSummaryState extends State<WalkSummary> {
                             photoUrl != null && photoUrl.toString().isNotEmpty
                                 ? NetworkImage(photoUrl)
                                 : null,
+                        child: photoUrl == null
+                          ? const Icon(Icons.pets, color: _kMuted)
+                          : null,
                       ),
                       const SizedBox(width: 12),
                       Expanded(

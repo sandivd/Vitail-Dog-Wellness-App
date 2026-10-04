@@ -8,20 +8,48 @@ import 'home_screen.dart';
 import 'login_screen.dart';
 import 'reset_password_screen.dart';
 import 'vitail_launch.dart';
+import 'notifications.dart';
 
 const String supabaseUrl = 'https://wvaivqtoriceinqzqeaf.supabase.co';
 const String supabaseAnonKey = 'sb_publishable_EsVDR5mB7Ud9ErJ_theXKA_qMwNuw4G';
+
+/// Cached in main() so any screen can read preferences synchronously —
+/// no first-frame flash of default values (the async-load gap that made
+/// the walk-reminders switch visibly animate off on open).
+late final SharedPreferences appPrefs;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
 
-  // Restore the saved theme before the first frame (Settings persists it).
-  final prefs = await SharedPreferences.getInstance();
+  appPrefs = await SharedPreferences.getInstance();
   themeNotifier.value =
-      (prefs.getBool('darkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
+      (appPrefs.getBool('darkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
 
+  await Notifications.init();
   runApp(const VitailApp());
+
+  // Restore the daily reminder if it's on (covers reinstalls/updates;
+  // device reboots are handled by the manifest boot receiver).
+  unawaited(() async {
+    if (appPrefs.getBool('walkReminders') ?? false) {
+      final client = Supabase.instance.client;
+
+      // The session restores asynchronously — wait for it (same pattern
+      // as AuthGate) so the reminder message can use the dog's name,
+      // goal and streak. Skip entirely if signed out; the previously
+      // scheduled alarm just keeps its last message.
+      if (client.auth.currentSession == null) {
+        await client.auth.onAuthStateChange.first;
+      }
+      if (client.auth.currentUser == null) return;
+
+      await Notifications.scheduleWalkReminder(
+        hour: appPrefs.getInt('reminderHour') ?? 9,
+        minute: appPrefs.getInt('reminderMinute') ?? 0,
+      );
+    }
+  }());
 }
 
 // Global notifier for Dark Mode
@@ -41,6 +69,8 @@ final ThemeData lightTheme = ThemeData(
     tertiary: Color(0xFFAEC568),         // Green ring
     onPrimary: Colors.white,
     outline: Color(0xFFDED2D6),
+    error: Color(0xFFB3402E),            // Warm terracotta — harmonises with the coral
+    onError: Colors.white,
   ),
 );
 
@@ -55,6 +85,8 @@ final ThemeData darkTheme = ThemeData(
     secondary: Color(0xFF5F98BD),        // Blue ring
     tertiary: Color(0xFFAEC568),         // Green ring
     outline: Color(0xFF444444),
+    error: Color(0xFFF2B8B5),            // M3 dark error — soft red that reads on dark
+    onError: Color(0xFF601410),
   ),
 );
 

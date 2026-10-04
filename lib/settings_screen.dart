@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'main.dart';
+import 'notifications.dart';
+import 'vitail_snack.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,7 +22,9 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = true;
+  bool _notificationsEnabled = false;
+  int _reminderHour = 9;
+  int _reminderMinute = 0;
   bool _isSigningOut = false;
   bool _isExporting = false;
   bool _isDeleting = false;
@@ -44,6 +48,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           fontWeight: weight,
           color: color ?? ink);
 
+
+  @override
+  void initState() {
+    super.initState();
+    // appPrefs is cached in main(), so these reads are synchronous —
+    // correct values on the first frame, no toggle flash.
+    _notificationsEnabled = appPrefs.getBool('walkReminders') ?? false;
+    _reminderHour = appPrefs.getInt('reminderHour') ?? 9;
+    _reminderMinute = appPrefs.getInt('reminderMinute') ?? 0;
+  }
+
   // ------------------------------------------------------------- preferences
 
   Future<void> _setDarkMode(bool dark) async {
@@ -52,6 +67,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     themeNotifier.value = dark ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('darkMode', dark);
+  }
+
+  // NEW: persist the walk-reminders toggle so it survives sign-out/in
+  // and app restarts (local device preference, like dark mode).
+  Future<void> _setWalkReminders(bool enabled) async {
+    if (enabled) {
+      final granted = await Notifications.requestPermission();
+      if (!granted) {
+        if (!mounted) return;
+        showVitailSnack(
+          context,
+          'Vitail needs notification permission for walk reminders. '
+              'Enable it in system settings, then try again.',
+          type: VitailSnackType.info,
+        );
+        return; // no setState — the switch stays off
+      }
+      await Notifications.scheduleWalkReminder(
+          hour: _reminderHour, minute: _reminderMinute);
+    } else {
+      await Notifications.cancelWalkReminder();
+    }
+    setState(() => _notificationsEnabled = enabled);
+    await appPrefs.setBool('walkReminders', enabled);
+  }
+
+  Future<void> _pickReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _reminderHour, minute: _reminderMinute),
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() {
+      _reminderHour = picked.hour;
+      _reminderMinute = picked.minute;
+    });
+    await appPrefs.setInt('reminderHour', _reminderHour);
+    await appPrefs.setInt('reminderMinute', _reminderMinute);
+
+    if (_notificationsEnabled) {
+      // Cancel-then-schedule with a fixed ID: re-scheduling is idempotent.
+      await Notifications.scheduleWalkReminder(
+          hour: _reminderHour, minute: _reminderMinute);
+    }
   }
 
   Future<void> _openEditProfile() async {
@@ -66,8 +126,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .maybeSingle();
       if (!mounted) return;
       if (dog == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No dog profile found yet.')));
+        showVitailSnack(context, 'No dog profile found yet.',
+            type: VitailSnackType.info);
         return;
       }
       await Navigator.push<bool>(
@@ -76,8 +136,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               builder: (context) => EditProfileScreen(dog: dog)));
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not load dog profile.')));
+        showVitailSnack(context, 'Could not load dog profile.',
+            type: VitailSnackType.error);
       }
     }
   }
@@ -154,8 +214,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         subject: 'Your Vitail data export',
       );
     } catch (_) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('Could not export your data. Check your connection.')));
+      showVitailSnackVia(messenger,
+          'Could not export your data. Check your connection.',
+          type: VitailSnackType.error);
     }
     if (mounted) setState(() => _isExporting = false);
   }
@@ -186,7 +247,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const SizedBox(height: 20),
               Text('Log out', style: style(22, weight: FontWeight.w700)),
               const SizedBox(height: 8),
-              
+
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: () {
@@ -223,7 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         fontWeight: FontWeight.w600)),
               ),
               const SizedBox(height: 10),
-              
+
               TextButton(
                 onPressed: () => Navigator.pop(sheet),
                 child: Text('Cancel',
@@ -257,7 +318,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ----------------------------------------------------------- delete account
 
-    Future<void> _confirmDeleteAccount() async {
+  Future<void> _confirmDeleteAccount() async {
     await showModalBottomSheet<void>(
       context: context,
       backgroundColor: cardFill,
@@ -347,11 +408,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         MaterialPageRoute(builder: (context) => const LoginScreen()),
         (route) => false,
       );
-    } catch (e) {
+    } catch (_) {
       if (mounted) setState(() => _isDeleting = false);
-      messenger.showSnackBar(SnackBar(
-          content: Text('Could not delete account: $e'),
-          backgroundColor: Colors.red));
+      showVitailSnackVia(
+          messenger, 'Could not delete account. Please try again.',
+          type: VitailSnackType.error);
     }
   }
 
@@ -492,10 +553,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _sectionLabel('NOTIFICATIONS'),
                   _toggleCard(
                     title: 'Walk reminders',
-                    subtitle: 'A daily nudge to get out and walk (coming soon)',
+                    subtitle: 'A daily nudge to get out and walk',
                     value: _notificationsEnabled,
-                    onChanged: (v) =>
-                        setState(() => _notificationsEnabled = v),
+                    onChanged: _setWalkReminders,
+                  ),
+                  const SizedBox(height: 12),
+                  _navCard(
+                    title: 'Remind me at',
+                    subtitle: _notificationsEnabled
+                        ? TimeOfDay(
+                                hour: _reminderHour, minute: _reminderMinute)
+                            .format(context)
+                        : 'Turn on walk reminders to pick a time',
+                    trailing: Icon(Icons.schedule, color: muted),
+                    onTap: _notificationsEnabled ? _pickReminderTime : null,
                   ),
 
                   _sectionLabel('YOUR DOG'),
@@ -535,8 +606,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 12),
                   _navCard(
                     title: 'Privacy policy',
-                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Coming soon'))),
+                    onTap: () => showVitailSnack(context, 'Coming soon',
+                        type: VitailSnackType.info),
                   ),
 
                   _sectionLabel('ACCOUNT'),
