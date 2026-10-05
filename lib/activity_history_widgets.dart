@@ -14,6 +14,29 @@ const activityShadow = [
   BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 3)),
 ];
 
+/// Theme-adaptive tokens for the activity family. Light values match the
+/// Figma exactly (so goldens don't move); dark values follow the app's
+/// dark palette — the same tokens the check-in / rewards screens use.
+Color activityCardColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF242321)
+        : Colors.white;
+
+Color activityMutedColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFAAAAAA)
+        : activityMuted;
+
+Color activityInkColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFF4F0E9)
+        : const Color(0xFF211F1D);
+
+Color activityBorderColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF444444)
+        : const Color(0xFFDBD7D1);
+
 class ActivityDateStrip extends StatefulWidget {
   const ActivityDateStrip({
     super.key,
@@ -110,10 +133,10 @@ class _ActivityDateStripState extends State<ActivityDateStrip> {
           SizedBox(
             width: 22,
             child: Material(
-              color: Colors.white,
+              color: activityCardColor(context),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: Color(0xFFDBD7D1)),
+                side: BorderSide(color: activityBorderColor(context)),
               ),
               child: InkWell(
                 onTap: () => pickActivityDate(
@@ -122,13 +145,13 @@ class _ActivityDateStripState extends State<ActivityDateStrip> {
                   widget.onChanged,
                 ),
                 borderRadius: BorderRadius.circular(14),
-                child: const SizedBox(
+                child: SizedBox(
                   height: 64,
                   child: Center(
                     child: VitailIcon(
                       'calendar',
                       size: 14,
-                      color: activityMuted,
+                      color: activityMutedColor(context),
                     ),
                   ),
                 ),
@@ -149,11 +172,11 @@ class _ActivityDateStripState extends State<ActivityDateStrip> {
       button: true,
       label: DateFormat.yMMMMEEEEd().format(date),
       child: Material(
-        color: active ? activityBlue : Colors.white,
+        color: active ? activityBlue : activityCardColor(context),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(widget.compact ? 14 : 16),
           side: BorderSide(
-            color: active ? activityBlue : const Color(0xFFDBD7D1),
+            color: active ? activityBlue : activityBorderColor(context),
           ),
         ),
         child: InkWell(
@@ -166,7 +189,7 @@ class _ActivityDateStripState extends State<ActivityDateStrip> {
                 DateFormat('EEE').format(date).substring(0, 2).toUpperCase(),
                 style: TextStyle(
                   fontSize: widget.compact ? 9 : 10,
-                  color: active ? Colors.white : activityMuted,
+                  color: active ? Colors.white : activityMutedColor(context),
                 ),
               ),
               const SizedBox(height: 3),
@@ -175,7 +198,7 @@ class _ActivityDateStripState extends State<ActivityDateStrip> {
                 style: TextStyle(
                   fontSize: widget.compact ? 15 : 16,
                   fontWeight: FontWeight.w700,
-                  color: active ? Colors.white : const Color(0xFF211F1D),
+                  color: active ? Colors.white : activityInkColor(context),
                 ),
               ),
               const SizedBox(height: 4),
@@ -221,106 +244,118 @@ class ActivityWalkCard extends StatelessWidget {
   final ActivityWalk walk;
   final bool showDog;
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 14),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: activityShadow,
-    ),
-    child: Material(
-      color: Colors.transparent,
-      child: InkWell(
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: activityCardColor(context),
         borderRadius: BorderRadius.circular(20),
-        onTap: () => openSavedWalk(context, walk),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              if (showDog)
-                SizedBox(
-                  width: 30,
-                  height: 30,
-                  child: walk.dog?['photo_url'] != null
-                      ? ClipOval(
-                          child: Image.network(
-                            walk.dog!['photo_url'],
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, _, _) => SvgPicture.asset(
-                              'assets/icons/history-pet.svg',
+        boxShadow: activityShadow,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => openSavedWalk(context, walk),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                if (showDog)
+                  SizedBox(
+                    width: 30,
+                    height: 30,
+                    child: walk.dog?['photo_url'] != null
+                        ? ClipOval(
+                            child: Image.network(
+                              walk.dog!['photo_url'],
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => SvgPicture.asset(
+                                'assets/icons/history-pet.svg',
+                              ),
                             ),
+                          )
+                        : SvgPicture.asset('assets/icons/history-pet.svg'),
+                  )
+                else
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      // Pale teal date tile (Figma); teal-tinted dark variant.
+                      color: dark
+                          ? const Color(0xFF2E3A44)
+                          : const Color(0xFFD1E8E1),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          DateFormat('EEE').format(walk.date).toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: activityMutedColor(context),
                           ),
-                        )
-                      : SvgPicture.asset('assets/icons/history-pet.svg'),
-                )
-              else
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD1E8E1),
-                    borderRadius: BorderRadius.circular(14),
+                        ),
+                        Text(
+                          '${walk.date.day}',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: activityInkColor(context),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        DateFormat('EEE').format(walk.date).toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 9,
-                          color: activityMuted,
+                        walk.title,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: activityInkColor(context),
                         ),
                       ),
+                      const SizedBox(height: 3),
                       Text(
-                        '${walk.date.day}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                        walk.details,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: activityMutedColor(context),
                         ),
                       ),
+                      if (showDog && walk.dog != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          walk.dog!['dog_name'] ?? 'Dog',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: activityMutedColor(context),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      walk.title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      walk.details,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: activityMuted,
-                      ),
-                    ),
-                    if (showDog && walk.dog != null) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        walk.dog!['dog_name'] ?? 'Dog',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: activityMuted,
-                        ),
-                      ),
-                    ],
-                  ],
+                VitailIcon(
+                  'chevron-right',
+                  size: 16,
+                  color: activityMutedColor(context),
                 ),
-              ),
-              const VitailIcon('chevron-right', size: 16, color: activityMuted),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 void openSavedWalk(BuildContext context, ActivityWalk walk) {
@@ -362,10 +397,10 @@ class ActivitySectionLabel extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 14),
     child: Text(
       label,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w600,
-        color: activityMuted,
+        color: activityMutedColor(context),
       ),
     ),
   );

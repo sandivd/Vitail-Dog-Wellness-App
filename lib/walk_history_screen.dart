@@ -106,6 +106,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     final walks = _walks
         .where((w) => inActivityPeriod(w.date, _selected, _period))
         .toList();
@@ -116,7 +117,9 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
         )
         .toList();
     return Scaffold(
-      backgroundColor: activityBackground,
+      // Dark-mode pass: cream page background goes near-black, matching
+      // the rest of the app's dark surfaces.
+      backgroundColor: dark ? const Color(0xFF121212) : activityBackground,
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _load,
@@ -145,11 +148,15 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+              // Period pill: soft-cream track -> soft dark; selected segment
+              // and text now resolve through the adaptive helpers.
               Container(
                 height: 46,
                 padding: const EdgeInsets.all(2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9F7F3),
+                  color: dark
+                      ? const Color(0xFF302E2B)
+                      : const Color(0xFFF9F7F3),
                   borderRadius: BorderRadius.circular(23),
                 ),
                 child: Row(
@@ -158,7 +165,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                       Expanded(
                         child: Material(
                           color: _period == period
-                              ? Colors.white
+                              ? activityCardColor(context)
                               : Colors.transparent,
                           borderRadius: BorderRadius.circular(21),
                           child: InkWell(
@@ -171,8 +178,8 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: _period == period
-                                      ? const Color(0xFF211F1D)
-                                      : activityMuted,
+                                      ? activityInkColor(context)
+                                      : activityMutedColor(context),
                                 ),
                               ),
                             ),
@@ -209,9 +216,9 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                             ? 'MMMM yyyy'
                             : 'd MMM yyyy',
                       ).format(_selected),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: activityMuted,
+                        color: activityMutedColor(context),
                       ),
                     ),
                   ),
@@ -232,11 +239,14 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                   if (_walkFailed)
                     _retry('Could not load walks.')
                   else if (walks.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 24),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
                       child: Text(
                         'No walks in this period.',
-                        style: TextStyle(fontSize: 12, color: activityMuted),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: activityMutedColor(context),
+                        ),
                       ),
                     )
                   else
@@ -249,18 +259,24 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                   if (_couponFailed)
                     _retry('Could not load coupons.')
                   else if (coupons.isEmpty)
-                    const Text(
+                    Text(
                       'No coupons in this period.',
-                      style: TextStyle(fontSize: 12, color: activityMuted),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: activityMutedColor(context),
+                      ),
                     )
                   else
                     for (final coupon in coupons) _couponCard(coupon),
                   if (_coupons.any((coupon) => coupon.date == null))
-                    const Padding(
-                      padding: EdgeInsets.only(top: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
                       child: Text(
                         'Older coupons without a recorded date cannot be shown by period.',
-                        style: TextStyle(fontSize: 11, color: activityMuted),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: activityMutedColor(context),
+                        ),
                       ),
                     ),
                 ],
@@ -278,68 +294,82 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
       TextButton(onPressed: _load, child: const Text('Retry')),
     ],
   );
-  Widget _couponCard(ActivityCoupon coupon) => Container(
-    margin: const EdgeInsets.only(bottom: 14),
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: activityShadow,
-    ),
-    child: Row(
-      children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xFFF9F7F3),
-            borderRadius: BorderRadius.circular(12),
+
+  Widget _couponCard(ActivityCoupon coupon) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: activityCardColor(context),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: activityShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: dark
+                  ? const Color(0xFF302E2B)
+                  : const Color(0xFFF9F7F3),
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                coupon.title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                coupon.details,
-                style: const TextStyle(fontSize: 11, color: activityMuted),
-              ),
-              const SizedBox(height: 5),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: coupon.collected
-                      ? const Color(0xFFEAF0D8)
-                      : const Color(0xFFF5D6CE),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(
-                  coupon.collected ? 'REDEEMED' : 'IN PROGRESS',
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Explicit ink — previously unstyled, which meant the
+                // theme's light text on this still-white card in dark mode.
+                Text(
+                  coupon.title,
                   style: TextStyle(
-                    fontSize: 9,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: coupon.collected
-                        ? const Color(0xFFAEC568)
-                        : const Color(0xFFDC755C),
+                    color: activityInkColor(context),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 3),
+                Text(
+                  coupon.details,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: activityMutedColor(context),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                // Self-contained coloured chips — readable on both card
+                // colours, left as the Figma specified.
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: coupon.collected
+                        ? const Color(0xFFEAF0D8)
+                        : const Color(0xFFF5D6CE),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    coupon.collected ? 'REDEEMED' : 'IN PROGRESS',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: coupon.collected
+                          ? const Color(0xFFAEC568)
+                          : const Color(0xFFDC755C),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

@@ -374,10 +374,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       _selectedDay,
                       (date) => setState(() => _selectedDay = date),
                     ),
-                    icon: const VitailIcon(
+                    icon: VitailIcon(
                       'calendar',
                       size: 18,
-                      color: activityMuted,
+                      color: activityMutedColor(context),
                     ),
                   ),
                 ],
@@ -449,9 +449,10 @@ class _HomeScreenState extends State<HomeScreen> {
               else if (!_walks.any(
                 (walk) => activityDay(walk.date) == _selectedDay,
               ))
-                const Text(
+                Text(
                   'No walks on this day. Start a walk to add one.',
-                  style: TextStyle(fontSize: 12, color: activityMuted),
+                  style: TextStyle(
+                      fontSize: 12, color: activityMutedColor(context)),
                 )
               else
                 for (final walk in _walks.where(
