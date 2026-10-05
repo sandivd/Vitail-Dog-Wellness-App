@@ -27,6 +27,7 @@ class VenueInfo {
     required this.details,
     this.points,
     this.photoUrl,
+    this.venueType,
   });
 
   factory VenueInfo.fromJson(Map<String, dynamic> row) => VenueInfo(
@@ -37,6 +38,7 @@ class VenueInfo {
     details: row['venue_details']?.toString() ?? '',
     points: _asInt(row['points']),
     photoUrl: _asPhotoUrl(row['photo_url']),
+    venueType: row['venue_type']?.toString(),
   );
 
   final String partnerId;
@@ -44,6 +46,13 @@ class VenueInfo {
   final String? closingTime;
   final LatLng? location;
   final String details;
+
+  /// 'vet' | 'park' | 'other' — null when the row predates the column
+  /// (treated as 'other').
+  final String? venueType;
+
+  bool get isVet => venueType == 'vet';
+  bool get isPark => venueType == 'park';
 
   /// Points a walker can earn by visiting (`points` column, int4).
   final int? points;

@@ -10,6 +10,10 @@ import 'profile_screen.dart';
 import 'walk_history_screen.dart';
 import 'activity_history_data.dart';
 import 'activity_history_widgets.dart';
+import 'dart:math';
+import 'daily_goal_card.dart';
+import 'reward_venues.dart';
+import 'venue_detail.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _dailyGoalMins = 60;
   double _currentKm = 0.0;
   int _currentMins = 0;
+  VenueInfo? _suggestedVenue;
 
   @override
   void initState() {
@@ -41,6 +46,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchHomeData() async {
+    // Suggested venue: runs in parallel with the main load — it must never
+    // delay Home, and the card works without it.
+    _loadSuggestedVenue();
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       final today = DateTime.now().toIso8601String().split('T')[0];
@@ -102,6 +110,41 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Picks today's suggested walk destination: a vet or park from
+  /// partnered_venues (venue_type column), seeded by the date so it's
+  /// stable all day.
+  Future<void> _loadSuggestedVenue() async {
+    try {
+      final venues = await loadRewardVenues();
+
+      // Vet/park rows only — cafés are reward partners, not walk spots.
+      // venue_type is null on rows that predate the column; null means
+      // "not eligible", so legacy café rows can never appear here.
+      final walkSpots = venues.where((v) => v.isVet || v.isPark).toList();
+      if (walkSpots.isEmpty) return;
+
+      // Prefer spots we can actually route a walk to (they have coords).
+      final withCoords = walkSpots.where((v) => v.location != null).toList();
+      final pool = withCoords.isNotEmpty ? withCoords : walkSpots;
+
+      final daySeed = DateTime.now().difference(DateTime(2024)).inDays;
+      final pick = pool[Random(daySeed).nextInt(pool.length)];
+      if (!mounted) return;
+      setState(() => _suggestedVenue = pick);
+    } catch (_) {
+      // Optional suggestion — Home is fully usable without it.
+    }
+  }
+
+  void _openSuggestedVenue() {
+    final venue = _suggestedVenue;
+    if (venue == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => VenueDetailScreen(venue: venue)),
+    );
   }
 
   // Custom Line Icons from Figma
@@ -343,6 +386,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 selected: _selectedDay,
                 walks: _walks,
                 onChanged: (date) => setState(() => _selectedDay = date),
+              ),
+              const SizedBox(height: 18),
+              DailyGoalCard(
+                currentMinutes: _currentMins,
+                goalMinutes: _dailyGoalMins,
+                venue: _suggestedVenue,
+                onVenueTap:
+                    _suggestedVenue == null ? null : _openSuggestedVenue,
               ),
               const SizedBox(height: 18),
               SizedBox(
