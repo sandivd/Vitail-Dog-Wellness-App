@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +8,8 @@ import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'walk_history_screen.dart';
+import 'activity_history_data.dart';
+import 'activity_history_widgets.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,11 +19,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  List<ActivityWalk> _walks = [];
+  DateTime _selectedDay = activityDay(DateTime.now());
+  bool _historyFailed = false;
   int _currentIndex = 0;
   int _totalPoints = 0;
   int _dailyStreak = 0;
   bool _isLoading = true;
-  
+
   String _dogName = 'Dog';
   String? _dogPhotoUrl;
   double _dailyGoalKm = 3.0;
@@ -43,16 +49,18 @@ class _HomeScreenState extends State<HomeScreen> {
       // so missed days show as broken WITHOUT needing a new walk.
       // Best-effort: Home still loads from the last stored value if this fails.
       try {
-        await Supabase.instance.client
-            .rpc('recompute_streak', params: {'p_today': today});
+        await Supabase.instance.client.rpc(
+          'recompute_streak',
+          params: {'p_today': today},
+        );
       } catch (_) {}
 
       final profileRes = await Supabase.instance.client
           .from('profiles')
-          .select('total_points, daily_streak') 
+          .select('total_points, daily_streak')
           .eq('id', userId)
           .single();
-      
+
       final dogRes = await Supabase.instance.client
           .from('dogs')
           .select('dog_name, photo_url, daily_goal_km, daily_goal_minutes')
@@ -60,20 +68,27 @@ class _HomeScreenState extends State<HomeScreen> {
           .limit(1)
           .maybeSingle();
 
-      final walksRes = await Supabase.instance.client
-          .from('walks')
-          .select('distance_meters, duration_seconds')
-          .eq('user_id', userId)
-          .gte('walk_date', today);
-
-      double kmToday = 0;
-      int minsToday = 0;
-      for (var walk in walksRes) {
-        kmToday += (walk['distance_meters'] as num).toDouble() / 1000;
-        minsToday += (walk['duration_seconds'] as num).toInt() ~/ 60;
+      List<ActivityWalk> walks = [];
+      bool historyFailed = false;
+      try {
+        walks = await ActivityHistoryRepository().loadWalks();
+      } catch (_) {
+        historyFailed = true;
       }
+      final todayWalks = walks.where(
+        (walk) => activityDay(walk.date) == activityDay(DateTime.now()),
+      );
+      final kmToday = todayWalks.fold<double>(
+        0,
+        (total, walk) => total + walk.meters / 1000,
+      );
+      final minsToday =
+          todayWalks.fold<int>(0, (total, walk) => total + walk.seconds) ~/ 60;
+      if (!mounted) return;
 
       setState(() {
+        _walks = walks;
+        _historyFailed = historyFailed;
         _totalPoints = profileRes['total_points'] ?? 0;
         _dailyStreak = profileRes['daily_streak'] ?? 0;
         _dogName = dogRes?['dog_name'] ?? 'Dog';
@@ -85,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -121,9 +136,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
-        body: Center(
-          child: VitailLoading(),
-        ),
+        body: Center(child: VitailLoading()),
       );
     }
 
@@ -140,18 +153,25 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
-                    backgroundImage: _dogPhotoUrl != null 
-                        ? CachedNetworkImageProvider(_dogPhotoUrl!) 
+                    backgroundColor: colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.2,
+                    ),
+                    backgroundImage: _dogPhotoUrl != null
+                        ? CachedNetworkImageProvider(_dogPhotoUrl!)
                         : null,
-                    child: _dogPhotoUrl == null ? Icon(Icons.pets, color: colorScheme.onSurfaceVariant) : null,
+                    child: _dogPhotoUrl == null
+                        ? VitailIcon(
+                            'paw-print',
+                            color: colorScheme.onSurfaceVariant,
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 16),
                   Text(
                     'Hi $_dogName!',
                     style: TextStyle(
-                      fontSize: 24, 
-                      fontWeight: FontWeight.bold, 
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,
                       fontFamily: 'PlusJakartaSans',
                     ),
@@ -159,7 +179,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 32),
-              
+
               Center(
                 child: SizedBox(
                   width: 200,
@@ -174,17 +194,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           value: (_currentKm / _dailyGoalKm).clamp(0.0, 1.0),
                           strokeWidth: 14,
                           color: colorScheme.secondary,
-                          backgroundColor: colorScheme.secondary.withValues(alpha: 0.2),
+                          backgroundColor: colorScheme.secondary.withValues(
+                            alpha: 0.2,
+                          ),
                         ),
                       ),
                       SizedBox(
                         width: 150,
                         height: 150,
                         child: CircularProgressIndicator(
-                          value: (_currentMins / _dailyGoalMins).clamp(0.0, 1.0),
+                          value: (_currentMins / _dailyGoalMins).clamp(
+                            0.0,
+                            1.0,
+                          ),
                           strokeWidth: 10,
                           color: colorScheme.tertiary,
-                          backgroundColor: colorScheme.tertiary.withValues(alpha: 0.2),
+                          backgroundColor: colorScheme.tertiary.withValues(
+                            alpha: 0.2,
+                          ),
                         ),
                       ),
                       Column(
@@ -194,43 +221,43 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             '${_currentKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
                             style: TextStyle(
-                              fontSize: 24, 
-                              fontWeight: FontWeight.w800, 
-                              color: colorScheme.secondary, 
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.secondary,
                               fontFamily: 'PlusJakartaSans',
-                              height: 1.0, 
+                              height: 1.0,
                             ),
                           ),
                           Text(
                             'KM',
                             style: TextStyle(
-                              fontSize: 14, 
-                              fontWeight: FontWeight.w800, 
-                              color: colorScheme.onSurfaceVariant, 
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.onSurfaceVariant,
                               fontFamily: 'PlusJakartaSans',
-                              height: 1.0, 
+                              height: 1.0,
                             ),
                           ),
-                          const SizedBox(height: 4), 
-                          
+                          const SizedBox(height: 4),
+
                           Text(
                             '$_currentMins/$_dailyGoalMins',
                             style: TextStyle(
-                              fontSize: 24, 
-                              fontWeight: FontWeight.w800, 
-                              color: colorScheme.tertiary, 
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.tertiary,
                               fontFamily: 'PlusJakartaSans',
-                              height: 1.0, 
+                              height: 1.0,
                             ),
                           ),
                           Text(
                             'MINS',
                             style: TextStyle(
-                              fontSize: 14, 
-                              fontWeight: FontWeight.w800, 
-                              color: colorScheme.onSurfaceVariant, 
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: colorScheme.onSurfaceVariant,
                               fontFamily: 'PlusJakartaSans',
-                              height: 1.0, 
+                              height: 1.0,
                             ),
                           ),
                         ],
@@ -240,20 +267,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               Row(
                 children: [
                   Expanded(
-                    child: _buildFigmaStatCard('Points earned', '$_totalPoints pts', Icons.star, context),
+                    child: _buildFigmaStatCard(
+                      'Points earned',
+                      '$_totalPoints pts',
+                      'star',
+                      context,
+                    ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildFigmaStatCard('Streaks', '$_dailyStreak days', Icons.local_fire_department, context),
+                    child: _buildFigmaStatCard(
+                      'Streaks',
+                      '$_dailyStreak days',
+                      'flame',
+                      context,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 32),
-              
+
               SizedBox(
                 width: double.infinity,
                 height: 56,
@@ -263,29 +300,113 @@ class _HomeScreenState extends State<HomeScreen> {
                       _currentIndex = 1;
                     });
                   },
-                  icon: const Icon(Icons.play_arrow, size: 24),
-                  label: const Text('Start walk', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  icon: const VitailIcon('play', size: 24),
+                  label: const Text(
+                    'Start walk',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
                     elevation: 0,
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
-              
-              Center(
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (context) => const WalkHistoryScreen()));
-                  },
-                  child: Text(
-                    'View Walk History', 
-                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+              const SizedBox(height: 40),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  ActivitySectionLabel(
+                    _selectedDay == activityDay(DateTime.now())
+                        ? 'TODAY'
+                        : 'DAILY HISTORY',
+                  ),
+                  IconButton(
+                    tooltip: 'Choose history date',
+                    onPressed: () => pickActivityDate(
+                      context,
+                      _selectedDay,
+                      (date) => setState(() => _selectedDay = date),
+                    ),
+                    icon: const VitailIcon(
+                      'calendar',
+                      size: 18,
+                      color: activityMuted,
+                    ),
+                  ),
+                ],
+              ),
+              ActivityDateStrip(
+                selected: _selectedDay,
+                walks: _walks,
+                onChanged: (date) => setState(() => _selectedDay = date),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: activityBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          WalkHistoryScreen(initialDate: _selectedDay),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Activity History',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      VitailIcon(
+                        'chevron-right',
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ],
                   ),
                 ),
               ),
+              const SizedBox(height: 28),
+              const ActivitySectionLabel('MY WALKS'),
+              if (_historyFailed)
+                Row(
+                  children: [
+                    const Expanded(child: Text('Could not load walks.')),
+                    TextButton(
+                      onPressed: _fetchHomeData,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                )
+              else if (!_walks.any(
+                (walk) => activityDay(walk.date) == _selectedDay,
+              ))
+                const Text(
+                  'No walks on this day. Start a walk to add one.',
+                  style: TextStyle(fontSize: 12, color: activityMuted),
+                )
+              else
+                for (final walk in _walks.where(
+                  (walk) => activityDay(walk.date) == _selectedDay,
+                ))
+                  ActivityWalkCard(walk: walk),
             ],
           ),
         ),
@@ -296,18 +417,20 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: screens,
-      ),
+      body: IndexedStack(index: _currentIndex, children: screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: colorScheme.surface,
-          border: Border(top: BorderSide(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2), width: 1)),
+          border: Border(
+            top: BorderSide(
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+              width: 1,
+            ),
+          ),
         ),
         padding: EdgeInsets.only(
           top: 8.0,
-          bottom: MediaQuery.of(context).padding.bottom > 0 ? 16.0 : 8.0, 
+          bottom: MediaQuery.of(context).padding.bottom > 0 ? 16.0 : 8.0,
         ),
         child: Row(
           children: [
@@ -321,14 +444,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFigmaStatCard(String title, String value, IconData icon, BuildContext context) {
+  Widget _buildFigmaStatCard(
+    String title,
+    String value,
+    String icon,
+    BuildContext context,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.1),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.05),
@@ -340,22 +470,22 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: colorScheme.onSurfaceVariant),
+          VitailIcon(icon, color: colorScheme.onSurfaceVariant),
           const SizedBox(height: 8),
           Text(
-            value, 
+            value,
             style: TextStyle(
-              fontSize: 20, 
-              fontWeight: FontWeight.bold, 
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
               color: colorScheme.onSurface,
               fontFamily: 'PlusJakartaSans',
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            title, 
+            title,
             style: TextStyle(
-              fontSize: 12, 
+              fontSize: 12,
               color: colorScheme.onSurfaceVariant,
               fontFamily: 'PlusJakartaSans',
             ),
@@ -365,13 +495,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCustomNavItem(int index, String label, String svgString, BuildContext context) {
+  Widget _buildCustomNavItem(
+    int index,
+    String label,
+    String svgString,
+    BuildContext context,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     bool isActive = _currentIndex == index;
-    
+
     // Active is primary, inactive is muted grey
-    String hexColor = isActive ? '#${colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}' : '#${colorScheme.onSurfaceVariant.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'; 
-    
+    String hexColor = isActive
+        ? '#${colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'
+        : '#${colorScheme.onSurfaceVariant.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
     String coloredSvg = svgString.replaceAll('[[COLOR]]', hexColor);
 
     return Expanded(
@@ -389,13 +526,15 @@ class _HomeScreenState extends State<HomeScreen> {
             SvgPicture.string(coloredSvg, height: 24, width: 24),
             const SizedBox(height: 4),
             Text(
-              label, 
+              label,
               style: TextStyle(
-                color: isActive ? colorScheme.primary : colorScheme.onSurfaceVariant, 
+                color: isActive
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
                 fontSize: 12,
                 fontFamily: 'PlusJakartaSans',
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              )
+              ),
             ),
           ],
         ),

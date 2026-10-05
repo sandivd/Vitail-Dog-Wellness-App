@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'dart:io';
 
@@ -22,8 +23,12 @@ const Color _kMuted = Color(0xFF6E6A63); // Secondary text
 const Color _kBorder = Color(0xFFDBD7D1); // Field/chip borders
 const Color _kAvatarBg = Color(0xFFE5E1DB); // Dog avatar placeholder
 const Color _kRoutePlaceholder = Color(0xFFD1E8E1); // "Route map" placeholder
-const Color _kGreenPale = Color(0xFFEAF0D8); // Points pill, star circle, active hygiene
-const Color _kGreen = Color(0xFFAEC568); // Star icon, pill text, active hygiene text
+const Color _kGreenPale = Color(
+  0xFFEAF0D8,
+); // Points pill, star circle, active hygiene
+const Color _kGreen = Color(
+  0xFFAEC568,
+); // Star icon, pill text, active hygiene text
 const Color _kBlue = Color(0xFF5F98BD); // Selected mood chip
 const Color _kCoral = Color(0xFFDC755C); // Done button, focus border, polyline
 
@@ -46,6 +51,7 @@ class WalkSummary extends StatefulWidget {
     required this.routePoints,
     this.photo,
     this.initialNote,
+    this.savedWalk,
   });
 
   final double distanceMeters;
@@ -63,6 +69,9 @@ class WalkSummary extends StatefulWidget {
   final XFile? photo;
   final String? initialNote;
 
+  /// When present, displays an existing walk without saving or editing it.
+  final Map<String, dynamic>? savedWalk;
+
   @override
   State<WalkSummary> createState() => _WalkSummaryState();
 }
@@ -79,8 +88,9 @@ class _WalkSummaryState extends State<WalkSummary> {
   ];
 
   String? _selectedMood;
-  late final TextEditingController _noteController =
-      TextEditingController(text: widget.initialNote ?? '');
+  late final TextEditingController _noteController = TextEditingController(
+    text: widget.initialNote ?? '',
+  );
   late XFile? _photo = widget.photo;
   bool _isSaving = false;
   int? _pointsPreview;
@@ -93,7 +103,13 @@ class _WalkSummaryState extends State<WalkSummary> {
   void initState() {
     super.initState();
     _hygiene = Map<String, bool>.from(widget.hygiene);
-    _computePointsPreview();
+    if (widget.savedWalk != null) {
+      _pointsPreview =
+          (widget.savedWalk!['points_earned'] as num?)?.toInt() ?? 0;
+      _selectedMood = widget.savedWalk!['mood'] as String?;
+    } else {
+      _computePointsPreview();
+    }
   }
 
   @override
@@ -149,7 +165,10 @@ class _WalkSummaryState extends State<WalkSummary> {
   String get _headline {
     if (_goalMet) return "Nice loop — that's the goal done.";
     final elapsedMinutes = widget.elapsedSeconds ~/ 60;
-    final remaining = (widget.goalMinutes - elapsedMinutes).clamp(1, widget.goalMinutes);
+    final remaining = (widget.goalMinutes - elapsedMinutes).clamp(
+      1,
+      widget.goalMinutes,
+    );
     return 'Great walk! $remaining min short of today\'s goal.';
   }
 
@@ -162,6 +181,7 @@ class _WalkSummaryState extends State<WalkSummary> {
   }
 
   void _toggleHygiene(String type) {
+    if (widget.savedWalk != null) return;
     setState(() {
       _hygiene[type] = !(_hygiene[type] ?? false);
     });
@@ -180,13 +200,16 @@ class _WalkSummaryState extends State<WalkSummary> {
   }
 
   Future<void> _finishAndSave() async {
-    if (_isSaving) return;
+    if (_isSaving || widget.savedWalk != null) return;
 
     // The timer never started (e.g. location permission was denied).
     // Discard instead of saving a 0-second walk.
     if (widget.elapsedSeconds < 1) {
-      showVitailSnack(context, 'Walk not started — nothing to save.',
-          type: VitailSnackType.info);
+      showVitailSnack(
+        context,
+        'Walk not started — nothing to save.',
+        type: VitailSnackType.info,
+      );
       Navigator.popUntil(context, (route) => route.isFirst);
       return;
     }
@@ -201,8 +224,11 @@ class _WalkSummaryState extends State<WalkSummary> {
     }
 
     final now = DateTime.now();
-    final todayStr =
-        DateTime(now.year, now.month, now.day).toIso8601String().split('T')[0];
+    final todayStr = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).toIso8601String().split('T')[0];
 
     // Single dog per user, attributed via dog_id.
     final String? dogId = widget.dog?['id']?.toString();
@@ -224,25 +250,31 @@ class _WalkSummaryState extends State<WalkSummary> {
       // Upload the photo first (if any) so we have a URL to store with the walk.
       String? photoUrl;
       if (_photo != null) {
-        final fileName = '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        await client.storage.from('walk_photos').upload(fileName, File(_photo!.path));
+        final fileName =
+            '${userId}_walk_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        await client.storage
+            .from('walk_photos')
+            .upload(fileName, File(_photo!.path));
         photoUrl = client.storage.from('walk_photos').getPublicUrl(fileName);
       }
       // One atomic RPC: inserts the walk (with route + dog), computes the
       // points, marks the daily task and updates the streak — all
       // server-side, so none of it can be spoofed or race itself.
-      await client.rpc('save_walk', params: {
-        'p_distance_meters': widget.distanceMeters,
-        'p_duration_seconds': widget.elapsedSeconds,
-        'p_walk_date': todayStr,
-        'p_dog_id': dogId,
-        'p_route_data': routeData.isEmpty ? null : routeData,
-        'p_hygiene_pee': _hygiene['pee'],
-        'p_hygiene_poo': _hygiene['poo'],
-        'p_mood': _selectedMood,
-        'p_note': _noteController.text.trim(),
-        'p_photo_url': photoUrl,
-      });
+      await client.rpc(
+        'save_walk',
+        params: {
+          'p_distance_meters': widget.distanceMeters,
+          'p_duration_seconds': widget.elapsedSeconds,
+          'p_walk_date': todayStr,
+          'p_dog_id': dogId,
+          'p_route_data': routeData.isEmpty ? null : routeData,
+          'p_hygiene_pee': _hygiene['pee'],
+          'p_hygiene_poo': _hygiene['poo'],
+          'p_mood': _selectedMood,
+          'p_note': _noteController.text.trim(),
+          'p_photo_url': photoUrl,
+        },
+      );
 
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
@@ -250,8 +282,11 @@ class _WalkSummaryState extends State<WalkSummary> {
     } on PostgrestException {
       if (mounted) {
         setState(() => _isSaving = false);
-        showVitailSnack(context, 'Could not save walk. Please try again.',
-            type: VitailSnackType.error);
+        showVitailSnack(
+          context,
+          'Could not save walk. Please try again.',
+          type: VitailSnackType.error,
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -268,25 +303,34 @@ class _WalkSummaryState extends State<WalkSummary> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: _kPageBg,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        leading: widget.savedWalk != null
+            ? IconButton(
+                tooltip: 'Back',
+                onPressed: () => Navigator.pop(context),
+                icon: const VitailIcon('chevron-left', color: _kInk),
+              )
+            : null,
+        title: const Text(
+          'Walk summary',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: _kInk,
+            fontFamily: 'PlusJakartaSans',
+          ),
+        ),
+      ),
       backgroundColor: _kPageBg,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
           children: [
-            const Center(
-              child: Text(
-                'WALK SUMMARY',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.0,
-                  color: _kMuted,
-                  fontFamily: 'PlusJakartaSans',
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
             Center(
               child: Container(
                 width: 64,
@@ -295,13 +339,13 @@ class _WalkSummaryState extends State<WalkSummary> {
                   color: _kGreenPale,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.star_rounded, color: _kGreen, size: 30),
+                child: const VitailIcon('star', color: _kGreen, size: 30),
               ),
             ),
             const SizedBox(height: 16),
 
             Text(
-              _headline,
+              widget.savedWalk != null ? 'Your saved walk' : _headline,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -316,7 +360,10 @@ class _WalkSummaryState extends State<WalkSummary> {
             Row(
               children: [
                 Expanded(
-                  child: _StatCard(label: 'DISTANCE', value: '$_formattedDistance km'),
+                  child: _StatCard(
+                    label: 'DISTANCE',
+                    value: '$_formattedDistance km',
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -350,8 +397,8 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 28),
 
-            const Text(
-              'HOW WAS THE WALK?',
+            Text(
+              widget.savedWalk != null ? 'WALK MOOD' : 'HOW WAS THE WALK?',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
@@ -369,9 +416,11 @@ class _WalkSummaryState extends State<WalkSummary> {
                 return _MoodChip(
                   label: mood,
                   selected: selected,
-                  onTap: () => setState(
-                    () => _selectedMood = selected ? null : mood,
-                  ),
+                  onTap: () => setState(() {
+                    if (widget.savedWalk == null) {
+                      _selectedMood = selected ? null : mood;
+                    }
+                  }),
                 );
               }).toList(),
             ),
@@ -437,79 +486,86 @@ class _WalkSummaryState extends State<WalkSummary> {
                 ],
               ),
               const SizedBox(height: 10),
-              Builder(builder: (context) {
-                final name = widget.dog!['dog_name'] ?? 'Dog';
-                final photoUrl = widget.dog!['photo_url'];
-                final peeDone = _hygiene['pee'] ?? false;
-                final pooDone = _hygiene['poo'] ?? false;
+              Builder(
+                builder: (context) {
+                  final name = widget.dog!['dog_name'] ?? 'Dog';
+                  final photoUrl = widget.dog!['photo_url'];
+                  final peeDone = _hygiene['pee'] ?? false;
+                  final pooDone = _hygiene['poo'] ?? false;
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: _kCard,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: _kCardShadow,
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: _kAvatarBg,
-                        backgroundImage:
-                            photoUrl != null && photoUrl.toString().isNotEmpty
-                                ? NetworkImage(photoUrl)
-                                : null,
-                        child: photoUrl == null
-                          ? const Icon(Icons.pets, color: _kMuted)
-                          : null,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _kCard,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: _kCardShadow,
+                    ),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: _kAvatarBg,
+                          backgroundImage:
+                              photoUrl != null && photoUrl.toString().isNotEmpty
+                              ? NetworkImage(photoUrl)
+                              : null,
+                          child: photoUrl == null
+                              ? const VitailIcon('paw-print', color: _kMuted)
+                              : null,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 15,
                                   color: _kInk,
-                                  fontFamily: 'PlusJakartaSans'),
-                            ),
-                            Text(
-                              _hygieneStatus,
-                              style: const TextStyle(
+                                  fontFamily: 'PlusJakartaSans',
+                                ),
+                              ),
+                              Text(
+                                _hygieneStatus,
+                                style: const TextStyle(
                                   fontSize: 12,
                                   color: _kMuted,
-                                  fontFamily: 'PlusJakartaSans'),
-                            ),
-                          ],
+                                  fontFamily: 'PlusJakartaSans',
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      SizedBox(
-                        width: 60,
-                        child: _HygieneButton(
-                          label: 'PEE',
-                          active: peeDone,
-                          onTap: () => _toggleHygiene('pee'),
+                        SizedBox(
+                          width: 60,
+                          child: _HygieneButton(
+                            label: 'PEE',
+                            active: peeDone,
+                            onTap: () => _toggleHygiene('pee'),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      SizedBox(
-                        width: 60,
-                        child: _HygieneButton(
-                          label: 'POO',
-                          active: pooDone,
-                          onTap: () => _toggleHygiene('poo'),
+                        const SizedBox(width: 6),
+                        SizedBox(
+                          width: 60,
+                          child: _HygieneButton(
+                            label: 'POO',
+                            active: pooDone,
+                            onTap: () => _toggleHygiene('poo'),
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 20),
             ],
 
@@ -526,14 +582,21 @@ class _WalkSummaryState extends State<WalkSummary> {
             const SizedBox(height: 8),
             TextField(
               controller: _noteController,
+              readOnly: widget.savedWalk != null,
               decoration: InputDecoration(
-                hintText: 'Add a walk note...',
+                hintText: widget.savedWalk != null
+                    ? 'No note recorded.'
+                    : 'Add a walk note...',
                 hintStyle: const TextStyle(
-                    color: _kMuted, fontFamily: 'PlusJakartaSans'),
+                  color: _kMuted,
+                  fontFamily: 'PlusJakartaSans',
+                ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(14),
                   borderSide: const BorderSide(color: _kBorder),
@@ -550,15 +613,33 @@ class _WalkSummaryState extends State<WalkSummary> {
             ),
             const SizedBox(height: 16),
 
-            _PhotoPicker(photo: _photo, onPick: _pickPhoto, onClear: () {
-              setState(() => _photo = null);
-            }),
+            if (widget.savedWalk == null)
+              _PhotoPicker(
+                photo: _photo,
+                onPick: _pickPhoto,
+                onClear: () {
+                  setState(() => _photo = null);
+                },
+              )
+            else if (widget.savedWalk!['photo_url'] != null)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: Image.network(
+                  widget.savedWalk!['photo_url'],
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const Text('Photo unavailable.'),
+                ),
+              ),
             const SizedBox(height: 24),
 
             SizedBox(
               height: 54,
               child: ElevatedButton(
-                onPressed: _isSaving ? null : _finishAndSave,
+                onPressed: widget.savedWalk != null
+                    ? () => Navigator.pop(context)
+                    : _isSaving
+                    ? null
+                    : _finishAndSave,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _kCoral,
                   foregroundColor: Colors.white,
@@ -577,9 +658,10 @@ class _WalkSummaryState extends State<WalkSummary> {
                     : const Text(
                         'Done',
                         style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'PlusJakartaSans'),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'PlusJakartaSans',
+                        ),
                       ),
               ),
             ),
@@ -654,9 +736,7 @@ class _MoodChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? _kBlue : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? _kBlue : _kBorder,
-          ),
+          border: Border.all(color: selected ? _kBlue : _kBorder),
         ),
         child: Text(
           label,
@@ -693,9 +773,7 @@ class _HygieneButton extends StatelessWidget {
         decoration: BoxDecoration(
           color: active ? _kGreenPale : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: active ? _kGreenPale : _kBorder,
-          ),
+          border: Border.all(color: active ? _kGreenPale : _kBorder),
         ),
         child: Text(
           label,
@@ -756,7 +834,10 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
       child: SizedBox(
         height: 180,
         child: GoogleMap(
-          initialCameraPosition: CameraPosition(target: widget.points.first, zoom: 15),
+          initialCameraPosition: CameraPosition(
+            target: widget.points.first,
+            zoom: 15,
+          ),
           polylines: {
             Polyline(
               polylineId: const PolylineId('summary_route'),
@@ -777,7 +858,9 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
             final bounds = _boundsFor(widget.points);
             // Give the map a beat to lay out before fitting bounds.
             Future.delayed(const Duration(milliseconds: 300), () {
-              _controller?.animateCamera(CameraUpdate.newLatLngBounds(bounds, 36));
+              _controller?.animateCamera(
+                CameraUpdate.newLatLngBounds(bounds, 36),
+              );
             });
           },
         ),
@@ -864,9 +947,10 @@ class _PhotoPicker extends StatelessWidget {
             child: Text(
               '+ Add photo',
               style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: _kMuted,
-                  fontFamily: 'PlusJakartaSans'),
+                fontWeight: FontWeight.w600,
+                color: _kMuted,
+                fontFamily: 'PlusJakartaSans',
+              ),
             ),
           ),
         ),
@@ -896,7 +980,7 @@ class _PhotoPicker extends StatelessWidget {
                 color: Colors.black45,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.close, color: Colors.white, size: 16),
+              child: const VitailIcon('x', color: Colors.white, size: 16),
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -306,7 +307,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_left,
+                    icon: const VitailIcon('chevron-left',
                         size: 28, color: _kInk),
                     onPressed: () => Navigator.pop(context),
                   ),
@@ -514,7 +515,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                     ? CachedNetworkImageProvider(photoUrl)
                                     : null,
                                 child: photoUrl == null
-                                  ? const Icon(Icons.pets, color: _kMuted)
+                                  ? const VitailIcon('paw-print', color: _kMuted)
                                   : null,
                               ),
                               const SizedBox(width: 12),
@@ -825,7 +826,7 @@ class _PhotoPicker extends StatelessWidget {
                 color: Colors.black45,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.close, color: Colors.white, size: 16),
+              child: const VitailIcon('x', color: Colors.white, size: 16),
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -518,7 +519,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-            trailing ?? Icon(Icons.chevron_right, color: muted),
+            trailing ?? VitailIcon('chevron-right', color: muted),
           ],
         ),
       );
@@ -565,7 +566,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 hour: _reminderHour, minute: _reminderMinute)
                             .format(context)
                         : 'Turn on walk reminders to pick a time',
-                    trailing: Icon(Icons.schedule, color: muted),
+                    trailing: VitailIcon('clock', color: muted),
                     onTap: _notificationsEnabled ? _pickReminderTime : null,
                   ),
 
@@ -587,7 +588,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             height: 18,
                             child:
                                 CircularProgressIndicator(strokeWidth: 2))
-                        : Icon(Icons.download_outlined, color: muted),
+                        : VitailIcon('download', color: muted),
                     onTap: _isExporting ? null : _exportData,
                   ),
 
@@ -631,7 +632,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _isSigningOut ? null : _showSignOutSheet,
                     child: Row(
                       children: [
-                        const Icon(Icons.logout, color: Colors.red, size: 20),
+                        const VitailIcon('log-out', color: Colors.red, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
                             child: Text('Log out',
@@ -642,7 +643,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 16,
                               child: CircularProgressIndicator(strokeWidth: 2))
                         else
-                          Icon(Icons.chevron_right, color: muted),
+                          VitailIcon('chevron-right', color: muted),
                       ],
                     ),
                   ),
@@ -652,7 +653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onTap: _isDeleting ? null : _confirmDeleteAccount,
                     child: Row(
                       children: [
-                        const Icon(Icons.delete_outline,
+                        const VitailIcon('trash',
                             color: Colors.red, size: 20),
                         const SizedBox(width: 12),
                         Expanded(
@@ -665,7 +666,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.red))
                         else
-                          Icon(Icons.chevron_right, color: muted),
+                          VitailIcon('chevron-right', color: muted),
                       ],
                     ),
                   ),

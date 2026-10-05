@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -182,7 +183,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               color: colorScheme.tertiary.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.mark_email_read_outlined,
+            child: VitailIcon('mail-check',
                 color: colorScheme.tertiary, size: 32),
           ),
         ),

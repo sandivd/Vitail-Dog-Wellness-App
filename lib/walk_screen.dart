@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -360,7 +361,7 @@ class _WalkScreenState extends State<WalkScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(Icons.gps_fixed,
+                          child: VitailIcon('locate-fixed',
                               color: colorScheme.secondary, size: 22),
                         ),
                       ),
@@ -442,7 +443,7 @@ class _WalkScreenState extends State<WalkScreen> {
                                 ),
                               ),
                               SizedBox(width: 8),
-                              Icon(Icons.play_arrow, size: 24),
+                              VitailIcon('play', size: 24),
                             ],
                           ),
                   ),
@@ -762,7 +763,7 @@ class _VenueCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            VitailIcon('chevron-right', color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),

@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -223,7 +224,7 @@ class _RewardFlowState extends State<RewardFlow> {
                       child: IconButton(
                         tooltip: 'Close',
                         onPressed: () => Navigator.pop(sheetContext),
-                        icon: const Text('×', style: TextStyle(fontSize: 26)),
+                        icon: const VitailIcon('x', size: 24),
                       ),
                     ),
                     if (success)

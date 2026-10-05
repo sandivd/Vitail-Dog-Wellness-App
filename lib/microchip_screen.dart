@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -339,7 +340,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           const SizedBox(height: 8),
           _title(title),
           const SizedBox(height: 28),
-          const Center(child: OnboardingBadge(icon: Icons.verified_outlined)),
+          const Center(child: OnboardingBadge(icon: 'badge-check')),
           const SizedBox(height: 24),
           Text(
             message,
@@ -377,7 +378,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
               color: Color(0xFFF2EFE9),
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.arrow_upward,
+            child: const VitailIcon('arrow-up',
                 size: 18, color: OnboardingStyle.muted),
           ),
           const SizedBox(height: 12),
