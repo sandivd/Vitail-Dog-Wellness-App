@@ -5,7 +5,8 @@ import 'package:intl/intl.dart';
 import 'reward_flow.dart';
 import 'reward_venues.dart';
 import 'rewards_data.dart';
-import 'reward_image_placeholder.dart';
+import 'venue_detail.dart';
+import 'venue_reward_thumbnail.dart';
 
 class RewardsScreen extends StatefulWidget {
   const RewardsScreen({
@@ -14,8 +15,10 @@ class RewardsScreen extends StatefulWidget {
     this.isActive = true,
     this.partnerId,
     this.venueName,
+    this.venueLoader = loadRewardVenues,
   });
 
+  final Future<List<VenueInfo>> Function() venueLoader;
   final RewardsRepository? repository;
   final bool isActive;
   final String? partnerId;
@@ -28,6 +31,7 @@ class RewardsScreen extends StatefulWidget {
 class _RewardsScreenState extends State<RewardsScreen> {
   late final RewardsRepository _repository;
   RewardsCatalogue? _catalogue;
+  List<VenueInfo> _venues = [];
   List<RedeemedReward>? _redeemed;
   bool _showMine = false;
   bool _loadingCatalogue = true;
@@ -65,19 +69,26 @@ class _RewardsScreenState extends State<RewardsScreen> {
     try {
       final catalogue = await _repository.loadCatalogue();
       if (!mounted || request != _catalogueRequest) return;
-      final venues = widget.partnerId == null ? null : await loadRewardVenues();
+      List<VenueInfo> venues;
+      try {
+        venues = await widget.venueLoader();
+      } catch (_) {
+        if (widget.partnerId != null) rethrow;
+        venues = []; // Photo failures must not hide the rewards catalogue.
+      }
       if (!mounted || request != _catalogueRequest) return;
       final sortedOffers =
           List<RewardOffer>.of(
             catalogue.offers.where(
               (offer) =>
-                  venues == null ||
+                  widget.partnerId == null ||
                   venueForReward(offer, venues)?.partnerId == widget.partnerId,
             ),
           )..sort((a, b) {
             final costOrder = a.pointsCost.compareTo(b.pointsCost);
             return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
           });
+      _venues = venues;
       setState(
         () => _catalogue = RewardsCatalogue(
           points: catalogue.points,
@@ -204,6 +215,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   .firstOrNull) ??
               offer,
           repository: _repository,
+          catalogue: _catalogue,
+          receipts: _redeemed ?? [],
+          venueLoader: widget.venueLoader,
           canRedeem:
               !_loadingCatalogue &&
               _catalogueError == null &&
@@ -418,8 +432,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
       final redeemed = _activeReceipt(offer) != null;
       return _rewardCard(
         title: offer.title,
+        photoUrl: venueForReward(offer, _venues)?.photoUrl,
         subtitle: offer.partnerName,
         footer: '${_number.format(offer.pointsCost)} pts',
+        isPointsCost: true,
+        buttonColor: redeemed ? Theme.of(context).colorScheme.tertiary : null,
         action: redeemed
             ? 'VIEW REWARD'
             : canAfford
@@ -451,6 +468,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
         .map(
           (reward) => _rewardCard(
             title: reward.title,
+            photoUrl: venueForReward(
+              _catalogue?.offers
+                      .where((offer) => offer.id == reward.rewardId)
+                      .firstOrNull ??
+                  reward.detailsOffer,
+              _venues,
+            )?.photoUrl,
             subtitle: reward.partnerName ?? 'Redeemed reward',
             footer: reward.isCollected ? 'Collected' : 'Ready to collect',
             action: 'VIEW REWARD',
@@ -500,6 +524,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
     required String action,
     required VoidCallback? onAction,
     required VoidCallback onDetails,
+    bool isPointsCost = false,
+    String? photoUrl,
     Color? footerColor,
     Color? buttonColor,
   }) {
@@ -519,13 +545,9 @@ class _RewardsScreenState extends State<RewardsScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: RewardImagePlaceholder(),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: VenueRewardThumbnail(photoUrl: photoUrl),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -560,7 +582,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                           final label = Text(
                             footer,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isPointsCost ? 14 : 12,
                               fontWeight: FontWeight.w700,
                               color: footerColor ?? colors.primary,
                             ),
