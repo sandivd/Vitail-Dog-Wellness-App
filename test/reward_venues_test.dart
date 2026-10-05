@@ -13,6 +13,7 @@ VenueInfo venue(String id, String name) => VenueInfo(
   closingTime: '17:00',
   location: null,
   details: 'Dog friendly',
+  venueType: 'other',
 );
 RewardOffer offer({String? id, String name = 'Other'}) => RewardOffer(
   id: 'reward',
