@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 
 import 'onboarding_style.dart';
@@ -221,7 +222,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
             Row(
               children: [
                 _stepButton(
-                  icon: Icons.remove,
+                  icon: 'minus',
                   filled: false,
                   onTap: _minutes > _minMinutes ? () => _nudge(-_stepMinutes) : null,
                 ),
@@ -234,7 +235,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
                   ),
                 ),
                 _stepButton(
-                  icon: Icons.add,
+                  icon: 'plus',
                   filled: true,
                   onTap: _minutes < _maxMinutes ? () => _nudge(_stepMinutes) : null,
                 ),
@@ -256,7 +257,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
       );
 
   Widget _stepButton({
-    required IconData icon,
+    required String icon,
     required bool filled,
     VoidCallback? onTap,
   }) {
@@ -277,7 +278,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
                 : _chipTrack,
             shape: BoxShape.circle,
           ),
-          child: Icon(
+          child: VitailIcon(
             icon,
             size: 22,
             color: filled

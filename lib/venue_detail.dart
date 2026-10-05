@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -589,7 +590,7 @@ class _VenuePhoto extends StatelessWidget {
         child: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.pop(context),
-          icon: Icon(Icons.chevron_left, color: colors.onSurface),
+          icon: VitailIcon('chevron-left', color: colors.onSurface),
         ),
       ),
     );

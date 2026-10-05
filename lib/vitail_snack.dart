@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 
 /// The one way Vitail shows snackbars.
@@ -42,21 +43,21 @@ void _show(
   // primary instead of stock Material red); success: the app's tertiary green
   // with the dark-ink pairing the tertiary buttons already use; info:
   // Material 3's inverse surface — what the old unstyled snackbars looked like.
-  final (Color background, Color foreground, IconData icon) = switch (type) {
+  final (Color background, Color foreground, String icon) = switch (type) {
     VitailSnackType.error => (
         colorScheme.error,
         colorScheme.onError,
-        Icons.error_outline_rounded,
+        'circle-alert',
       ),
     VitailSnackType.success => (
         colorScheme.tertiary,
         const Color(0xFF241C24),
-        Icons.check_circle_outline_rounded,
+        'circle-check',
       ),
     VitailSnackType.info => (
         colorScheme.inverseSurface,
         colorScheme.onInverseSurface,
-        Icons.info_outline_rounded,
+        'info',
       ),
   };
 
@@ -66,7 +67,7 @@ void _show(
       SnackBar(
         content: Row(
           children: [
-            Icon(icon, color: foreground, size: 20),
+            VitailIcon(icon, color: foreground, size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

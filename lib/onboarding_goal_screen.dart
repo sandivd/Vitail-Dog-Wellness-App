@@ -134,7 +134,7 @@ class _GoalFlowState extends State<_GoalFlow> {
                                 ? OnboardingGoals.helpOptions
                                 : OnboardingGoals.mattersOptions,
                             badgeIcon:
-                                onFirstStep ? Icons.pets : Icons.favorite_border,
+                                onFirstStep ? 'paw-print' : 'heart',
                             initialValue: onFirstStep ? _help : _matters,
                             onSelected: _select,
                           ),
@@ -164,7 +164,7 @@ class _GoalQuestion extends StatefulWidget {
 
   final String title;
   final List<String> options;
-  final IconData badgeIcon;
+  final String badgeIcon;
   final ValueChanged<String> onSelected;
   final String? initialValue;
 

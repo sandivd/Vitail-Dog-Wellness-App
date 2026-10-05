@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -201,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
-                          const Icon(Icons.calendar_today, size: 20),
+                          const VitailIcon('calendar', size: 20),
                         ],
                       ),
                     ),
@@ -284,7 +285,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const VitailIcon('settings'),
             onPressed: () async {
               // Navigate to Settings Screen and refresh profile when returning
               await Navigator.push(
@@ -320,7 +321,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ? CachedNetworkImageProvider(_dogData!['photo_url'])
                         : null,
                     child: _dogData?['photo_url'] == null
-                        ? const Icon(Icons.pets, size: 50, color: Colors.green)
+                        ? const VitailIcon('paw-print', size: 50, color: Colors.green)
                         : null,
                   ),
                   // Pencil badge — opens the Edit Profile screen
@@ -334,7 +335,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
-                      child: const Icon(Icons.edit, color: Colors.white, size: 20),
+                      child: const VitailIcon('pencil', color: Colors.white, size: 20),
                     ),
                   ),
                 ],
@@ -397,7 +398,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _logNewWeight,
-                    icon: const Icon(Icons.scale),
+                    icon: const VitailIcon('weight'),
                     label: const Text('Log New Weight'),
                   ),
                 ),
@@ -444,14 +445,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                              const VitailIcon('circle-check', color: Colors.green, size: 16),
                               const SizedBox(width: 4),
                               Text('$_positiveImpact positive impact', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                             ],
                           ),
                           Row(
                             children: [
-                              const Icon(Icons.error_outline, color: Colors.orange, size: 16),
+                              const VitailIcon('circle-alert', color: Colors.orange, size: 16),
                               const SizedBox(width: 4),
                               Text('$_needsFocus needs focus', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                             ],
@@ -472,7 +473,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.pets, size: 20, color: color),
+                      leading: VitailIcon('paw-print', size: 20, color: color),
                       title: Text(entry.key, style: const TextStyle(fontSize: 14)),
                       trailing: Text(entry.value['status'], style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
                     );
@@ -489,9 +490,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _buildMilestoneIcon(Icons.directions_walk, '${_totalDistanceKm.toStringAsFixed(1)}km', 'Walked'),
-                _buildMilestoneIcon(Icons.task_alt, '$_totalQuests', 'Quests'), // <-- Now uses real data!
-                _buildMilestoneIcon(Icons.attach_money, '\$$_totalPoints', 'Rewards'),
+                _buildMilestoneIcon('footprints', '${_totalDistanceKm.toStringAsFixed(1)}km', 'Walked'),
+                _buildMilestoneIcon('list-check', '$_totalQuests', 'Quests'), // <-- Now uses real data!
+                _buildMilestoneIcon('dollar-sign', '\$$_totalPoints', 'Rewards'),
               ],
             ),
           ),
@@ -531,10 +532,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // Helper widget for milestone row
-  Widget _buildMilestoneIcon(IconData icon, String value, String label) {
+  Widget _buildMilestoneIcon(String icon, String value, String label) {
     return Column(
       children: [
-        Icon(icon, color: Colors.green, size: 28),
+        VitailIcon(icon, color: Colors.green, size: 28),
         const SizedBox(height: 8),
         Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
