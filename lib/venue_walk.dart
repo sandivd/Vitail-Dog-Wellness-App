@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'walk_in_progress.dart';
 
+
 /// Starts the existing walk tracker with the venue as its planned destination.
 Future<void> startVenueWalk(BuildContext context, LatLng destination) async {
   try {

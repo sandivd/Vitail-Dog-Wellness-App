@@ -11,7 +11,9 @@ import 'vitail_snack.dart';
 enum _RouteMode { longest }
 
 class WalkScreen extends StatefulWidget {
-  const WalkScreen({super.key});
+  const WalkScreen({super.key, this.onProgress});
+
+  final WalkProgressCallback? onProgress;
 
   @override
   State<WalkScreen> createState() => _WalkScreenState();
@@ -84,6 +86,7 @@ class _WalkScreenState extends State<WalkScreen> {
     _sheetController.dispose();
     _searchController.dispose();
     super.dispose();
+    widget.onProgress?.call(null);
   }
 
   Future<void> _locateUser() async {
@@ -271,6 +274,7 @@ class _WalkScreenState extends State<WalkScreen> {
             plannedRoute: hasPlannedRoute
                 ? [_currentPosition!, routeDestination!]
                 : null,
+            onProgress: widget.onProgress,
           ),
         ),
       );
