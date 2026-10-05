@@ -479,8 +479,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
             footer: reward.isCollected ? 'Collected' : 'Ready to collect',
             action: 'VIEW REWARD',
             footerColor: reward.isCollected
-                ? Theme.of(context).colorScheme.tertiary
-                : null,
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.tertiary,
             buttonColor: Theme.of(context).colorScheme.tertiary,
             onAction: () => _showOffer(reward.detailsOffer, receipt: reward),
             onDetails: () => _showOffer(reward.detailsOffer, receipt: reward),
