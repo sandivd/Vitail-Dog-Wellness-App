@@ -171,3 +171,6 @@ Future<void> cancelJoinRequest(String requestId) async {
       .delete()
       .eq('id', requestId);
 }
+
+String walksVisibleFilter(String userId, String? dogId) =>
+    dogId == null ? 'user_id.eq.$userId' : 'dog_id.eq.$dogId,user_id.eq.$userId';

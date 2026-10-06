@@ -2,6 +2,7 @@ import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart'; // For formatting dates
+import 'dog_sharing.dart'; 
 
 class WalkHistoryScreen extends StatefulWidget {
   const WalkHistoryScreen({super.key});
@@ -23,10 +24,11 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
   Future<void> _fetchWalks() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
+      final link = await primaryDogForCurrentUser();
       final response = await Supabase.instance.client
           .from('walks')
           .select()
-          .eq('user_id', userId)
+          .or(walksVisibleFilter(userId, link?.dog['id'] as String?))
           .order('walk_date', ascending: false);
 
       setState(() {

@@ -58,17 +58,19 @@ class _HomeScreenState extends State<HomeScreen> {
       final DogShare? link = await primaryDogForCurrentUser();
       final Map<String, dynamic>? dogRes = link?.dog;
 
-      final walksRes = await Supabase.instance.client
-          .from('walks')
-          .select('distance_meters, duration_seconds')
-          .eq('user_id', userId)
-          .gte('walk_date', today);
-
+      final dogId = dogRes?['id'] as String?;
       double kmToday = 0;
       int minsToday = 0;
-      for (var walk in walksRes) {
-        kmToday += (walk['distance_meters'] as num).toDouble() / 1000;
-        minsToday += (walk['duration_seconds'] as num).toInt() ~/ 60;
+      if (dogId != null) {
+        final totals = await Supabase.instance.client.rpc(
+          'dog_totals_since',
+          params: {'p_dog_id': dogId, 'p_since': today},
+        ) as List;
+        if (totals.isNotEmpty) {
+          final t = totals.first as Map<String, dynamic>;
+          kmToday = (t['distance_meters'] as num).toDouble() / 1000;
+          minsToday = (t['duration_seconds'] as num).toInt() ~/ 60;
+        }
       }
 
       setState(() {
