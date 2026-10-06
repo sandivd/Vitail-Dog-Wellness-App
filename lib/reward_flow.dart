@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -24,8 +25,12 @@ class RewardFlow extends StatefulWidget {
     this.redemption,
     this.openRedemption = false,
     this.venueLoader = loadRewardVenues,
+    this.catalogue,
+    this.receipts = const [],
   });
   final Future<List<VenueInfo>> Function() venueLoader;
+  final RewardsCatalogue? catalogue;
+  final List<RedeemedReward> receipts;
   final RewardOffer offer;
   final RewardsRepository repository;
   final bool canRedeem;
@@ -38,12 +43,28 @@ class RewardFlow extends StatefulWidget {
 }
 
 class _RewardFlowState extends State<RewardFlow> {
-  late RedeemedReward? _reward = widget.redemption;
+  late RewardOffer _selectedOffer = widget.offer;
+  late int? _points = widget.catalogue?.points;
+  late final Map<String, RedeemedReward> _receipts = {
+    for (final receipt in widget.receipts)
+      if (receipt.rewardId != null && !receipt.isCollected)
+        receipt.rewardId!: receipt,
+    if (widget.redemption != null) widget.offer.id: widget.redemption!,
+  };
+  RedeemedReward? get _reward => _receipts[_selectedOffer.id];
+  List<RewardOffer> _offers = [];
+  final Map<String, String> _requestIds = {};
+  String get _requestId => _requestIds.putIfAbsent(
+    _selectedOffer.id,
+    () => List.generate(
+      24,
+      (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join(),
+  );
+  bool _canRedeem(RewardOffer offer) => _points != null
+      ? _points! >= offer.pointsCost
+      : offer.id == widget.offer.id && widget.canRedeem;
   final _progress = ValueNotifier<String?>(null);
-  final _requestId = List.generate(
-    24,
-    (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
-  ).join();
   VenueInfo? _venue;
   LatLng? _userLocation;
 
@@ -51,15 +72,17 @@ class _RewardFlowState extends State<RewardFlow> {
     try {
       final permission = await Geolocator.checkPermission();
       if (permission != LocationPermission.always &&
-          permission != LocationPermission.whileInUse)
+          permission != LocationPermission.whileInUse) {
         return;
+      }
       final position = await Geolocator.getCurrentPosition(
         timeLimit: const Duration(seconds: 10),
       );
-      if (mounted)
+      if (mounted) {
         setState(
           () => _userLocation = LatLng(position.latitude, position.longitude),
         );
+      }
     } catch (_) {
       // Venue navigation remains available without location access.
     }
@@ -76,7 +99,22 @@ class _RewardFlowState extends State<RewardFlow> {
     try {
       final venues = await widget.venueLoader();
       if (!mounted) return;
-      setState(() => _venue = venueForReward(widget.offer, venues));
+      setState(() {
+        _venue = venueForReward(widget.offer, venues);
+        _offers = [
+          for (final offer in widget.catalogue?.offers ?? [widget.offer])
+            if (_venue != null &&
+                identical(venueForReward(offer, venues), _venue))
+              offer,
+        ];
+        if (!_offers.any((offer) => offer.id == widget.offer.id)) {
+          _offers.add(widget.offer);
+        }
+        _offers.sort((a, b) {
+          final cost = a.pointsCost.compareTo(b.pointsCost);
+          return cost != 0 ? cost : a.id.compareTo(b.id);
+        });
+      });
     } catch (_) {
       if (mounted) setState(() => _venueFailed = true);
     } finally {
@@ -125,14 +163,20 @@ class _RewardFlowState extends State<RewardFlow> {
 
   Future<void> _redeem() async {
     if (_busy || _reward != null) return;
+    final offer = _selectedOffer;
     _busy = true;
     _progress.value = 'busy';
     try {
-      final reward = await widget.repository.redeem(widget.offer, _requestId);
+      final reward = await widget.repository.redeem(offer, _requestId);
       // Update the catalogue even if this route or its sheet was dismissed.
       widget.onChanged(reward);
       if (!mounted) return;
-      setState(() => _reward = reward);
+      setState(() {
+        _receipts[offer.id] = reward;
+        if (_points != null) {
+          _points = (_points! - offer.pointsCost).clamp(0, 1 << 53);
+        }
+      });
       _progress.value = 'success';
     } catch (_) {
       if (mounted) {
@@ -140,7 +184,11 @@ class _RewardFlowState extends State<RewardFlow> {
             'We couldn’t confirm redemption. Please retry. You won’t be charged twice for this request.';
       }
     } finally {
-      _busy = false;
+      if (mounted) {
+        setState(() => _busy = false);
+      } else {
+        _busy = false;
+      }
     }
   }
 
@@ -176,7 +224,7 @@ class _RewardFlowState extends State<RewardFlow> {
                       child: IconButton(
                         tooltip: 'Close',
                         onPressed: () => Navigator.pop(sheetContext),
-                        icon: const Text('×', style: TextStyle(fontSize: 26)),
+                        icon: const VitailIcon('x', size: 24),
                       ),
                     ),
                     if (success)
@@ -199,7 +247,7 @@ class _RewardFlowState extends State<RewardFlow> {
                       ),
                     const SizedBox(height: 20),
                     Text(
-                      success ? 'Redeemed!' : widget.offer.title,
+                      success ? 'Redeemed!' : _selectedOffer.title,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 16,
@@ -210,7 +258,7 @@ class _RewardFlowState extends State<RewardFlow> {
                     Text(
                       success
                           ? 'Your reward is ready. Check in when you’re at the counter.'
-                          : '${NumberFormat.decimalPattern('en').format(widget.offer.pointsCost)} points',
+                          : '${NumberFormat.decimalPattern('en').format(_selectedOffer.pointsCost)} points',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
@@ -268,6 +316,7 @@ class _RewardFlowState extends State<RewardFlow> {
   }
 
   Future<void> _checkIn() async {
+    final offerId = _selectedOffer.id;
     final reward = _reward;
     if (reward == null) return;
     await Navigator.push<RedeemedReward>(
@@ -278,7 +327,7 @@ class _RewardFlowState extends State<RewardFlow> {
           onCollect: () async {
             final collected = await widget.repository.collect(reward);
             widget.onChanged(collected);
-            if (mounted) setState(() => _reward = collected);
+            if (mounted) setState(() => _receipts[offerId] = collected);
             return collected;
           },
         ),
@@ -332,7 +381,35 @@ class _RewardFlowState extends State<RewardFlow> {
         : _venue == null
         ? 'No linked venue available yet. Tap GO HERE to refresh.'
         : null,
-    canRedeem: widget.canRedeem,
+    offerCards: [
+      for (final offer in _offers.isEmpty ? [widget.offer] : _offers)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 22),
+          child: RewardOfferCard(
+            key: ValueKey('offer-${offer.id}'),
+            offer: offer,
+            canRedeem: !_busy && _canRedeem(offer),
+            redemption: _receipts[offer.id],
+            onRedeem: () {
+              if (_busy || _sheetOpen) return;
+              _selectedOffer = offer;
+              _progress.value = null;
+              _showRedemption();
+            },
+            onCheckIn: () {
+              if (_busy || _sheetOpen) return;
+              _selectedOffer = offer;
+              _checkIn();
+            },
+            onShowCode: () {
+              if (_busy || _sheetOpen) return;
+              _selectedOffer = offer;
+              _showCode();
+            },
+          ),
+        ),
+    ],
+    canRedeem: _canRedeem(widget.offer),
     onRedeem: _showRedemption,
     redemption: _reward,
     onCheckIn: _checkIn,

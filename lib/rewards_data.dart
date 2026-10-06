@@ -8,6 +8,7 @@ class RewardOffer {
     required this.pointsCost,
     required this.category,
     this.partnerId,
+    this.description = '',
   });
 
   factory RewardOffer.fromJson(Map<String, dynamic> row) => RewardOffer(
@@ -17,6 +18,7 @@ class RewardOffer {
     pointsCost: (row['points_cost'] as num).toInt(),
     category: row['category'] as String? ?? '',
     partnerId: row['partner_id']?.toString(),
+    description: (row['description'] as String?)?.trim() ?? '',
   );
 
   final String id;
@@ -25,6 +27,7 @@ class RewardOffer {
   final int pointsCost;
   final String category;
   final String? partnerId;
+  final String description;
 }
 
 class RedeemedReward {

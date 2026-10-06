@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -136,7 +137,7 @@ class OnboardingPage extends StatelessWidget {
 class OnboardingBadge extends StatelessWidget {
   const OnboardingBadge({super.key, required this.icon, this.color});
 
-  final IconData icon;
+  final String icon;
   final Color? color;
 
   @override
@@ -149,7 +150,7 @@ class OnboardingBadge extends StatelessWidget {
         color: tint.withValues(alpha: 0.18),
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, size: 28, color: tint),
+      child: VitailIcon(icon, size: 28, color: tint),
     );
   }
 }

@@ -6,7 +6,6 @@ import 'rewards_data.dart';
 import 'detail_image_header.dart';
 import 'venue_detail.dart';
 import 'reward_image_placeholder.dart';
-import 'vitail_snack.dart';
 
 /// Offer details with the linked Explore venue.
 class RewardDetailsScreen extends StatelessWidget {
@@ -22,8 +21,10 @@ class RewardDetailsScreen extends StatelessWidget {
     this.onGoHere,
     this.venueStatus,
     this.distanceLabel,
+    this.offerCards,
   });
 
+  final List<Widget>? offerCards;
   final String? distanceLabel;
   final VenueInfo? venue;
   final VoidCallback? onGoHere;
@@ -40,7 +41,6 @@ class RewardDetailsScreen extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
-    final softColor = dark ? const Color(0xFF302E2B) : const Color(0xFFF9F7F3);
     final borderColor = dark ? colors.outline : const Color(0xFFDBD7D1);
     return Scaffold(
       backgroundColor: colors.surface,
@@ -48,7 +48,7 @@ class RewardDetailsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const DetailImageHeader(),
+            DetailImageHeader(photoUrl: venue?.photoUrl),
             Padding(
               padding: EdgeInsets.fromLTRB(
                 24,
@@ -153,123 +153,16 @@ class RewardDetailsScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                  ...?offerCards,
+                  if (offerCards == null)
+                    RewardOfferCard(
+                      offer: offer,
+                      canRedeem: canRedeem,
+                      onRedeem: onRedeem,
+                      redemption: redemption,
+                      onCheckIn: onCheckIn,
+                      onShowCode: onShowCode,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const RewardImagePlaceholder(),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    offer.title,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      height: 1.4,
-                                      fontWeight: FontWeight.w600,
-                                      color: colors.onSurface,
-                                    ),
-                                  ),
-                                  if (offer.category.isNotEmpty) ...[
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      offer.category,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        color: colors.onSurfaceVariant,
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: redemption != null
-                                        ? SvgPicture.asset(
-                                            'assets/icons/reward-redeemed-check.svg',
-                                            width: 38,
-                                            height: 38,
-                                            semanticsLabel: 'Redeemed',
-                                          )
-                                        : Text(
-                                            '${NumberFormat.decimalPattern('en').format(offer.pointsCost)} pts',
-                                            style: TextStyle(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.w700,
-                                              color: colors.primary,
-                                            ),
-                                          ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        FilledButton(
-                          onPressed: redemption != null
-                              ? onCheckIn
-                              : canRedeem
-                              ? onRedeem
-                              : null,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: colors.primary,
-                            foregroundColor: Colors.white,
-                            disabledBackgroundColor: softColor,
-                            disabledForegroundColor: colors.onSurfaceVariant,
-                            minimumSize: const Size(double.infinity, 48),
-                            textStyle: const TextStyle(
-                              fontFamily: 'PlusJakartaSans',
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          child: Text(
-                            redemption != null
-                                ? redemption!.isCollected
-                                      ? 'VIEW COLLECTION'
-                                      : 'CHECK IN'
-                                : canRedeem
-                                ? 'REDEEM'
-                                : 'LOCKED',
-                          ),
-                        ),
-                        if (redemption != null && onShowCode != null)
-                          TextButton(
-                            onPressed: onShowCode,
-                            child: const Text('View code'),
-                          ),
-                        if (redemption == null && !canRedeem) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            'You need more points to redeem this offer.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: colors.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -302,4 +195,150 @@ class RewardDetailsScreen extends StatelessWidget {
       ),
     ],
   );
+}
+
+class RewardOfferCard extends StatelessWidget {
+  const RewardOfferCard({
+    super.key,
+    required this.offer,
+    required this.canRedeem,
+    required this.onRedeem,
+    this.redemption,
+    this.onCheckIn,
+    this.onShowCode,
+  });
+  final RewardOffer offer;
+  final bool canRedeem;
+  final VoidCallback onRedeem;
+  final RedeemedReward? redemption;
+  final VoidCallback? onCheckIn;
+  final VoidCallback? onShowCode;
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = dark ? const Color(0xFF242321) : Colors.white;
+    final softColor = dark ? const Color(0xFF302E2B) : const Color(0xFFF9F7F3);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const RewardImagePlaceholder(),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      offer.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                    if (offer.description.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        offer.description.trim(),
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ] else if (offer.category.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        offer.category,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: redemption != null
+                          ? SvgPicture.asset(
+                              'assets/icons/reward-redeemed-check.svg',
+                              width: 38,
+                              height: 38,
+                              semanticsLabel: 'Redeemed',
+                            )
+                          : Text(
+                              '${NumberFormat.decimalPattern('en').format(offer.pointsCost)} pts',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: colors.primary,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: redemption != null
+                ? onCheckIn
+                : canRedeem
+                ? onRedeem
+                : null,
+            style: FilledButton.styleFrom(
+              backgroundColor: colors.primary,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: softColor,
+              disabledForegroundColor: colors.onSurfaceVariant,
+              minimumSize: const Size(double.infinity, 48),
+              textStyle: const TextStyle(
+                fontFamily: 'PlusJakartaSans',
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            child: Text(
+              redemption != null
+                  ? redemption!.isCollected
+                        ? 'VIEW COLLECTION'
+                        : 'CHECK IN'
+                  : canRedeem
+                  ? 'REDEEM'
+                  : 'LOCKED',
+            ),
+          ),
+          if (redemption != null && onShowCode != null)
+            TextButton(onPressed: onShowCode, child: const Text('View code')),
+          if (redemption == null && !canRedeem) ...[
+            const SizedBox(height: 8),
+            Text(
+              'You need more points to redeem this offer.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

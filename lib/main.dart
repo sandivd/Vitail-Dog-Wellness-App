@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -60,6 +61,7 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 final ThemeData lightTheme = ThemeData(
   useMaterial3: true,
   fontFamily: 'PlusJakartaSans',
+  actionIconTheme: ActionIconThemeData(backButtonIconBuilder: (_) => const VitailIcon('chevron-left')),
   colorScheme: const ColorScheme.light(
     surface: Color(0xFFF4F0E9),          // Beige background
     primary: Color(0xFFDC755C),          // Coral button
@@ -77,6 +79,7 @@ final ThemeData lightTheme = ThemeData(
 final ThemeData darkTheme = ThemeData(
   useMaterial3: true,
   fontFamily: 'PlusJakartaSans',
+  actionIconTheme: ActionIconThemeData(backButtonIconBuilder: (_) => const VitailIcon('chevron-left')),
   colorScheme: const ColorScheme.dark(
     surface: Color(0xFF121212),          // True dark background
     primary: Color(0xFFDC755C),          // Coral button (stays same)

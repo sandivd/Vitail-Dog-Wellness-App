@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -26,6 +27,7 @@ class VenueInfo {
     required this.details,
     this.points,
     this.photoUrl,
+    this.venueType,
   });
 
   factory VenueInfo.fromJson(Map<String, dynamic> row) => VenueInfo(
@@ -36,6 +38,7 @@ class VenueInfo {
     details: row['venue_details']?.toString() ?? '',
     points: _asInt(row['points']),
     photoUrl: _asPhotoUrl(row['photo_url']),
+    venueType: row['venue_type']?.toString(),
   );
 
   final String partnerId;
@@ -43,6 +46,13 @@ class VenueInfo {
   final String? closingTime;
   final LatLng? location;
   final String details;
+
+  /// 'vet' | 'park' | 'other' — null when the row predates the column
+  /// (treated as 'other').
+  final String? venueType;
+
+  bool get isVet => venueType == 'vet';
+  bool get isPark => venueType == 'park';
 
   /// Points a walker can earn by visiting (`points` column, int4).
   final int? points;
@@ -102,7 +112,9 @@ class VenueInfo {
     if (text == null || text.isEmpty) return null;
     final uri = Uri.tryParse(text);
     final isWebUrl =
-        uri != null && uri.hasAuthority && (uri.scheme == 'http' || uri.scheme == 'https');
+        uri != null &&
+        uri.hasAuthority &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
     return isWebUrl ? text : null;
   }
 
@@ -274,6 +286,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           builder: (_) => RewardFlow(
             offer: offer,
             repository: repository,
+            catalogue: catalogue,
+            receipts: receipts,
             canRedeem: catalogue.points >= offer.pointsCost,
             redemption: receipt,
             venueLoader: widget.venueLoader,
@@ -282,7 +296,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
         ),
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -290,7 +304,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
             ),
           ),
         );
-    } finally {
+    }} finally {
       if (mounted) setState(() => _loadingReward = false);
     }
   }
@@ -519,8 +533,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           ? null
           : SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-              child: SizedBox(
-                height: 60,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 60),
                 child: FilledButton(
                   onPressed: _startingWalk ? null : _startWalk,
                   style: FilledButton.styleFrom(
@@ -531,7 +545,12 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     ),
                     disabledForegroundColor: colors.onPrimary,
                     shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
                     textStyle: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -547,8 +566,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         )
                       : Text(
                           'Start walk to ${venue.name}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
                 ),
               ),
@@ -581,7 +599,7 @@ class _VenuePhoto extends StatelessWidget {
         child: IconButton(
           tooltip: 'Back',
           onPressed: () => Navigator.pop(context),
-          icon: Icon(Icons.chevron_left, color: colors.onSurface),
+          icon: VitailIcon('chevron-left', color: colors.onSurface),
         ),
       ),
     );
