@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'edit_profile_screen.dart';
 import 'vitail_snack.dart';
+import 'dog_sharing.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -42,12 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       
-      final dogResponse = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
+      final dogResponse = (await primaryDogForCurrentUser())?.dog;
           
       final profileResponse = await Supabase.instance.client
           .from('profiles')

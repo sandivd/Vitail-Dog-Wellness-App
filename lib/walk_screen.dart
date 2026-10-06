@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'venue_detail.dart';
 import 'walk_in_progress.dart';
 import 'vitail_snack.dart';
+import 'dog_sharing.dart';
 
 enum _RouteMode { longest }
 
@@ -226,14 +227,8 @@ class _WalkScreenState extends State<WalkScreen> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Single dog per user — fetch it directly instead of routing through
-      // a dog-selection screen.
-      final dog = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
+      
+      final dog = (await primaryDogForCurrentUser())?.dog;
 
       if (!mounted) return;
 

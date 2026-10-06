@@ -8,6 +8,8 @@ import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
 import 'walk_history_screen.dart';
+import 'dog_sharing.dart';
+import 'join_requests_banner.dart';
 import 'activity_history_data.dart';
 import 'activity_history_widgets.dart';
 import 'dart:math';
@@ -63,18 +65,14 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       } catch (_) {}
 
-      final profileRes = await Supabase.instance.client
+            final profileRes = await Supabase.instance.client
           .from('profiles')
           .select('total_points, daily_streak')
           .eq('id', userId)
-          .single();
-
-      final dogRes = await Supabase.instance.client
-          .from('dogs')
-          .select('dog_name, photo_url, daily_goal_km, daily_goal_minutes')
-          .eq('owner_id', userId)
-          .limit(1)
           .maybeSingle();
+
+      final DogShare? link = await primaryDogForCurrentUser();
+      final Map<String, dynamic>? dogRes = link?.dog;
 
       List<ActivityWalk> walks = [];
       bool historyFailed = false;
@@ -83,22 +81,28 @@ class _HomeScreenState extends State<HomeScreen> {
       } catch (_) {
         historyFailed = true;
       }
-      final todayWalks = walks.where(
-        (walk) => activityDay(walk.date) == activityDay(DateTime.now()),
-      );
-      final kmToday = todayWalks.fold<double>(
-        0,
-        (total, walk) => total + walk.meters / 1000,
-      );
-      final minsToday =
-          todayWalks.fold<int>(0, (total, walk) => total + walk.seconds) ~/ 60;
+
+      final dogId = dogRes?['id'] as String?;
+      double kmToday = 0;
+      int minsToday = 0;
+      if (dogId != null) {
+        final totals = await Supabase.instance.client.rpc(
+          'dog_totals_since',
+          params: {'p_dog_id': dogId, 'p_since': today},
+        ) as List;
+        if (totals.isNotEmpty) {
+          final t = totals.first as Map<String, dynamic>;
+          kmToday = (t['distance_meters'] as num).toDouble() / 1000;
+          minsToday = (t['duration_seconds'] as num).toInt() ~/ 60;
+        }
+      }
       if (!mounted) return;
 
       setState(() {
         _walks = walks;
         _historyFailed = historyFailed;
-        _totalPoints = profileRes['total_points'] ?? 0;
-        _dailyStreak = profileRes['daily_streak'] ?? 0;
+        _totalPoints = profileRes?['total_points'] ?? 0;
+        _dailyStreak = profileRes?['daily_streak'] ?? 0;
         _dogName = dogRes?['dog_name'] ?? 'Dog';
         _dogPhotoUrl = dogRes?['photo_url'];
         _dailyGoalKm = (dogRes?['daily_goal_km'] ?? 3.0).toDouble();
@@ -106,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _currentKm = kmToday;
         _currentMins = minsToday;
         _isLoading = false;
-      });
+      }); 
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -221,6 +225,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+              const JoinRequestsBanner(),
               const SizedBox(height: 32),
 
               Center(

@@ -8,15 +8,17 @@ class LoginView extends StatelessWidget {
   const LoginView({super.key, required this.emailController,
     required this.passwordController, required this.isLoading,
     required this.onEmailLogin, required this.onGoogleLogin,
-    required this.onSignUp, required this.onForgotPassword});
+    required this.onForgotPassword,
+    required this.onSignUp, this.onContinueWithCode});
 
   final TextEditingController emailController;
   final TextEditingController passwordController;
   final bool isLoading;
   final VoidCallback onEmailLogin;
   final VoidCallback onGoogleLogin;
-  final VoidCallback onSignUp;
   final VoidCallback onForgotPassword;
+  final VoidCallback onSignUp;
+  final VoidCallback? onContinueWithCode;
 
   Widget _lucideIcon(BuildContext context, String name) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -31,6 +33,7 @@ class LoginView extends StatelessWidget {
         colorFilter: ColorFilter.mode(colorScheme.onSurfaceVariant, BlendMode.srcIn)),
     ));
   }
+  
 
   InputDecoration _decoration(BuildContext context, String label, String icon) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -140,6 +143,15 @@ class LoginView extends StatelessWidget {
                                 child: SvgPicture.asset('assets/brand/google-logo.svg',
                                   key: const ValueKey('google-logo'), width: 20, height: 20)),
                             ])),
+                          if (onContinueWithCode != null) ...[
+                            const SizedBox(height: 12),
+                            OutlinedButton(onPressed: isLoading ? null : onContinueWithCode,
+                              style: OutlinedButton.styleFrom(foregroundColor: colorScheme.onSurface, backgroundColor: colorScheme.surface,
+                                padding: const EdgeInsets.symmetric(horizontal: 24),
+                                side: BorderSide(color: colorScheme.outline), minimumSize: const Size.fromHeight(54),
+                                shape: const StadiumBorder(), textStyle: const TextStyle(fontFamily: 'PlusJakartaSans', fontSize: 15, fontWeight: FontWeight.w600)),
+                              child: const Text('Continue with Code')),
+                          ],
                           const SizedBox(height: 13),
                           TextButton(onPressed: isLoading ? null : onSignUp,
                             style: TextButton.styleFrom(foregroundColor: colorScheme.primary),

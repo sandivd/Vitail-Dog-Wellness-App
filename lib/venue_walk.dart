@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'walk_in_progress.dart';
+import 'dog_sharing.dart';
 
 /// Starts the existing walk tracker with the venue as its planned destination.
 Future<void> startVenueWalk(BuildContext context, LatLng destination) async {
@@ -11,12 +12,7 @@ Future<void> startVenueWalk(BuildContext context, LatLng destination) async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
     if (userId == null) throw StateError('Please sign in to start a walk.');
-    final dog = await client
-        .from('dogs')
-        .select()
-        .eq('owner_id', userId)
-        .limit(1)
-        .maybeSingle();
+    final dog = (await primaryDogForCurrentUser())?.dog;
     if (dog == null) throw StateError('Please register a dog first.');
     if (!await Geolocator.isLocationServiceEnabled()) {
       throw StateError(
