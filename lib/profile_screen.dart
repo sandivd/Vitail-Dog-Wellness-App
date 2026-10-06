@@ -5,8 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'settings_screen.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'edit_profile_screen.dart';
 import 'vitail_snack.dart';
@@ -271,9 +269,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_isLoading) {
       return const Scaffold(body: Center(child: VitailLoading()));
     }
-
-    String insurance = _dogData?['insurance_partner'] ?? 'Bow Wow Meow';
-    String vaccDate = _dogData?['vaccination_date'] ?? 'Aug 2026';
 
     return Scaffold(
         appBar: AppBar(

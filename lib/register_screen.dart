@@ -45,7 +45,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-    Future<void> _continueWithCode() async {
+  Future<void> _continueWithCode() async {
     final code = await Navigator.push<String>(
       context,
       onboardingFadeRoute<String>(const JoinWithCodeScreen()),
@@ -158,5 +158,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     onSignUp: _signUp,
     onGoogleLogin: _signInWithGoogle,
     onSignIn: () => Navigator.pop(context),
+    onContinueWithCode: _continueWithCode,
   );
 }

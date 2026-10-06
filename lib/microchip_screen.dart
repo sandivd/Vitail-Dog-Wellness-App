@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
-import 'vitail_snack.dart';
 
 import 'dart:io';
 

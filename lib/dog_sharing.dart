@@ -52,7 +52,7 @@ Future<DogShare?> primaryDogForCurrentUser() async {
       .order('role', ascending: false)
       .limit(1);
   if (rows.isEmpty) return null;
-  final row = rows.first as Map<String, dynamic>;
+  final Map<String, dynamic> row = rows.first;
   return DogShare(
     dog: row['dogs'] as Map<String, dynamic>,
     role: row['role'] as String,
