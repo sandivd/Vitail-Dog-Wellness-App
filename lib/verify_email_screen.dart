@@ -75,7 +75,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       title: 'Check your email',
       children: [
         const SizedBox(height: 20),
-        const Center(child: OnboardingBadge(icon: Icons.mail_outline)),
+        const Center(child: OnboardingBadge(icon: 'mail')),
         const SizedBox(height: 20),
         Text(
           "We've sent a verification link to $email. Verify to finish joining as a carer.",

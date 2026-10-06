@@ -90,7 +90,7 @@ class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
         const SizedBox(height: 32),
         Center(
           child: OnboardingBadge(
-            icon: declined ? Icons.close : Icons.schedule,
+            icon: declined ? 'x' : 'clock',
             color: declined ? OnboardingStyle.coral : null,
           ),
         ),
