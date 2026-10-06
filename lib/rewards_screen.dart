@@ -3,14 +3,26 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'reward_flow.dart';
+import 'reward_venues.dart';
 import 'rewards_data.dart';
-import 'reward_image_placeholder.dart';
+import 'venue_detail.dart';
+import 'venue_reward_thumbnail.dart';
 
 class RewardsScreen extends StatefulWidget {
-  const RewardsScreen({super.key, this.repository, this.isActive = true});
+  const RewardsScreen({
+    super.key,
+    this.repository,
+    this.isActive = true,
+    this.partnerId,
+    this.venueName,
+    this.venueLoader = loadRewardVenues,
+  });
 
+  final Future<List<VenueInfo>> Function() venueLoader;
   final RewardsRepository? repository;
   final bool isActive;
+  final String? partnerId;
+  final String? venueName;
 
   @override
   State<RewardsScreen> createState() => _RewardsScreenState();
@@ -19,6 +31,7 @@ class RewardsScreen extends StatefulWidget {
 class _RewardsScreenState extends State<RewardsScreen> {
   late final RewardsRepository _repository;
   RewardsCatalogue? _catalogue;
+  List<VenueInfo> _venues = [];
   List<RedeemedReward>? _redeemed;
   bool _showMine = false;
   bool _loadingCatalogue = true;
@@ -56,11 +69,26 @@ class _RewardsScreenState extends State<RewardsScreen> {
     try {
       final catalogue = await _repository.loadCatalogue();
       if (!mounted || request != _catalogueRequest) return;
-      final sortedOffers = List<RewardOffer>.of(catalogue.offers)
-        ..sort((a, b) {
-          final costOrder = a.pointsCost.compareTo(b.pointsCost);
-          return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
-        });
+      List<VenueInfo> venues;
+      try {
+        venues = await widget.venueLoader();
+      } catch (_) {
+        if (widget.partnerId != null) rethrow;
+        venues = []; // Photo failures must not hide the rewards catalogue.
+      }
+      if (!mounted || request != _catalogueRequest) return;
+      final sortedOffers =
+          List<RewardOffer>.of(
+            catalogue.offers.where(
+              (offer) =>
+                  widget.partnerId == null ||
+                  venueForReward(offer, venues)?.partnerId == widget.partnerId,
+            ),
+          )..sort((a, b) {
+            final costOrder = a.pointsCost.compareTo(b.pointsCost);
+            return costOrder != 0 ? costOrder : a.id.compareTo(b.id);
+          });
+      _venues = venues;
       setState(
         () => _catalogue = RewardsCatalogue(
           points: catalogue.points,
@@ -181,8 +209,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => RewardFlow(
-          offer: offer,
+          offer:
+              (_catalogue?.offers
+                  .where((entry) => entry.id == offer.id)
+                  .firstOrNull) ??
+              offer,
           repository: _repository,
+          catalogue: _catalogue,
+          receipts: _redeemed ?? [],
+          venueLoader: widget.venueLoader,
           canRedeem:
               !_loadingCatalogue &&
               _catalogueError == null &&
@@ -201,7 +236,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
     if (_isLoading) {
       return const Scaffold(body: Center(child: VitailLoading()));
     }
-    
+
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
       backgroundColor: colors.surface,
@@ -271,7 +306,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
           onTap: points == null ? null : _showTier,
           borderRadius: BorderRadius.circular(22),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -279,7 +314,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   'POINTS WALLET',
                   style: TextStyle(
                     color: Color(0xFFE1ECF3),
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -301,7 +336,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       const TextSpan(
                         text: '   pts',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           color: Color(0xFFE1ECF3),
                           fontWeight: FontWeight.w600,
                         ),
@@ -322,7 +357,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 Text(
                   caption,
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 13,
                     color: Color(0xFFE1ECF3),
                     fontWeight: FontWeight.w500,
                   ),
@@ -358,7 +393,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
             onTap: () => _selectTab(mine),
             borderRadius: BorderRadius.circular(22),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 40),
+              constraints: const BoxConstraints(minHeight: 44),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,
@@ -368,7 +403,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                   title,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                     color: selected
                         ? colors.onSurface
@@ -397,8 +432,11 @@ class _RewardsScreenState extends State<RewardsScreen> {
       final redeemed = _activeReceipt(offer) != null;
       return _rewardCard(
         title: offer.title,
+        photoUrl: venueForReward(offer, _venues)?.photoUrl,
         subtitle: offer.partnerName,
         footer: '${_number.format(offer.pointsCost)} pts',
+        isPointsCost: true,
+        buttonColor: redeemed ? Theme.of(context).colorScheme.tertiary : null,
         action: redeemed
             ? 'VIEW REWARD'
             : canAfford
@@ -430,12 +468,19 @@ class _RewardsScreenState extends State<RewardsScreen> {
         .map(
           (reward) => _rewardCard(
             title: reward.title,
+            photoUrl: venueForReward(
+              _catalogue?.offers
+                      .where((offer) => offer.id == reward.rewardId)
+                      .firstOrNull ??
+                  reward.detailsOffer,
+              _venues,
+            )?.photoUrl,
             subtitle: reward.partnerName ?? 'Redeemed reward',
             footer: reward.isCollected ? 'Collected' : 'Ready to collect',
             action: 'VIEW REWARD',
             footerColor: reward.isCollected
-                ? Theme.of(context).colorScheme.tertiary
-                : null,
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.tertiary,
             buttonColor: Theme.of(context).colorScheme.tertiary,
             onAction: () => _showOffer(reward.detailsOffer, receipt: reward),
             onDetails: () => _showOffer(reward.detailsOffer, receipt: reward),
@@ -479,12 +524,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
     required String action,
     required VoidCallback? onAction,
     required VoidCallback onDetails,
+    bool isPointsCost = false,
+    String? photoUrl,
     Color? footerColor,
     Color? buttonColor,
   }) {
     final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Material(
         color: _cardColor,
         borderRadius: BorderRadius.circular(20),
@@ -494,15 +541,15 @@ class _RewardsScreenState extends State<RewardsScreen> {
           onTap: onDetails,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+            padding: const EdgeInsets.all(12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: RewardImagePlaceholder(),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: VenueRewardThumbnail(photoUrl: photoUrl),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,8 +559,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                         child: Text(
                           title,
                           style: TextStyle(
-                            fontSize: 13,
-                            height: 1.4,
+                            fontSize: 16,
+                            height: 1.25,
                             fontWeight: FontWeight.w600,
                             color: colors.onSurface,
                           ),
@@ -523,8 +570,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
                       Text(
                         subtitle,
                         style: TextStyle(
-                          fontSize: 11,
-                          height: 1.4,
+                          fontSize: 13,
+                          height: 1.25,
                           fontWeight: FontWeight.w500,
                           color: colors.onSurfaceVariant,
                         ),
@@ -535,7 +582,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                           final label = Text(
                             footer,
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: isPointsCost ? 14 : 12,
                               fontWeight: FontWeight.w700,
                               color: footerColor ?? colors.primary,
                             ),
@@ -548,7 +595,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                                   ? _softColor
                                   : buttonColor ?? colors.primary,
                               disabledForegroundColor: colors.onSurfaceVariant,
-                              minimumSize: const Size(96, 28),
+                              minimumSize: const Size(96, 32),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 12,
                                 vertical: 6,
@@ -556,14 +603,14 @@ class _RewardsScreenState extends State<RewardsScreen> {
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               textStyle: const TextStyle(
                                 fontFamily: 'PlusJakartaSans',
-                                fontSize: 10,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             child: Text(action),
                           );
-                          if (constraints.maxWidth < 175 ||
-                              MediaQuery.textScalerOf(context).scale(12) > 16) {
+                          if (constraints.maxWidth < 200 ||
+                              MediaQuery.textScalerOf(context).scale(14) > 18) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [

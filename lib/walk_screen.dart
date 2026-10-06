@@ -1,15 +1,20 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'venue_detail.dart';
 import 'walk_in_progress.dart';
-import 'venues_screen.dart';
+import 'vitail_snack.dart';
+import 'dog_sharing.dart';
 
-enum _RouteMode { last, longest }
+enum _RouteMode { longest }
 
 class WalkScreen extends StatefulWidget {
-  const WalkScreen({super.key});
+  const WalkScreen({super.key, this.onProgress});
+
+  final WalkProgressCallback? onProgress;
 
   @override
   State<WalkScreen> createState() => _WalkScreenState();
@@ -17,6 +22,11 @@ class WalkScreen extends StatefulWidget {
 
 class _WalkScreenState extends State<WalkScreen> {
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
+
+  // Collapsed height of the draggable sheet, as a fraction of screen height.
+  // Shared with the Start-walk overlay below so it always sits just above
+  // the sheet's handle instead of being covered by it.
+  static const double _sheetCollapsedSize = 0.14;
 
   // Average dog-walk pace, used only to estimate time for the placeholder
   // "route to pin" line below (see _polylines / _routeSummaryText).
@@ -27,54 +37,49 @@ class _WalkScreenState extends State<WalkScreen> {
       DraggableScrollableController();
   final TextEditingController _searchController = TextEditingController();
 
-  _RouteMode _routeMode = _RouteMode.last;
+  _RouteMode _routeMode = _RouteMode.longest;
 
   LatLng? _currentPosition;
   LatLng? _droppedPin;
 
-  Map<String, dynamic>? _lastWalk;
-  bool _loadingLastWalk = true;
   bool _isStartingWalk = false;
 
-  // Placeholder partner venues. Swap for a Supabase 'venues' query once
-  // that table exists, keeping the same name/subtitle/tag/location shape.
-  final List<Map<String, dynamic>> _nearbyVenues = const [
-    {
-      'name': 'Royal Park',
-      'subtitle': 'Off-lead park · 400 m',
-      'tag': 'Free entry',
-      'tagColor': Color(0xFFD9E4B0),
-      'location': LatLng(-37.7850, 144.9470),
-    },
-    {
-      'name': 'The Grounds Café',
-      'subtitle': 'Dog-friendly café · 650 m',
-      'tag': 'Free coffee · 250 pts',
-      'tagColor': Color(0xFFE7B9A6),
-      'location': LatLng(-37.8110, 144.9600),
-    },
-    {
-      'name': 'Paws Vet Clinic',
-      'subtitle': 'Partner vet · 1.2 km',
-      'tag': '15% off check-up',
-      'tagColor': Color(0xFFB9D8CE),
-      'location': LatLng(-37.8180, 144.9700),
-    },
-  ];
+  // Partner venues loaded from the Supabase 'partnered_venues' table.
+  List<VenueInfo> _nearbyVenues = [];
+  bool _loadingVenues = true;
+  String? _venueError;
 
-  List<Map<String, dynamic>> get _visibleVenues {
+  /// Venues matching the search box, nearest first. Until the user's location
+  /// is known (or for venues without coordinates) they fall back to A–Z.
+  List<VenueInfo> get _visibleVenues {
     final query = _searchController.text.trim().toLowerCase();
-    if (query.isEmpty) return _nearbyVenues;
-    return _nearbyVenues
-        .where((v) => v['name'].toString().toLowerCase().contains(query))
-        .toList();
+    final matches = query.isEmpty
+        ? [..._nearbyVenues]
+        : _nearbyVenues
+              .where((venue) => venue.name.toLowerCase().contains(query))
+              .toList();
+
+    matches.sort((a, b) {
+      final distanceA = a.distanceMetersFrom(_currentPosition);
+      final distanceB = b.distanceMetersFrom(_currentPosition);
+      if (distanceA != null && distanceB != null) {
+        final byDistance = distanceA.compareTo(distanceB);
+        if (byDistance != 0) return byDistance;
+      } else if (distanceA != null) {
+        return -1; // venues with a known distance come first
+      } else if (distanceB != null) {
+        return 1;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return matches;
   }
 
   @override
   void initState() {
     super.initState();
     _locateUser();
-    _fetchLastWalk();
+    _fetchVenues();
   }
 
   @override
@@ -82,6 +87,7 @@ class _WalkScreenState extends State<WalkScreen> {
     _sheetController.dispose();
     _searchController.dispose();
     super.dispose();
+    widget.onProgress?.call(null);
   }
 
   Future<void> _locateUser() async {
@@ -109,30 +115,49 @@ class _WalkScreenState extends State<WalkScreen> {
     }
   }
 
-  Future<void> _fetchLastWalk() async {
+  Future<void> _fetchVenues() async {
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        if (mounted) setState(() => _loadingLastWalk = false);
-        return;
-      }
-
-      final response = await Supabase.instance.client
-          .from('walks')
-          .select('distance_meters, duration_seconds, walk_date')
-          .eq('user_id', userId)
-          .order('walk_date', ascending: false)
-          .limit(1)
-          .maybeSingle();
+      // select() with no column list = every column. VenueInfo.fromJson picks
+      // out what it needs (incl. optional latitude/longitude/points), so this
+      // keeps working before and after those columns are added.
+      final rows = await Supabase.instance.client.from('partnered_venues').select();
 
       if (!mounted) return;
       setState(() {
-        _lastWalk = response;
-        _loadingLastWalk = false;
+        _nearbyVenues = rows
+            .map((row) => VenueInfo.fromJson(Map<String, dynamic>.from(row)))
+            .toList();
+        _venueError = null;
+        _loadingVenues = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _loadingLastWalk = false);
+      if (!mounted) return;
+      setState(() {
+        _venueError = 'Could not load nearby venues.';
+        _loadingVenues = false;
+      });
     }
+  }
+  void _retryVenues() {
+    setState(() {
+      _loadingVenues = true;
+      _venueError = null;
+    });
+    _fetchVenues();
+  }
+
+  /// Opens that venue's own detail page. Its "Start walk to …" button comes
+  /// back here so the walk can head for the venue's coordinates.
+  void _openVenue(VenueInfo venue) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VenueDetailScreen(
+          venue: venue,
+          userLocation: _currentPosition,
+        ),
+      ),
+    );
   }
 
   void _recenter() {
@@ -154,7 +179,8 @@ class _WalkScreenState extends State<WalkScreen> {
   void _onSearchSubmitted(String query) {
     final matches = _visibleVenues;
     if (matches.isEmpty) return;
-    _dropPinAt(matches.first['location'] as LatLng);
+    final location = matches.first.location;
+    if (location != null) _dropPinAt(location);
     FocusScope.of(context).unfocus();
   }
 
@@ -183,14 +209,6 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   String get _routeSummaryText {
-    if (_routeMode == _RouteMode.last) {
-      if (_loadingLastWalk) return '···';
-      if (_lastWalk == null) return 'No past walks yet';
-      final meters = (_lastWalk!['distance_meters'] as num).toDouble();
-      final seconds = (_lastWalk!['duration_seconds'] as num?)?.toInt() ?? 0;
-      return '${(meters / 1000).toStringAsFixed(1)} km · ${(seconds / 60).round()} min';
-    }
-
     if (_currentPosition == null || _droppedPin == null) {
       return 'Search or drop a pin for a route';
     }
@@ -204,7 +222,7 @@ class _WalkScreenState extends State<WalkScreen> {
     return '${(meters / 1000).toStringAsFixed(1)} km · $minutes min';
   }
 
-  Future<void> _startWalk() async {
+  Future<void> _startWalk({LatLng? destination}) async {
     if (_isStartingWalk) return;
     setState(() => _isStartingWalk = true);
 
@@ -212,45 +230,53 @@ class _WalkScreenState extends State<WalkScreen> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Single dog per user — fetch it directly instead of routing through
-      // a dog-selection screen.
-      final dog = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
+      
+      final dog = (await primaryDogForCurrentUser())?.dog;
 
       if (!mounted) return;
 
       if (dog == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No dog found. Please register a dog first.'),
-          ),
-        );
+        showVitailSnack(context, 'No dog found. Please register a dog first.',
+            type: VitailSnackType.error);
         return;
       }
 
-      // Carry the dropped-pin route forward if the user set one up — it'll
-      // show on the map once tracking begins in WalkInProgress.
-      final hasPlannedRoute = _currentPosition != null && _droppedPin != null;
+      final routeDestination = destination ?? _droppedPin;
+
+      // GPS may not have resolved yet if the user tapped quickly. Wait for
+      // it so the planned route isn't silently dropped.
+      if (routeDestination != null && _currentPosition == null) {
+        await _locateUser();
+        if (!mounted) return;
+      }
+
+      final hasPlannedRoute =
+          _currentPosition != null && routeDestination != null;
+
+      if (routeDestination != null && !hasPlannedRoute) {
+        showVitailSnack(
+          context,
+          'Couldn’t get your location, so the route won’t be shown.',
+          type: VitailSnackType.info,
+        );
+      }
 
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => WalkInProgress(
             dog: dog,
-            plannedRoute:
-                hasPlannedRoute ? [_currentPosition!, _droppedPin!] : null,
+            plannedRoute: hasPlannedRoute
+                ? [_currentPosition!, routeDestination!]
+                : null,
+            onProgress: widget.onProgress,
           ),
         ),
       );
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not start walk: $e')),
-        );
+        showVitailSnack(context, 'Could not start the walk. Please try again.',
+            type: VitailSnackType.error);
       }
     } finally {
       if (mounted) setState(() => _isStartingWalk = false);
@@ -279,7 +305,7 @@ class _WalkScreenState extends State<WalkScreen> {
             ),
           ),
 
-          // Top overlay: search bar, route mode toggle, legend, summary pill.
+          // Top overlay: search bar and route mode toggle.
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -303,6 +329,7 @@ class _WalkScreenState extends State<WalkScreen> {
                           ),
                           child: TextField(
                             controller: _searchController,
+                            onChanged: (_) => setState(() {}),
                             onSubmitted: _onSearchSubmitted,
                             textInputAction: TextInputAction.search,
                             decoration: InputDecoration(
@@ -333,7 +360,7 @@ class _WalkScreenState extends State<WalkScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(Icons.gps_fixed,
+                          child: VitailIcon('locate-fixed',
                               color: colorScheme.secondary, size: 22),
                         ),
                       ),
@@ -341,58 +368,97 @@ class _WalkScreenState extends State<WalkScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Route mode toggle
-                  Row(
-                    children: [
-                      _RoutePill(
-                        label: 'Last route',
-                        selected: _routeMode == _RouteMode.last,
-                        onTap: () => setState(() => _routeMode = _RouteMode.last),
-                      ),
-                      const SizedBox(width: 16),
-                      _RouteLink(
-                        label: 'Longest route',
-                        selected: _routeMode == _RouteMode.longest,
-                        onTap: () =>
-                            setState(() => _routeMode = _RouteMode.longest),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  const SizedBox(height: 10),
-                  const SizedBox(height: 18),
-
-                  // Distance / time summary pill
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.onSurface,
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Text(
-                      _routeSummaryText,
-                      style: TextStyle(
-                        color: colorScheme.surface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                  // Route mode toggle — one bar, selected side shown as a
+                  // green pill.
+                  _RouteModeToggle(
+                    mode: _routeMode,
+                    onChanged: (mode) => setState(() => _routeMode = mode),
                   ),
                 ],
               ),
             ),
           ),
 
+          // Summary pill + Start walk button: a fixed overlay above the
+          // draggable sheet, not part of its scrollable content.
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.sizeOf(context).height * _sheetCollapsedSize + 20,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Distance / time summary pill
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.onSurface,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Text(
+                    _routeSummaryText,
+                    style: TextStyle(
+                      color: colorScheme.surface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: _isStartingWalk ? null : _startWalk,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      disabledBackgroundColor:
+                          colorScheme.primary.withValues(alpha: 0.6),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: _isStartingWalk
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Start walk',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              VitailIcon('play', size: 24),
+                            ],
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Draggable panel: nearby venues + start walk button.
           DraggableScrollableSheet(
             controller: _sheetController,
-            initialChildSize: 0.5,
-            minChildSize: 0.16,
+            initialChildSize: _sheetCollapsedSize,
+            minChildSize: _sheetCollapsedSize,
             maxChildSize: 0.9,
             snap: true,
-            snapSizes: const [0.16, 0.5, 0.9],
+            snapSizes: const [_sheetCollapsedSize, 0.5, 0.9],
             builder: (context, scrollController) {
               return Container(
                 decoration: BoxDecoration(
@@ -434,83 +500,78 @@ class _WalkScreenState extends State<WalkScreen> {
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const VenuesScreen(),
-                              ),
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 0),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'See all',
-                            style: TextStyle(
-                              color: colorScheme.secondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                        // TextButton(
+                        //   onPressed: () {
+                        //     Navigator.push(
+                        //       context,
+                        //       MaterialPageRoute(
+                        //         builder: (context) => const VenuesScreen(),
+                        //       ),
+                        //     );
+                        //   },
+                        //   style: TextButton.styleFrom(
+                        //     padding: EdgeInsets.zero,
+                        //     minimumSize: const Size(0, 0),
+                        //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        //   ),
+                        //   child: Text(
+                        //     'See all',
+                        //     style: TextStyle(
+                        //       color: colorScheme.secondary,
+                        //       fontWeight: FontWeight.w600,
+                        //     ),
+                        //   ),
+                        // ),
                       ],
                     ),
                     const SizedBox(height: 12),
 
-                    if (_visibleVenues.isEmpty)
+                    if (_loadingVenues)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_venueError != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Column(
+                          children: [
+                            Text(
+                              _venueError!,
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _retryVenues,
+                              child: const Text('Try again'),
+                            ),
+                          ],
+                        ),
+                      )
+                    else if (_visibleVenues.isEmpty)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Center(
-                          child: Text('No matches nearby',
-                              style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                          child: Text(
+                            'No venues nearby',
+                            style: TextStyle(
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ),
                       )
                     else
                       ..._visibleVenues.map(
                         (venue) => _VenueCard(
-                          name: venue['name'] as String,
-                          subtitle: venue['subtitle'] as String,
-                          tag: venue['tag'] as String,
-                          tagColor: venue['tagColor'] as Color,
-                          onTap: () => _dropPinAt(venue['location'] as LatLng),
+                          name: venue.name,
+                          subtitle: venue.distanceLabelFrom(_currentPosition),
+                          tag: venue.hoursLabel,
+                          tagColor: colorScheme.tertiary.withValues(alpha: 0.3),
+                          photoUrl: venue.photoUrl,
+                          onTap: () => _openVenue(venue),
                         ),
                       ),
-
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton.icon(
-                        onPressed: _isStartingWalk ? null : _startWalk,
-                        icon: _isStartingWalk
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : const Icon(Icons.play_arrow, size: 24),
-                        label: const Text(
-                          'Start a walk',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w600),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
-                          disabledBackgroundColor:
-                              colorScheme.primary.withValues(alpha: 0.6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                          elevation: 0,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
               );
@@ -522,16 +583,51 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 }
 
-/// Filled pill used for the currently-selected route mode ("Last route").
-class _RoutePill extends StatelessWidget {
-  const _RoutePill({
+/// Segmented bar for choosing between "Last route" and "Longest route" —
+/// one pill-shaped container, with the selected side highlighted as a
+/// solid green pill.
+class _RouteModeToggle extends StatelessWidget {
+  const _RouteModeToggle({required this.mode, required this.onChanged});
+
+  final _RouteMode mode;
+  final ValueChanged<_RouteMode> onChanged;
+
+  // Matches the green used for mood chips / points pill elsewhere in the
+  // app (see walk_summary.dart's _kGreen) — not in ColorScheme, so hardcoded
+  // to stay consistent with those other hardcoded Figma tokens.
+  static const Color _kGreen = Color(0xFFAEC568);
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RouteModeSegment extends StatelessWidget {
+  const _RouteModeSegment({
     required this.label,
     required this.selected,
+    required this.selectedColor,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
+  final Color selectedColor;
   final VoidCallback onTap;
 
   @override
@@ -540,62 +636,20 @@ class _RoutePill extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? colorScheme.primary : colorScheme.surface,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Underlined text link style used for the non-selected route mode
-/// ("Longest route"), matching the mockup's link-like second option.
-class _RouteLink extends StatelessWidget {
-  const _RouteLink({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 12),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? selectedColor : Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+        ),
         child: Text(
           label,
           style: TextStyle(
-            color: colorScheme.onSurface,
+            color: selected ? Colors.white : colorScheme.onSurface,
             fontWeight: FontWeight.w600,
             fontSize: 14,
-            decoration:
-                selected ? TextDecoration.underline : TextDecoration.none,
-            decorationColor: colorScheme.secondary,
-            decorationThickness: 2,
           ),
         ),
       ),
@@ -612,6 +666,7 @@ class _VenueCard extends StatelessWidget {
     required this.tag,
     required this.tagColor,
     required this.onTap,
+    this.photoUrl,
   });
 
   final String name;
@@ -619,6 +674,9 @@ class _VenueCard extends StatelessWidget {
   final String tag;
   final Color tagColor;
   final VoidCallback onTap;
+
+  /// Venue photo; the grey square shows when null, loading, or on error.
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -644,6 +702,27 @@ class _VenueCard extends StatelessWidget {
                 color: colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(14),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: photoUrl == null
+                  ? null
+                  : Image.network(
+                      photoUrl!,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      // Decode at thumbnail size, not full resolution.
+                      cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).round(),
+                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 250),
+                          child: child,
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -683,10 +762,14 @@ class _VenueCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            VitailIcon('chevron-right', color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),
     );
   }
 }
+
+
+// Command: E:\user\Android_Studio\SDK\platform-tools\adb.exe -s emulator-5554 shell am force-stop com.example.vitail
+// Flutter: Installing build\app\outputs\flutter-apk\app-debug.apk...

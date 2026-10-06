@@ -1,8 +1,10 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth_style.dart';
+import 'vitail_snack.dart';
 
 /// Where the reset email's link sends the user. Must match:
 ///  - the intent-filter in AndroidManifest.xml
@@ -27,14 +29,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _snack(String message) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red));
-
   Future<void> _sendResetLink() async {
     if (_isLoading) return;
     final email = _emailController.text.trim();
     if (email.isEmpty || !email.contains('@')) {
-      _snack('Please enter the email you signed up with.');
+      showVitailSnack(context, 'Please enter the email you signed up with.',
+          type: VitailSnackType.error);
       return;
     }
 
@@ -49,9 +49,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } catch (e) {
       if (!mounted) return;
       final rateLimited = e.toString().contains('60 seconds');
-      _snack(rateLimited
-          ? 'Please wait a minute before requesting another email.'
-          : 'Could not send the reset email. Check your connection.');
+      showVitailSnack(
+        context,
+        rateLimited
+            ? 'Please wait a minute before requesting another email.'
+            : 'Could not send the reset email. Check your connection.',
+        type: VitailSnackType.error,
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -179,7 +183,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               color: colorScheme.tertiary.withValues(alpha: 0.18),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.mark_email_read_outlined,
+            child: VitailIcon('mail-check',
                 color: colorScheme.tertiary, size: 32),
           ),
         ),

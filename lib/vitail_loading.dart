@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 
 /// Shared, bundled brand animation: no network or video player required.
@@ -23,7 +24,7 @@ class VitailLoading extends StatelessWidget {
             : 'assets/brand/vitail-loading.webp',
         fit: BoxFit.contain,
         excludeFromSemantics: true,
-        errorBuilder: (_, _, _) => const Icon(Icons.pets),
+        errorBuilder: (_, _, _) => const VitailIcon('paw-print'),
       ),
     ),
   );

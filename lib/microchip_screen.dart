@@ -1,9 +1,11 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
+import 'vitail_snack.dart';
 
 import 'dart:io';
 
@@ -313,8 +315,8 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           title: 'Certificate submitted',
           message:
               'We\'ve received your certificate. We\'ll verify it and get back to you within 24 hours.',
-          icon: Icons.schedule,
-          onContinue: _finish,
+            icon: 'clock',
+            onContinue: _finish,
         );
     }
   }
@@ -497,7 +499,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     required String title,
     required String message,
     required VoidCallback onContinue,
-    IconData icon = Icons.verified_outlined,
+    String icon = 'badge-check',
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -542,11 +544,8 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
               color: Color(0xFFF2EFE9),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              file == null ? Icons.arrow_upward : Icons.description_outlined,
-              size: 18,
-              color: OnboardingStyle.muted,
-            ),
+            child: VitailIcon(file == null ? 'arrow-up' : 'circle-check',
+                size: 18, color: OnboardingStyle.muted),
           ),
           const SizedBox(height: 12),
           Text(

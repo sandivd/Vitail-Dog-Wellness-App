@@ -1,11 +1,14 @@
+import 'vitail_icon.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'walk_summary.dart';
+import 'vitail_snack.dart';
 
 // ---------------------------------------------------------------------------
 // Design tokens from the Figma spec for this screen. Hardcoded on purpose:
@@ -24,14 +27,32 @@ const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
 const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
 
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.dog, this.plannedRoute});
+  const WalkInProgress({super.key, this.dog, this.plannedRoute, this.onProgress,});
 
   final Map<String, dynamic>? dog;
   final List<LatLng>? plannedRoute;
+  final WalkProgressCallback? onProgress;
+  
 
   @override
   State<WalkInProgress> createState() => _WalkInProgressState();
 }
+
+// to relay to home screen to display live walking progress
+class WalkProgress {
+  const WalkProgress({
+    required this.elapsedSeconds,
+    required this.distanceMeters,
+  });
+
+  final int elapsedSeconds;
+  final double distanceMeters;
+}
+
+final ValueNotifier<WalkProgress?> activeWalkProgress =
+    ValueNotifier<WalkProgress?>(null);
+
+typedef WalkProgressCallback = void Function(WalkProgress? progress);
 
 class _WalkInProgressState extends State<WalkInProgress> {
   static const LatLng _melbourne = LatLng(-37.8136, 144.9631);
@@ -86,6 +107,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
     _timer?.cancel();
     _noteController.dispose();
     _sheetController.dispose();
+    activeWalkProgress.value = null;
+    widget.onProgress?.call(null);
     super.dispose();
   }
 
@@ -105,10 +128,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
     final hasPermission = await _checkPermissions();
     if (!hasPermission) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location permission is required to track your walk.'),
-          ),
+        showVitailSnack(
+          context,
+          'Location permission is required to track your walk.',
+          type: VitailSnackType.error,
         );
       }
       return;
@@ -121,6 +144,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
     _startTimer();
     _startLocationTracking();
+    _publishProgress();
   }
 
   void _startTimer() {
@@ -128,6 +152,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!_isPaused && mounted) {
         setState(() => _elapsedSeconds++);
+        _publishProgress();
       }
     });
   }
@@ -156,7 +181,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
         }
         _polylinePoints.add(newPoint);
       });
-
+      _publishProgress();
       _mapController?.animateCamera(CameraUpdate.newLatLng(newPoint));
     });
   }
@@ -266,7 +291,15 @@ class _WalkInProgressState extends State<WalkInProgress> {
       southwest: LatLng(minLat, minLng),
       northeast: LatLng(maxLat, maxLng),
     );
-}
+  }
+  void _publishProgress() {
+    final progress = WalkProgress(
+      elapsedSeconds: _elapsedSeconds,
+      distanceMeters: _totalDistance,
+    );
+    activeWalkProgress.value = progress;
+    widget.onProgress?.call(progress);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -304,9 +337,15 @@ class _WalkInProgressState extends State<WalkInProgress> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.chevron_left,
+                    icon: const VitailIcon('chevron-left',
                         size: 28, color: _kInk),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      if (_isWalking) {
+                        Navigator.of(context).pushNamed('/active-walk-home');
+                      } else {
+                        Navigator.of(context).pop();
+                      }
+                    },
                   ),
                   Expanded(
                     child: Text(
@@ -509,8 +548,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
                                 backgroundColor: _kAvatarBg,
                                 backgroundImage: photoUrl != null &&
                                         photoUrl.toString().isNotEmpty
-                                    ? NetworkImage(photoUrl)
+                                    ? CachedNetworkImageProvider(photoUrl)
                                     : null,
+                                child: photoUrl == null
+                                  ? const VitailIcon('paw-print', color: _kMuted)
+                                  : null,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -820,7 +862,7 @@ class _PhotoPicker extends StatelessWidget {
                 color: Colors.black45,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.close, color: Colors.white, size: 16),
+              child: const VitailIcon('x', color: Colors.white, size: 16),
             ),
           ),
         ),
