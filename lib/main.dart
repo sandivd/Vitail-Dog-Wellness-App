@@ -203,7 +203,11 @@ class _VitailAppState extends State<VitailApp> {
           themeMode: currentMode,
           themeAnimationDuration: const Duration(milliseconds: 150),
           themeAnimationCurve: Curves.easeOut,
-          home: const VitailLaunch(child: AuthGate()),        );
+          home: const VitailLaunch(child: AuthGate()),        
+          routes: {
+            '/active-walk-home': (_) => const HomeScreen(),
+          },
+        );
       },
     );
   }

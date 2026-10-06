@@ -16,6 +16,7 @@ import 'dart:math';
 import 'daily_goal_card.dart';
 import 'reward_venues.dart';
 import 'venue_detail.dart';
+import 'walk_in_progress.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,7 +45,27 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _activeWalk = activeWalkProgress.value;
+    activeWalkProgress.addListener(_syncActiveWalk);
     _fetchHomeData();
+  }
+
+  void _syncActiveWalk() {
+    if (!mounted) return;
+    setState(() => _activeWalk = activeWalkProgress.value);
+  }
+
+  @override
+  void dispose() {
+    activeWalkProgress.removeListener(_syncActiveWalk);
+    super.dispose();
+  }
+
+  WalkProgress? _activeWalk;
+
+  void _handleWalkProgress(WalkProgress? progress) {
+    if (!mounted) return;
+    setState(() => _activeWalk = progress);
   }
 
   Future<void> _fetchHomeData() async {
@@ -179,6 +200,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final displayedKm = _currentKm + (_activeWalk?.distanceMeters ?? 0) / 1000;
+    final displayedMins = _currentMins + ((_activeWalk?.elapsedSeconds ?? 0) ~/ 60);
 
     if (_isLoading) {
       return Scaffold(
@@ -239,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 186,
                         height: 186,
                         child: CircularProgressIndicator(
-                          value: (_currentKm / _dailyGoalKm).clamp(0.0, 1.0),
+                          value: (displayedKm / _dailyGoalKm).clamp(0.0, 1.0),
                           strokeWidth: 14,
                           color: colorScheme.secondary,
                           backgroundColor: colorScheme.secondary.withValues(
@@ -251,10 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 150,
                         height: 150,
                         child: CircularProgressIndicator(
-                          value: (_currentMins / _dailyGoalMins).clamp(
-                            0.0,
-                            1.0,
-                          ),
+                          value: (displayedMins / _dailyGoalMins).clamp(0.0, 1.0),
                           strokeWidth: 10,
                           color: colorScheme.tertiary,
                           backgroundColor: colorScheme.tertiary.withValues(
@@ -267,7 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '${_currentKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
+                            '${displayedKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
@@ -289,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 4),
 
                           Text(
-                            '$_currentMins/$_dailyGoalMins',
+                            '$displayedMins/$_dailyGoalMins',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
@@ -339,30 +359,34 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 32),
 
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _currentIndex = 1;
-                    });
-                  },
-                  icon: const VitailIcon('play', size: 24),
-                  label: const Text(
-                    'Start walk',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: colorScheme.primary,
-                    foregroundColor: colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+              if (_activeWalk == null)
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _currentIndex = 1;
+                      });
+                    },
+                    icon: const VitailIcon('play', size: 24),
+                    label: const Text(
+                      'Start walk',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    elevation: 0,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      elevation: 0,
+                    ),
                   ),
-                ),
-              ),
+                )
+              else
+                _buildActiveWalkPanel(context),
+
               const SizedBox(height: 40),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -468,7 +492,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      const WalkScreen(),
+      WalkScreen(onProgress: _handleWalkProgress),
       RewardsScreen(isActive: _currentIndex == 2),
       const ProfileScreen(),
     ];
@@ -572,6 +596,13 @@ class _HomeScreenState extends State<HomeScreen> {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
+          if (index == 1 &&
+              _activeWalk != null &&
+              Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+            return;
+          }
+
           setState(() {
             _currentIndex = index;
             if (index == 0) _fetchHomeData();
@@ -593,6 +624,76 @@ class _HomeScreenState extends State<HomeScreen> {
                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+  Widget _buildActiveWalkPanel(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final progress = _activeWalk!;
+    final minutes = progress.elapsedSeconds ~/ 60;
+    final seconds = (progress.elapsedSeconds % 60).toString().padLeft(2, '0');
+    final time = '$minutes:$seconds';
+    final distance = (progress.distanceMeters / 1000).toStringAsFixed(1);
+    final fraction =
+        (progress.elapsedSeconds / (_dailyGoalMins * 60)).clamp(0.0, 1.0);
+
+    return InkWell(
+      onTap: () {
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
+      },
+      borderRadius: BorderRadius.circular(28),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: colorScheme.primary,
+          borderRadius: BorderRadius.circular(28),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.35),
+                  child: Icon(Icons.circle, color: colorScheme.onPrimary, size: 16),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Walk in progress',
+                        style: TextStyle(
+                          color: colorScheme.onPrimary,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '$time · $distance km',
+                        style: TextStyle(color: colorScheme.onPrimary),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: LinearProgressIndicator(
+                value: fraction,
+                minHeight: 14,
+                backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.35),
+                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
