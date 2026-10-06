@@ -5,11 +5,13 @@ import 'onboarding_style.dart';
 import 'microchip_screen.dart';
 import 'onboarding_goal_screen.dart';
 
+
 class HighPawScreen extends StatefulWidget {
   final String dogName;
   final int dailyGoalMins;
   final double dailyGoalKm;
   final String? breed;
+  final String? dogId;
 
   const HighPawScreen({
     super.key,
@@ -17,6 +19,7 @@ class HighPawScreen extends StatefulWidget {
     required this.dailyGoalMins,
     required this.dailyGoalKm,
     this.breed,
+    this.dogId,
   });
 
   @override
@@ -149,8 +152,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
                       ElevatedButton(
                         onPressed: () => Navigator.pushReplacement(
                           context,
-                          onboardingFadeRoute(const MicrochipScreen()),
-                        ),
+                          onboardingFadeRoute(MicrochipScreen(dogId: widget.dogId)),                        ),
                         style: OnboardingStyle.primaryButton,
                         child: Text('Continue',
                             style: OnboardingStyle.text(16,
