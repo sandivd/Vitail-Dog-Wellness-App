@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'dog_sharing.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'microchip_screen.dart';
@@ -51,12 +52,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
 
-      final dogResponse = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
+      final dogResponse = (await primaryDogForCurrentUser())?.dog ??
+          await Supabase.instance.client
+              .from('dogs')
+              .select()
+              .eq('owner_id', userId)
+              .limit(1)
+              .maybeSingle();
 
       final profileResponse = await Supabase.instance.client
           .from('profiles')

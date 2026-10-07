@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -5,13 +6,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'venue_detail.dart';
 import 'walk_in_progress.dart';
-import 'venues_screen.dart';
 import 'vitail_snack.dart';
-
-enum _RouteMode { last, longest }
+import 'dog_sharing.dart';
 
 class WalkScreen extends StatefulWidget {
-  const WalkScreen({super.key});
+  const WalkScreen({super.key, this.onProgress});
+
+  final WalkProgressCallback? onProgress;
 
   @override
   State<WalkScreen> createState() => _WalkScreenState();
@@ -34,13 +35,9 @@ class _WalkScreenState extends State<WalkScreen> {
       DraggableScrollableController();
   final TextEditingController _searchController = TextEditingController();
 
-  _RouteMode _routeMode = _RouteMode.last;
-
   LatLng? _currentPosition;
   LatLng? _droppedPin;
 
-  Map<String, dynamic>? _lastWalk;
-  bool _loadingLastWalk = true;
   bool _isStartingWalk = false;
 
   // Partner venues loaded from the Supabase 'partnered_venues' table.
@@ -78,7 +75,6 @@ class _WalkScreenState extends State<WalkScreen> {
   void initState() {
     super.initState();
     _locateUser();
-    _fetchLastWalk();
     _fetchVenues();
   }
 
@@ -87,6 +83,7 @@ class _WalkScreenState extends State<WalkScreen> {
     _sheetController.dispose();
     _searchController.dispose();
     super.dispose();
+    widget.onProgress?.call(null);
   }
 
   Future<void> _locateUser() async {
@@ -111,32 +108,6 @@ class _WalkScreenState extends State<WalkScreen> {
       _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
     } catch (_) {
       // Keep the default camera position if location isn't available yet.
-    }
-  }
-
-  Future<void> _fetchLastWalk() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) {
-        if (mounted) setState(() => _loadingLastWalk = false);
-        return;
-      }
-
-      final response = await Supabase.instance.client
-          .from('walks')
-          .select('distance_meters, duration_seconds, walk_date')
-          .eq('user_id', userId)
-          .order('walk_date', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      if (!mounted) return;
-      setState(() {
-        _lastWalk = response;
-        _loadingLastWalk = false;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _loadingLastWalk = false);
     }
   }
 
@@ -180,7 +151,6 @@ class _WalkScreenState extends State<WalkScreen> {
         builder: (_) => VenueDetailScreen(
           venue: venue,
           userLocation: _currentPosition,
-          onStartWalk: () => _startWalk(destination: venue.location),
         ),
       ),
     );
@@ -197,7 +167,6 @@ class _WalkScreenState extends State<WalkScreen> {
   void _dropPinAt(LatLng point) {
     setState(() {
       _droppedPin = point;
-      _routeMode = _RouteMode.longest;
     });
     _mapController?.animateCamera(CameraUpdate.newLatLng(point));
   }
@@ -211,9 +180,7 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   Set<Polyline> _buildPolylines(Color lineColor) {
-    if (_routeMode == _RouteMode.longest &&
-        _currentPosition != null &&
-        _droppedPin != null) {
+    if (_currentPosition != null && _droppedPin != null) {
       return {
         Polyline(
           polylineId: const PolylineId('pin_route'),
@@ -235,14 +202,6 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   String get _routeSummaryText {
-    if (_routeMode == _RouteMode.last) {
-      if (_loadingLastWalk) return '···';
-      if (_lastWalk == null) return 'No past walks yet';
-      final meters = (_lastWalk!['distance_meters'] as num).toDouble();
-      final seconds = (_lastWalk!['duration_seconds'] as num?)?.toInt() ?? 0;
-      return '${(meters / 1000).toStringAsFixed(1)} km · ${(seconds / 60).round()} min';
-    }
-
     if (_currentPosition == null || _droppedPin == null) {
       return 'Search or drop a pin for a route';
     }
@@ -264,14 +223,8 @@ class _WalkScreenState extends State<WalkScreen> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Single dog per user — fetch it directly instead of routing through
-      // a dog-selection screen.
-      final dog = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
+      
+      final dog = (await primaryDogForCurrentUser())?.dog;
 
       if (!mounted) return;
 
@@ -290,10 +243,10 @@ class _WalkScreenState extends State<WalkScreen> {
         if (!mounted) return;
       }
 
-      final hasPlannedRoute =
-          _currentPosition != null && routeDestination != null;
+      final LatLng? start = _currentPosition;
+      final LatLng? end = routeDestination;
 
-      if (routeDestination != null && !hasPlannedRoute) {
+      if (end != null && start == null) {
         showVitailSnack(
           context,
           'Couldn’t get your location, so the route won’t be shown.',
@@ -306,9 +259,8 @@ class _WalkScreenState extends State<WalkScreen> {
         MaterialPageRoute(
           builder: (context) => WalkInProgress(
             dog: dog,
-            plannedRoute: hasPlannedRoute
-                ? [_currentPosition!, routeDestination!]
-                : null,
+            plannedRoute: (start != null && end != null) ? [start, end] : null,
+            onProgress: widget.onProgress,
           ),
         ),
       );
@@ -399,19 +351,11 @@ class _WalkScreenState extends State<WalkScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(Icons.gps_fixed,
+                          child: VitailIcon('locate-fixed',
                               color: colorScheme.secondary, size: 22),
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Route mode toggle — one bar, selected side shown as a
-                  // green pill.
-                  _RouteModeToggle(
-                    mode: _routeMode,
-                    onChanged: (mode) => setState(() => _routeMode = mode),
                   ),
                 ],
               ),
@@ -481,7 +425,7 @@ class _WalkScreenState extends State<WalkScreen> {
                                 ),
                               ),
                               SizedBox(width: 8),
-                              Icon(Icons.play_arrow, size: 24),
+                              VitailIcon('play', size: 24),
                             ],
                           ),
                   ),
@@ -539,28 +483,28 @@ class _WalkScreenState extends State<WalkScreen> {
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const VenuesScreen(),
-                              ),
-                            );
-                          },
-                          style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: const Size(0, 0),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'See all',
-                            style: TextStyle(
-                              color: colorScheme.secondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
+                        // TextButton(
+                        //   onPressed: () {
+                        //     Navigator.push(
+                        //       context,
+                        //       MaterialPageRoute(
+                        //         builder: (context) => const VenuesScreen(),
+                        //       ),
+                        //     );
+                        //   },
+                        //   style: TextButton.styleFrom(
+                        //     padding: EdgeInsets.zero,
+                        //     minimumSize: const Size(0, 0),
+                        //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        //   ),
+                        //   child: Text(
+                        //     'See all',
+                        //     style: TextStyle(
+                        //       color: colorScheme.secondary,
+                        //       fontWeight: FontWeight.w600,
+                        //     ),
+                        //   ),
+                        // ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -607,6 +551,7 @@ class _WalkScreenState extends State<WalkScreen> {
                           subtitle: venue.distanceLabelFrom(_currentPosition),
                           tag: venue.hoursLabel,
                           tagColor: colorScheme.tertiary.withValues(alpha: 0.3),
+                          photoUrl: venue.photoUrl,
                           onTap: () => _openVenue(venue),
                         ),
                       ),
@@ -621,100 +566,6 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 }
 
-/// Segmented bar for choosing between "Last route" and "Longest route" —
-/// one pill-shaped container, with the selected side highlighted as a
-/// solid green pill.
-class _RouteModeToggle extends StatelessWidget {
-  const _RouteModeToggle({required this.mode, required this.onChanged});
-
-  final _RouteMode mode;
-  final ValueChanged<_RouteMode> onChanged;
-
-  // Matches the green used for mood chips / points pill elsewhere in the
-  // app (see walk_summary.dart's _kGreen) — not in ColorScheme, so hardcoded
-  // to stay consistent with those other hardcoded Figma tokens.
-  static const Color _kGreen = Color(0xFFAEC568);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _RouteModeSegment(
-              label: 'Last route',
-              selected: mode == _RouteMode.last,
-              selectedColor: _kGreen,
-              onTap: () => onChanged(_RouteMode.last),
-            ),
-          ),
-          Expanded(
-            child: _RouteModeSegment(
-              label: 'Longest route',
-              selected: mode == _RouteMode.longest,
-              selectedColor: _kGreen,
-              onTap: () => onChanged(_RouteMode.longest),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RouteModeSegment extends StatelessWidget {
-  const _RouteModeSegment({
-    required this.label,
-    required this.selected,
-    required this.selectedColor,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final Color selectedColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? selectedColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// A single nearby-venue row: placeholder thumbnail, name/subtitle, tag pill,
 /// and a chevron. Backed by placeholder data for now (see _nearbyVenues).
 class _VenueCard extends StatelessWidget {
@@ -724,6 +575,7 @@ class _VenueCard extends StatelessWidget {
     required this.tag,
     required this.tagColor,
     required this.onTap,
+    this.photoUrl,
   });
 
   final String name;
@@ -731,6 +583,9 @@ class _VenueCard extends StatelessWidget {
   final String tag;
   final Color tagColor;
   final VoidCallback onTap;
+
+  /// Venue photo; the grey square shows when null, loading, or on error.
+  final String? photoUrl;
 
   @override
   Widget build(BuildContext context) {
@@ -756,6 +611,27 @@ class _VenueCard extends StatelessWidget {
                 color: colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(14),
               ),
+              clipBehavior: Clip.antiAlias,
+              child: photoUrl == null
+                  ? null
+                  : Image.network(
+                      photoUrl!,
+                      width: 56,
+                      height: 56,
+                      fit: BoxFit.cover,
+                      // Decode at thumbnail size, not full resolution.
+                      cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).round(),
+                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 250),
+                          child: child,
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) =>
+                          const SizedBox.shrink(),
+                    ),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -795,7 +671,7 @@ class _VenueCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+            VitailIcon('chevron-right', color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),

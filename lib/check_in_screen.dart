@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -93,7 +94,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
             child: IconButton(
               tooltip: 'Close',
               onPressed: () => Navigator.pop(context, _collected),
-              icon: const Text('×', style: TextStyle(fontSize: 26)),
+              icon: const VitailIcon('x', size: 24),
             ),
           ),
         ],

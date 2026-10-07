@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -45,7 +46,8 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
   _View _view = _View.form;
   bool _uploadTab = false;
-  XFile? _certificateFile;
+  File? _certificateFile;
+  String? _certificateFileName;
   bool _isSaving = false;
 
   @override
@@ -113,7 +115,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     if (_certificateFile == null) {
       showVitailSnack(
         context,
-        'Please select a certificate photo first.',
+        'Please select a certificate file first.',
         type: VitailSnackType.error,
       );
       return;
@@ -125,14 +127,17 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       final userId = client.auth.currentUser?.id;
       if (userId == null) throw Exception('Not signed in');
 
-      final file = File(_certificateFile!.path);
+      final ext = _certificateFileName != null &&
+              _certificateFileName!.contains('.')
+          ? _certificateFileName!.split('.').last.toLowerCase()
+          : 'jpg';
       final fileName =
-          '${userId}_certificate_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          '${userId}_certificate_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       // Upload certificate to Supabase Storage
       await client.storage.from('dog_photos').upload(
             fileName,
-            file,
+            _certificateFile!,
             fileOptions: const FileOptions(upsert: true),
           );
       final certUrl = client.storage.from('dog_photos').getPublicUrl(fileName);
@@ -182,7 +187,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
   Future<void> _pickCertificate() async {
     FocusScope.of(context).unfocus();
-    final source = await showModalBottomSheet<ImageSource>(
+    final action = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: OnboardingStyle.background,
       shape: const RoundedRectangleBorder(
@@ -209,14 +214,21 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                     color: OnboardingStyle.ink),
                 title: Text('Take photo of certificate',
                     style: OnboardingStyle.text(14, weight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                onTap: () => Navigator.pop(ctx, 'camera'),
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library_outlined,
                     color: OnboardingStyle.ink),
-                title: Text('Choose from photos',
+                title: Text('Choose from photo library',
                     style: OnboardingStyle.text(14, weight: FontWeight.w600)),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                onTap: () => Navigator.pop(ctx, 'gallery'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.attach_file_rounded,
+                    color: OnboardingStyle.ink),
+                title: Text('Choose document (PDF, JPG, PNG)',
+                    style: OnboardingStyle.text(14, weight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'file'),
               ),
             ],
           ),
@@ -224,23 +236,58 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       ),
     );
 
-    if (source == null) return;
+    if (action == null) return;
 
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? file = await picker.pickImage(
-        source: source,
-        maxWidth: 1600,
-        imageQuality: 85,
-      );
-      if (file != null && mounted) {
-        setState(() => _certificateFile = file);
+      if (action == 'file') {
+        // Direct call to FilePicker.pickFiles (no .platform)
+        final dynamic result = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+        );
+        if (result != null) {
+          String? pickedPath;
+          String? pickedName;
+
+          if (result is List && result.isNotEmpty) {
+            final dynamic first = result.first;
+            pickedPath = first.path as String?;
+            pickedName = first.name as String?;
+          } else {
+            final dynamic files = result.files;
+            if (files is List && files.isNotEmpty) {
+              final dynamic first = files.first;
+              pickedPath = first.path as String?;
+              pickedName = first.name as String?;
+            }
+          }
+
+          if (pickedPath != null) {
+            setState(() {
+              _certificateFile = File(pickedPath!);
+              _certificateFileName = pickedName ?? 'certificate';
+            });
+          }
+        }
+      } else {
+        final picker = ImagePicker();
+        final picked = await picker.pickImage(
+          source: action == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1600,
+          imageQuality: 85,
+        );
+        if (picked != null) {
+          setState(() {
+            _certificateFile = File(picked.path);
+            _certificateFileName = picked.name;
+          });
+        }
       }
     } catch (_) {
       if (mounted) {
         showVitailSnack(
           context,
-          'Could not access photos or camera.',
+          'Could not access file or camera.',
           type: VitailSnackType.error,
         );
       }
@@ -582,7 +629,21 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           const SizedBox(height: 8),
           _title(title),
           const SizedBox(height: 28),
-          const Center(child: OnboardingBadge(icon: Icons.verified_outlined)),
+          Center(
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: OnboardingStyle.green.withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.verified_outlined,
+                size: 28,
+                color: OnboardingStyle.green,
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
           Text(
             message,
@@ -601,6 +662,9 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       );
 
   Widget _uploadBox({required bool dashed}) {
+    final isPdf =
+        _certificateFileName?.toLowerCase().endsWith('.pdf') ?? false;
+
     final Widget inner = Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
@@ -626,7 +690,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                 Text('Upload microchip certificate',
                     style: OnboardingStyle.text(14, weight: FontWeight.w600)),
                 const SizedBox(height: 4),
-                Text('Tap to take photo or choose image',
+                Text('Tap to take photo or choose document',
                     style: OnboardingStyle.text(12,
                         color: OnboardingStyle.muted, weight: FontWeight.w500)),
               ],
@@ -635,19 +699,27 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
-                  child: Image.file(
-                    File(_certificateFile!.path),
-                    width: 54,
-                    height: 54,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 54,
-                      height: 54,
-                      color: const Color(0xFFF2EFE9),
-                      child: const Icon(Icons.description,
-                          color: OnboardingStyle.muted),
-                    ),
-                  ),
+                  child: isPdf
+                      ? Container(
+                          width: 54,
+                          height: 54,
+                          color: const Color(0xFFFBEFED),
+                          child: const Icon(Icons.picture_as_pdf_rounded,
+                              color: OnboardingStyle.coral, size: 28),
+                        )
+                      : Image.file(
+                          _certificateFile!,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 54,
+                            height: 54,
+                            color: const Color(0xFFF2EFE9),
+                            child: const Icon(Icons.description,
+                                color: OnboardingStyle.muted),
+                          ),
+                        ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -655,7 +727,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        _certificateFile!.name,
+                        _certificateFileName ?? 'Certificate',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style:
@@ -674,7 +746,10 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                 IconButton(
                   icon: const Icon(Icons.close,
                       size: 20, color: OnboardingStyle.muted),
-                  onPressed: () => setState(() => _certificateFile = null),
+                  onPressed: () => setState(() {
+                    _certificateFile = null;
+                    _certificateFileName = null;
+                  }),
                 ),
               ],
             ),

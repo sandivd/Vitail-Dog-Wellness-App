@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 
@@ -86,7 +87,7 @@ class _VitailLaunchState extends State<VitailLaunch> {
                             return child;
                           },
                           errorBuilder: (_, _, _) =>
-                              const Icon(Icons.pets, size: 96),
+                              const VitailIcon('paw-print', size: 96),
                         ),
                       ),
                       const SizedBox(height: 24),

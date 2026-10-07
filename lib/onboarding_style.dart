@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -89,19 +90,25 @@ class OnboardingPage extends StatelessWidget {
                           style: OnboardingStyle.text(24,
                               weight: FontWeight.w700, height: 1.3),
                         ),
-                        if (Navigator.canPop(context))
-                          Positioned(
-                            left: -24,
-                            top: -6,
+                        if (Navigator.canPop(context)) ...[
+                          Align(
+                            alignment: Alignment.centerLeft,
                             child: IconButton(
                               tooltip: 'Back',
                               onPressed: busy
                                   ? null
-                                  : (onBack ??
-                                      () => Navigator.maybePop(context)),
+                                  : (onBack ?? () => Navigator.maybePop(context)),
                               icon: OnboardingStyle.icon('back'),
                             ),
                           ),
+                          const SizedBox(height: 10),
+                        ],
+                        Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: OnboardingStyle.text(24,
+                              weight: FontWeight.w700, height: 1.3),
+                        ),
                       ],
                     ),
                     if (subtitle != null) ...[
@@ -130,7 +137,7 @@ class OnboardingPage extends StatelessWidget {
 class OnboardingBadge extends StatelessWidget {
   const OnboardingBadge({super.key, required this.icon, this.color});
 
-  final IconData icon;
+  final String icon;
   final Color? color;
 
   @override
@@ -143,7 +150,7 @@ class OnboardingBadge extends StatelessWidget {
         color: tint.withValues(alpha: 0.18),
         shape: BoxShape.circle,
       ),
-      child: Icon(icon, size: 28, color: tint),
+      child: VitailIcon(icon, size: 28, color: tint),
     );
   }
 }

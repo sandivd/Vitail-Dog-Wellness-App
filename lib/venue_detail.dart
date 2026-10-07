@@ -1,3 +1,4 @@
+import 'vitail_icon.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,9 +6,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
-import 'rewards_screen.dart';
+import 'reward_flow.dart';
+import 'reward_venues.dart';
+import 'rewards_data.dart';
+import 'venue_walk.dart';
+import 'detail_image_header.dart';
 
-/// One row of the `venues` table.
+/// One row of the `partnered_venues` table.
 ///
 /// Reads: partner_id, venue_name, closing_time, venue_details, points, and the
 /// location from EITHER numeric `latitude` + `longitude` columns (preferred)
@@ -21,6 +26,8 @@ class VenueInfo {
     required this.location,
     required this.details,
     this.points,
+    this.photoUrl,
+    this.venueType,
   });
 
   factory VenueInfo.fromJson(Map<String, dynamic> row) => VenueInfo(
@@ -30,6 +37,8 @@ class VenueInfo {
     location: _locationFromRow(row),
     details: row['venue_details']?.toString() ?? '',
     points: _asInt(row['points']),
+    photoUrl: _asPhotoUrl(row['photo_url']),
+    venueType: row['venue_type']?.toString(),
   );
 
   final String partnerId;
@@ -38,8 +47,18 @@ class VenueInfo {
   final LatLng? location;
   final String details;
 
+  /// 'vet' | 'park' | 'other' — null when the row predates the column
+  /// (treated as 'other').
+  final String? venueType;
+
+  bool get isVet => venueType == 'vet';
+  bool get isPark => venueType == 'park';
+
   /// Points a walker can earn by visiting (`points` column, int4).
   final int? points;
+
+  /// Venue photo (`photo_url` column, text). Null when empty or not a web URL.
+  final String? photoUrl;
 
   String get hoursLabel {
     final value = closingTime?.trim();
@@ -84,6 +103,19 @@ class VenueInfo {
     if (value is num) return value.toDouble();
     if (value is String) return double.tryParse(value.trim());
     return null;
+  }
+
+  /// Only full http(s) URLs are usable by Image.network; anything else
+  /// (blank, a bare storage path, junk) is treated as "no photo".
+  static String? _asPhotoUrl(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    final uri = Uri.tryParse(text);
+    final isWebUrl =
+        uri != null &&
+        uri.hasAuthority &&
+        (uri.scheme == 'http' || uri.scheme == 'https');
+    return isWebUrl ? text : null;
   }
 
   static int? _asInt(dynamic value) {
@@ -188,15 +220,21 @@ class VenueDetailScreen extends StatefulWidget {
     required this.venue,
     this.userLocation,
     this.onStartWalk,
+    this.onCheckRewards,
+    this.rewardsRepository,
+    this.venueLoader = loadRewardVenues,
   });
 
+  final RewardsRepository? rewardsRepository;
+  final Future<List<VenueInfo>> Function() venueLoader;
+  final VoidCallback? onCheckRewards;
   final VenueInfo venue;
 
   /// The user's position if the caller already has it. If null, this screen
   /// looks it up itself so the distance still fills in.
   final LatLng? userLocation;
 
-  /// Called by the "Start walk to …" button. If null, the button is hidden.
+  /// Optional override for the destination walk.
   final Future<void> Function()? onStartWalk;
 
   @override
@@ -207,6 +245,69 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   LatLng? _userLocation;
   bool _locating = false;
   bool _startingWalk = false;
+  bool _loadingReward = false;
+
+  Future<void> _checkRewards() async {
+    if (_loadingReward) return;
+    setState(() => _loadingReward = true);
+    try {
+      final repository =
+          widget.rewardsRepository ?? SupabaseRewardsRepository();
+      final catalogue = await repository.loadCatalogue();
+      final venues = await widget.venueLoader();
+      final offers =
+          catalogue.offers.where((offer) {
+            final linked = venueForReward(offer, venues);
+            return linked != null &&
+                linked.partnerId == widget.venue.partnerId &&
+                linked.name == widget.venue.name;
+          }).toList()..sort((a, b) {
+            final cost = a.pointsCost.compareTo(b.pointsCost);
+            return cost != 0 ? cost : a.id.compareTo(b.id);
+          });
+      if (!mounted) return;
+      if (offers.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No rewards are available for this venue yet.'),
+          ),
+        );
+        return;
+      }
+      final offer = offers.first;
+      final receipts = await repository.loadRedeemed();
+      if (!mounted) return;
+      final receipt = receipts
+          .where((reward) => reward.rewardId == offer.id && !reward.isCollected)
+          .firstOrNull;
+      await Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RewardFlow(
+            offer: offer,
+            repository: repository,
+            catalogue: catalogue,
+            receipts: receipts,
+            canRedeem: catalogue.points >= offer.pointsCost,
+            redemption: receipt,
+            venueLoader: widget.venueLoader,
+            onChanged: (_) {},
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not load rewards. Please try CHECK REWARDS again.',
+            ),
+          ),
+        );
+    }} finally {
+      if (mounted) setState(() => _loadingReward = false);
+    }
+  }
 
   @override
   void initState() {
@@ -244,8 +345,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   }
 
   Future<void> _startWalk() async {
-    final onStartWalk = widget.onStartWalk;
-    if (onStartWalk == null || _startingWalk) return;
+    final location = widget.venue.location;
+    if (location == null || _startingWalk) return;
+    final onStartWalk =
+        widget.onStartWalk ?? () => startVenueWalk(context, location);
     setState(() => _startingWalk = true);
     try {
       await onStartWalk();
@@ -276,84 +379,71 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       body: CustomScrollView(
         slivers: [
           SliverToBoxAdapter(
-            child: SizedBox(
-              height: 320 + MediaQuery.paddingOf(context).top,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(
-                    color: dark
-                        ? const Color(0xFF39443F)
-                        : const Color(0xFFD6E7E1),
-                  ),
-                  Positioned(
-                    top: MediaQuery.paddingOf(context).top + 12,
-                    left: 20,
-                    child: Material(
-                      color: cardColor,
-                      elevation: 2,
-                      shadowColor: Colors.black.withValues(alpha: 0.15),
-                      shape: const CircleBorder(),
-                      child: IconButton(
-                        tooltip: 'Back',
-                        onPressed: () => Navigator.pop(context),
-                        icon: Icon(Icons.chevron_left, color: colors.onSurface),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: Stack(
+              children: [
+                // Existing header: sizes the area and is what shows while the
+                // photo loads, if it fails, or if the venue has no photo.
+                const DetailImageHeader(),
+                if (venue.photoUrl != null)
+                  Positioned.fill(child: _VenuePhoto(url: venue.photoUrl!)),
+              ],
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 36),
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 Text(
                   venue.name,
                   style: TextStyle(
-                    fontSize: 32,
-                    height: 1.2,
+                    fontSize: 24,
+                    height: 1.4,
                     fontWeight: FontWeight.w700,
                     color: colors.onSurface,
                   ),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 16),
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: FilledButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RewardsScreen(
-                            partnerId: venue.partnerId,
-                            venueName: venue.name,
-                          ),
-                        ),
-                      );
-                    },
-                    style: FilledButton.styleFrom(
+                  child: OutlinedButton(
+                    onPressed: _loadingReward
+                        ? null
+                        : widget.onCheckRewards ?? _checkRewards,
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: dark ? colors.outline : const Color(0xFFDBD7D1),
+                        width: 1.5,
+                      ),
+                      textStyle: const TextStyle(
+                        fontFamily: 'PlusJakartaSans',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                       backgroundColor: colors.tertiary,
                       foregroundColor: const Color(0xFF241C24),
                       minimumSize: const Size(0, 48),
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 10,
+                      ),
                     ),
-                    child: const Text('CHECK REWARDS'),
+                    child: Text(
+                      _loadingReward ? 'LOADING REWARD…' : 'CHECK REWARDS',
+                    ),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 22,
+                    horizontal: 20,
                     vertical: 18,
                   ),
                   decoration: BoxDecoration(
                     color: cardColor,
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: dark ? colors.outline : const Color(0xFFDEDAD4),
+                      color: dark ? colors.outline : const Color(0xFFDBD7D1),
                       width: 1.5,
                     ),
                   ),
@@ -362,14 +452,16 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       children: [
                         Expanded(
                           child: _VenueInfoColumn(
-                            label: 'OPEN',
+                            label: 'HOURS',
                             value: venue.hoursLabel,
                           ),
                         ),
                         VerticalDivider(
                           width: 28,
                           thickness: 1,
-                          color: dark ? colors.outline : const Color(0xFFDEDAD4),
+                          color: dark
+                              ? colors.outline
+                              : const Color(0xFFDBD7D1),
                         ),
                         Expanded(
                           child: _VenueInfoColumn(
@@ -381,11 +473,11 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 34),
+                const SizedBox(height: 24),
                 Text(
-                  'About this venue',
+                  'ABOUT THIS VENUE',
                   style: TextStyle(
-                    fontSize: 22,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: colors.onSurface,
                   ),
@@ -396,7 +488,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       ? 'Details for this venue are not available yet.'
                       : venue.details.trim(),
                   style: TextStyle(
-                    fontSize: 17,
+                    fontSize: 15,
                     height: 1.5,
                     color: colors.onSurfaceVariant,
                   ),
@@ -404,16 +496,16 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                 // Points card: only the points that can be earned here, and
                 // only when the venue actually offers some.
                 if (points != null && points > 0) ...[
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 22,
+                      horizontal: 20,
                       vertical: 22,
                     ),
                     decoration: BoxDecoration(
                       color: cardColor,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.06),
@@ -437,12 +529,12 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: widget.onStartWalk == null
+      bottomNavigationBar: widget.venue.location == null
           ? null
           : SafeArea(
               minimum: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-              child: SizedBox(
-                height: 60,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 60),
                 child: FilledButton(
                   onPressed: _startingWalk ? null : _startWalk,
                   style: FilledButton.styleFrom(
@@ -453,7 +545,12 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     ),
                     disabledForegroundColor: colors.onPrimary,
                     shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 16,
+                    ),
                     textStyle: const TextStyle(
+                      fontFamily: 'PlusJakartaSans',
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                     ),
@@ -469,12 +566,58 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         )
                       : Text(
                           'Start walk to ${venue.name}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
                 ),
               ),
             ),
+    );
+  }
+}
+
+/// Full-bleed venue photo drawn over the header. Invisible until it has
+/// loaded (and stays invisible on error), so the placeholder header underneath
+/// is what the user sees in those cases. Carries its own back button because
+/// the photo covers the header's.
+class _VenuePhoto extends StatelessWidget {
+  const _VenuePhoto({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final backButton = Positioned(
+      top: MediaQuery.paddingOf(context).top + 12,
+      left: 20,
+      child: Material(
+        color: dark ? const Color(0xFF242321) : Colors.white,
+        elevation: 2,
+        shadowColor: Colors.black.withValues(alpha: 0.15),
+        shape: const CircleBorder(),
+        child: IconButton(
+          tooltip: 'Back',
+          onPressed: () => Navigator.pop(context),
+          icon: VitailIcon('chevron-left', color: colors.onSurface),
+        ),
+      ),
+    );
+
+    return Image.network(
+      url,
+      fit: BoxFit.cover,
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        final loaded = wasSynchronouslyLoaded || frame != null;
+        return AnimatedOpacity(
+          opacity: loaded ? 1 : 0,
+          duration: wasSynchronouslyLoaded
+              ? Duration.zero
+              : const Duration(milliseconds: 300),
+          child: Stack(fit: StackFit.expand, children: [child, backButton]),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
     );
   }
 }
@@ -500,11 +643,12 @@ class _VenueInfoColumn extends StatelessWidget {
             color: colors.onSurfaceVariant,
           ),
         ),
-        const SizedBox(height: 7),
+        const SizedBox(height: 6),
         Text(
           value,
           style: TextStyle(
             fontSize: 16,
+            height: 1.4,
             fontWeight: FontWeight.w700,
             color: colors.onSurface,
           ),
