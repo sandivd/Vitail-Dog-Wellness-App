@@ -1,17 +1,15 @@
-import 'vitail_icon.dart';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
-
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'certificate_reader.dart';
-import 'certificate_scanner.dart';
+import 'vitail_snack.dart';
 
 String? microchipNumberError(String raw) {
   final String value = raw.trim();
@@ -28,8 +26,15 @@ String? microchipNumberError(String raw) {
 enum _View { form, verified, failed, submitted }
 
 class MicrochipScreen extends StatefulWidget {
-  const MicrochipScreen({super.key, this.dogId});
+  const MicrochipScreen({
+    super.key,
+    this.isFromProfile = false,
+    this.initialNumber,
+    this.dogId,
+  });
 
+  final bool isFromProfile;
+  final String? initialNumber;
   final String? dogId;
 
   @override
@@ -37,62 +42,19 @@ class MicrochipScreen extends StatefulWidget {
 }
 
 class _MicrochipScreenState extends State<MicrochipScreen> {
-  final TextEditingController _numberController = TextEditingController();
+  late final TextEditingController _numberController;
 
   _View _view = _View.form;
   bool _uploadTab = false;
-  static const int _maxBytes = 10 * 1024 * 1024;
-
-  PlatformFile? _certificate;
-  bool _uploading = false;
-
-    bool _scanning = false;
-  CertificateReading? _reading;
-  String? _dogName;
-  DateTime? _dogBirthday;
+  File? _certificateFile;
+  String? _certificateFileName;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadDog();
-  }
-
-  Future<void> _loadDog() async {
-    final String? dogId = widget.dogId;
-    if (dogId == null) return;
-    try {
-      final Map<String, dynamic>? dog = await Supabase.instance.client
-          .from('dogs')
-          .select('dog_name, birthday')
-          .eq('id', dogId)
-          .maybeSingle();
-      if (dog == null) return;
-      _dogName = dog['dog_name'] as String?;
-      final String? birthday = dog['birthday'] as String?;
-      _dogBirthday = birthday == null ? null : DateTime.tryParse(birthday);
-    } catch (e) {
-      debugPrint('Could not load dog details: ${e.runtimeType}');
-    }
-  }
-
-  Future<void> _readCertificate(PlatformFile file) async {
-    try {
-      final String text = await extractCertificateText(file);
-      final CertificateReading reading = readCertificateText(
-        text,
-        dogName: _dogName,
-        dogBirthday: _dogBirthday,
-      );
-      if (mounted && identical(_certificate, file)) {
-        setState(() => _reading = reading);
-      }
-    } catch (e) {
-      debugPrint('Certificate reader failed: ${e.runtimeType}');
-    } finally {
-      if (mounted && identical(_certificate, file)) {
-        setState(() => _scanning = false);
-      }
-    }
+    _numberController =
+        TextEditingController(text: widget.initialNumber ?? '');
   }
 
   @override
@@ -102,16 +64,234 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
   }
 
   void _finish() {
-    Navigator.pushReplacement<void, void>(
-      context,
-      onboardingFadeRoute<void>(const HomeScreen()),
-    );
+    if (widget.isFromProfile) {
+      Navigator.pop(context, true);
+    } else {
+      Navigator.pushReplacement<void, void>(
+        context,
+        onboardingFadeRoute<void>(const HomeScreen()),
+      );
+    }
   }
 
-  void _verify() {
+  Future<void> _verifyAndSave() async {
     FocusScope.of(context).unfocus();
     final String? error = microchipNumberError(_numberController.text);
-    setState(() => _view = error == null ? _View.verified : _View.failed);
+    if (error != null) {
+      setState(() => _view = _View.failed);
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) throw Exception('Not signed in');
+
+      final chipNumber = _numberController.text.trim();
+
+      var query = client.from('dogs').update({'microchip_number': chipNumber});
+      if (widget.dogId != null && widget.dogId!.isNotEmpty) {
+        await query.eq('id', widget.dogId!);
+      } else {
+        await query.eq('owner_id', userId);
+      }
+
+      if (!mounted) return;
+      setState(() => _view = _View.verified);
+    } catch (_) {
+      if (!mounted) return;
+      showVitailSnack(
+        context,
+        'Could not save microchip number. Please try again.',
+        type: VitailSnackType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _submitCertificate() async {
+    if (_certificateFile == null) {
+      showVitailSnack(
+        context,
+        'Please select a certificate file first.',
+        type: VitailSnackType.error,
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final client = Supabase.instance.client;
+      final userId = client.auth.currentUser?.id;
+      if (userId == null) throw Exception('Not signed in');
+
+      final ext = _certificateFileName != null &&
+              _certificateFileName!.contains('.')
+          ? _certificateFileName!.split('.').last.toLowerCase()
+          : 'jpg';
+      final fileName =
+          '${userId}_certificate_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      // Upload certificate to Supabase Storage
+      await client.storage.from('dog_photos').upload(
+            fileName,
+            _certificateFile!,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final certUrl = client.storage.from('dog_photos').getPublicUrl(fileName);
+
+      final chipNumber = _numberController.text.trim();
+      final hasValidChip =
+          chipNumber.isNotEmpty && microchipNumberError(chipNumber) == null;
+
+      try {
+        var query = client.from('dogs').update({
+          if (hasValidChip) 'microchip_number': chipNumber,
+          'microchip_certificate_url': certUrl,
+        });
+        if (widget.dogId != null && widget.dogId!.isNotEmpty) {
+          await query.eq('id', widget.dogId!);
+        } else {
+          await query.eq('owner_id', userId);
+        }
+      } catch (_) {
+        // Fallback if microchip_certificate_url column does not exist
+        if (hasValidChip) {
+          try {
+            var query =
+                client.from('dogs').update({'microchip_number': chipNumber});
+            if (widget.dogId != null && widget.dogId!.isNotEmpty) {
+              await query.eq('id', widget.dogId!);
+            } else {
+              await query.eq('owner_id', userId);
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (!mounted) return;
+      setState(() => _view = _View.submitted);
+    } catch (_) {
+      if (!mounted) return;
+      showVitailSnack(
+        context,
+        'Could not upload certificate. Please try again.',
+        type: VitailSnackType.error,
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _pickCertificate() async {
+    FocusScope.of(context).unfocus();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: OnboardingStyle.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: OnboardingStyle.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt_outlined,
+                    color: OnboardingStyle.ink),
+                title: Text('Take photo of certificate',
+                    style: OnboardingStyle.text(14, weight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'camera'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined,
+                    color: OnboardingStyle.ink),
+                title: Text('Choose from photo library',
+                    style: OnboardingStyle.text(14, weight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'gallery'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.attach_file_rounded,
+                    color: OnboardingStyle.ink),
+                title: Text('Choose document (PDF, JPG, PNG)',
+                    style: OnboardingStyle.text(14, weight: FontWeight.w600)),
+                onTap: () => Navigator.pop(ctx, 'file'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (action == null) return;
+
+    try {
+      if (action == 'file') {
+        // Direct call to FilePicker.pickFiles (no .platform)
+        final dynamic result = await FilePicker.pickFiles(
+          type: FileType.custom,
+          allowedExtensions: ['pdf', 'png', 'jpg', 'jpeg'],
+        );
+        if (result != null) {
+          String? pickedPath;
+          String? pickedName;
+
+          if (result is List && result.isNotEmpty) {
+            final dynamic first = result.first;
+            pickedPath = first.path as String?;
+            pickedName = first.name as String?;
+          } else {
+            final dynamic files = result.files;
+            if (files is List && files.isNotEmpty) {
+              final dynamic first = files.first;
+              pickedPath = first.path as String?;
+              pickedName = first.name as String?;
+            }
+          }
+
+          if (pickedPath != null) {
+            setState(() {
+              _certificateFile = File(pickedPath!);
+              _certificateFileName = pickedName ?? 'certificate';
+            });
+          }
+        }
+      } else {
+        final picker = ImagePicker();
+        final picked = await picker.pickImage(
+          source: action == 'camera' ? ImageSource.camera : ImageSource.gallery,
+          maxWidth: 1600,
+          imageQuality: 85,
+        );
+        if (picked != null) {
+          setState(() {
+            _certificateFile = File(picked.path);
+            _certificateFileName = picked.name;
+          });
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        showVitailSnack(
+          context,
+          'Could not access file or camera.',
+          type: VitailSnackType.error,
+        );
+      }
+    }
   }
 
   void _back() {
@@ -119,122 +299,12 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       case _View.form:
         Navigator.maybePop(context);
       case _View.failed:
+        setState(() => _view = _View.form);
       case _View.verified:
       case _View.submitted:
-        setState(() => _view = _View.form);
+        _finish();
     }
   }
-
-    void _showMessage(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
-  }
-
-  String _contentType(String extension) {
-    switch (extension) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'png':
-        return 'image/png';
-      default:
-        return 'image/jpeg';
-    }
-  }
-
-    Future<void> _pickCertificate() async {
-    if (_uploading) return;
-    final PlatformFile? file = await FilePicker.pickFile(
-      type: FileType.custom,
-      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png'],
-    );
-    if (file == null || !mounted) return;
-    final int? bytes = await file.length();
-    if (!mounted) return;
-    if (bytes == null || bytes == 0) {
-      _showMessage("We couldn't read that file. Try another one.");
-      return;
-    }
-    if (bytes > _maxBytes) {
-      _showMessage('That file is over 10 MB. Try a smaller scan or photo.');
-      return;
-    }
-    setState(() {
-      _certificate = file;
-      _reading = null;
-      _scanning = true;
-    });
-    await _readCertificate(file);
-  }
-
-  Future<void> _submitCertificate() async {
-    final PlatformFile? file = _certificate;
-    final String? dogId = widget.dogId;
-    final CertificateReading? reading = _reading;
-    if (file == null) {
-      _showMessage('Choose your certificate first.');
-      return;
-    }
-    final SupabaseClient client = Supabase.instance.client;
-    final String? userId = client.auth.currentUser?.id;
-    if (dogId == null || file.path == null || userId == null) {
-      _showMessage('Something went wrong. Please try again.');
-      return;
-    }
-
-    final String extension = file.name.split('.').last.toLowerCase();
-    final String storagePath =
-        '$userId/$dogId/${DateTime.now().millisecondsSinceEpoch}.$extension';
-
-    setState(() => _uploading = true);
-    try {
-      await client.storage.from('microchip_certificates').upload(
-            storagePath,
-            File(file.path!),
-            fileOptions: FileOptions(contentType: _contentType(extension)),
-          );
-      try {
-        await client.from('microchip_submissions').insert({
-          'dog_id': dogId,
-          'file_path': storagePath,
-          'extracted_microchip': reading?.microchipNumber,
-          'reader_flags': reading == null
-              ? <String>['reader_failed']
-              : reading.issues.map((issue) => issue.name).toList(),
-        });
-      } catch (_) {
-        await client.storage.from('microchip_certificates').remove([storagePath]);
-        rethrow;
-      }
-      if (!mounted) return;
-      setState(() {
-        _certificate = null;
-        _view = _View.submitted;
-      });
-    } catch (e) {
-      debugPrint('Certificate upload failed: $e');
-      if (mounted) _showMessage("Couldn't upload your certificate. Please try again.");
-    } finally {
-      if (mounted) setState(() => _uploading = false);
-    }
-  }
-
-  Widget _submitButton() => ElevatedButton(
-        onPressed: _certificate == null ||
-                _uploading ||
-                _scanning ||
-                _reading?.canSubmit == false
-            ? null
-            : _submitCertificate,
-        style: OnboardingStyle.primaryButton,
-        child: _uploading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2.5, color: OnboardingStyle.muted),
-              )
-            : Text('Submit certificate',
-                style: OnboardingStyle.text(16, color: Colors.white)),
-      );
 
   @override
   Widget build(BuildContext context) {
@@ -263,7 +333,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                     child: Container(
                       alignment: Alignment.topCenter,
                       padding: EdgeInsets.only(
-                          top: constraints.maxHeight * 0.10),
+                          top: constraints.maxHeight * 0.08),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 460),
                         child: Padding(
@@ -303,19 +373,17 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       case _View.verified:
         return _result(
           title: 'Microchip verified',
-          message:
-              'Nice, you\'re all set to redeem reward coupons too.',
+          message: 'Nice, you\'re all set to redeem reward coupons too.',
           onContinue: _finish,
         );
       case _View.failed:
         return _failed();
-            case _View.submitted:
+      case _View.submitted:
         return _result(
           title: 'Certificate submitted',
           message:
               'We\'ve received your certificate. We\'ll verify it and get back to you within 24 hours.',
-            icon: 'clock',
-            onContinue: _finish,
+          onContinue: _finish,
         );
     }
   }
@@ -373,24 +441,32 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         ),
       );
 
-  Widget _skipLink() => Center(
-        child: TextButton(
-          onPressed: _finish,
-          child: Text(
-            'Skip for now, use the app as a tracker & journal',
-            textAlign: TextAlign.center,
-            style: OnboardingStyle.text(12,
-                color: OnboardingStyle.muted, weight: FontWeight.w500),
-          ),
+  Widget _skipLink() {
+    if (widget.isFromProfile) {
+      return const SizedBox.shrink();
+    }
+    return Center(
+      child: TextButton(
+        onPressed: _finish,
+        child: Text(
+          'Skip for now, use the app as a tracker & journal',
+          textAlign: TextAlign.center,
+          style: OnboardingStyle.text(12,
+              color: OnboardingStyle.muted, weight: FontWeight.w500),
         ),
-      );
+      ),
+    );
+  }
 
   Widget _numberForm() => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _title("Add your dog's microchip"),
+            child: _title(widget.initialNumber != null &&
+                    widget.initialNumber!.isNotEmpty
+                ? "Update your dog's microchip"
+                : "Add your dog's microchip"),
           ),
           const SizedBox(height: 20),
           _tabs(),
@@ -433,10 +509,22 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: _verify,
+            onPressed: _isSaving ? null : _verifyAndSave,
             style: OnboardingStyle.primaryButton,
-            child: Text('Verify',
-                style: OnboardingStyle.text(16, color: Colors.white)),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : Text(
+                    widget.initialNumber != null &&
+                            widget.initialNumber!.isNotEmpty
+                        ? 'Update & Verify'
+                        : 'Verify',
+                    style: OnboardingStyle.text(16, color: Colors.white),
+                  ),
           ),
           const SizedBox(height: 8),
           _skipLink(),
@@ -448,19 +536,33 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         children: [
           Align(
             alignment: Alignment.centerLeft,
-            child: _title("Add your dog's microchip"),
+            child: _title(widget.initialNumber != null &&
+                    widget.initialNumber!.isNotEmpty
+                ? "Update your dog's microchip"
+                : "Add your dog's microchip"),
           ),
           const SizedBox(height: 20),
           _tabs(),
           const SizedBox(height: 14),
           _helper(
-            'Optional: upload your dog\'s microchip certificate and we\'ll verify it for you.',
+            'Optional: Needed only to redeem reward coupons. You can still track walks and keep a journal without it.',
           ),
           const SizedBox(height: 20),
           _uploadBox(dashed: false),
-          _readingSummary(),
           const SizedBox(height: 20),
-          _submitButton(),
+          ElevatedButton(
+            onPressed: _isSaving ? null : _submitCertificate,
+            style: OnboardingStyle.primaryButton,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : Text('Submit certificate',
+                    style: OnboardingStyle.text(16, color: Colors.white)),
+          ),
           const SizedBox(height: 8),
           _skipLink(),
         ],
@@ -479,12 +581,34 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           ),
           const SizedBox(height: 24),
           _uploadBox(dashed: true),
-          _readingSummary(),
           const SizedBox(height: 20),
-          _submitButton(),
-          const SizedBox(height: 14),
+          ElevatedButton(
+            onPressed: _isSaving ? null : _submitCertificate,
+            style: OnboardingStyle.primaryButton,
+            child: _isSaving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : Text('Submit certificate',
+                    style: OnboardingStyle.text(16, color: Colors.white)),
+          ),
+          const SizedBox(height: 10),
+          Center(
+            child: TextButton(
+              onPressed: () => setState(() => _view = _View.form),
+              child: Text(
+                'Try entering number again',
+                style: OnboardingStyle.text(13,
+                    color: OnboardingStyle.coral, weight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
           Text(
-            'We\'ll review your certificate and get back to you within 1\u20132 business days.',
+            'We\'ll review your certificate and get back to you within 1–2 business days.',
             textAlign: TextAlign.center,
             style: OnboardingStyle.text(12,
                 color: OnboardingStyle.muted, weight: FontWeight.w500, height: 1.5),
@@ -498,7 +622,6 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     required String title,
     required String message,
     required VoidCallback onContinue,
-    String icon = 'badge-check',
   }) =>
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -506,7 +629,21 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           const SizedBox(height: 8),
           _title(title),
           const SizedBox(height: 28),
-          Center(child: OnboardingBadge(icon: icon)),          
+          Center(
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: BoxDecoration(
+                color: OnboardingStyle.green.withValues(alpha: 0.18),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.verified_outlined,
+                size: 28,
+                color: OnboardingStyle.green,
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
           Text(
             message,
@@ -518,131 +655,114 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           ElevatedButton(
             onPressed: onContinue,
             style: OnboardingStyle.primaryButton,
-            child: Text('Continue',
+            child: Text(widget.isFromProfile ? 'Done' : 'Continue',
                 style: OnboardingStyle.text(16, color: Colors.white)),
           ),
         ],
       );
 
-    Widget _uploadBox({required bool dashed}) {
-    final PlatformFile? file = _certificate;
+  Widget _uploadBox({required bool dashed}) {
+    final isPdf =
+        _certificateFileName?.toLowerCase().endsWith('.pdf') ?? false;
+
     final Widget inner = Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 26, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: dashed ? null : Border.all(color: OnboardingStyle.border),
       ),
-      child: Column(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: const BoxDecoration(
-              color: Color(0xFFF2EFE9),
-              shape: BoxShape.circle,
+      child: _certificateFile == null
+          ? Column(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF2EFE9),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.arrow_upward,
+                      size: 18, color: OnboardingStyle.muted),
+                ),
+                const SizedBox(height: 12),
+                Text('Upload microchip certificate',
+                    style: OnboardingStyle.text(14, weight: FontWeight.w600)),
+                const SizedBox(height: 4),
+                Text('Tap to take photo or choose document',
+                    style: OnboardingStyle.text(12,
+                        color: OnboardingStyle.muted, weight: FontWeight.w500)),
+              ],
+            )
+          : Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: isPdf
+                      ? Container(
+                          width: 54,
+                          height: 54,
+                          color: const Color(0xFFFBEFED),
+                          child: const Icon(Icons.picture_as_pdf_rounded,
+                              color: OnboardingStyle.coral, size: 28),
+                        )
+                      : Image.file(
+                          _certificateFile!,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            width: 54,
+                            height: 54,
+                            color: const Color(0xFFF2EFE9),
+                            child: const Icon(Icons.description,
+                                color: OnboardingStyle.muted),
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _certificateFileName ?? 'Certificate',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style:
+                            OnboardingStyle.text(14, weight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Ready to submit · Tap to change',
+                        style: OnboardingStyle.text(12,
+                            color: OnboardingStyle.green,
+                            weight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close,
+                      size: 20, color: OnboardingStyle.muted),
+                  onPressed: () => setState(() {
+                    _certificateFile = null;
+                    _certificateFileName = null;
+                  }),
+                ),
+              ],
             ),
-            child: VitailIcon(file == null ? 'arrow-up' : 'circle-check',
-                size: 18, color: OnboardingStyle.muted),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            file == null ? 'Upload microchip certificate' : file.name,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: OnboardingStyle.text(14, weight: FontWeight.w600),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            file == null ? 'PDF, JPG or PNG' : 'Tap to choose a different file',
-            style: OnboardingStyle.text(12,
-                color: OnboardingStyle.muted, weight: FontWeight.w500),
-          ),
-        ],
-      ),
     );
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: _uploading ? null : _pickCertificate,
+      onTap: _pickCertificate,
       child: dashed
           ? CustomPaint(painter: const _DashedBorderPainter(), child: inner)
           : inner,
     );
   }
-
-    Widget _readingSummary() {
-    if (_certificate == null) return const SizedBox.shrink();
-    if (_scanning) {
-      return Padding(
-        padding: const EdgeInsets.only(top: 14),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: OnboardingStyle.coral),
-            ),
-            const SizedBox(width: 10),
-            Text('Reading your certificate…',
-                style: OnboardingStyle.text(12,
-                    color: OnboardingStyle.muted, weight: FontWeight.w500)),
-          ],
-        ),
-      );
-    }
-    final CertificateReading? reading = _reading;
-    final List<Widget> rows = <Widget>[];
-    if (reading == null) {
-      rows.add(_readingRow(
-        Icons.info_outline,
-        "We couldn't read this file automatically. You can still submit it and our team will check it.",
-        OnboardingStyle.muted,
-      ));
-    } else {
-      final String? number = reading.microchipNumber;
-      if (number != null) {
-        rows.add(_readingRow(Icons.check_circle_outline,
-            'Microchip number found: ${_groupDigits(number)}', OnboardingStyle.ink));
-      }
-      for (final CertificateIssue issue in reading.issues) {
-        rows.add(_readingRow(
-          issue.blocksSubmit ? Icons.error_outline : Icons.info_outline,
-          issue.message,
-          issue.blocksSubmit ? OnboardingStyle.coral : OnboardingStyle.muted,
-        ));
-      }
-    }
-    return Padding(
-      padding: const EdgeInsets.only(top: 14),
-      child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
-    );
-  }
-
-  Widget _readingRow(IconData icon, String text, Color color) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text,
-                  style: OnboardingStyle.text(12,
-                      color: color, weight: FontWeight.w500, height: 1.4)),
-            ),
-          ],
-        ),
-      );
-
-  String _groupDigits(String digits) => [
-        for (int i = 0; i < digits.length; i += 3)
-          digits.substring(i, i + 3 > digits.length ? digits.length : i + 3),
-      ].join(' ');
 
   OutlineInputBorder _fieldBorder(Color color) => OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -669,7 +789,7 @@ class _DashedBorderPainter extends CustomPainter {
     const double dash = 6;
     const double gap = 5;
 
-    for (final metric in path.computeMetrics()) {      
+    for (final metric in path.computeMetrics()) {
       double distance = 0;
       while (distance < metric.length) {
         final double next = distance + dash;

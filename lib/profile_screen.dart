@@ -1,14 +1,16 @@
-import 'vitail_icon.dart';
-import 'vitail_loading.dart';
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
-import 'settings_screen.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'edit_profile_screen.dart';
-import 'vitail_snack.dart';
+
 import 'dog_sharing.dart';
+import 'edit_profile_screen.dart';
+import 'login_screen.dart';
+import 'microchip_screen.dart';
+import 'settings_screen.dart';
+import 'vitail_loading.dart';
+import 'vitail_snack.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -19,17 +21,26 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _dogData;
-  int _totalPoints = 0;
   bool _isLoading = true;
+
+  int _dailyStreak = 0;
+  int _totalWalks = 0;
+  int _totalSeconds = 0;
   double _totalDistanceKm = 0.0;
-  List<Map<String, dynamic>> _weightHistory = [];
-  double _weightChange = 0.0;
-  final _weightInputController = TextEditingController();
-  int _totalQuests = 0;
+  
   int _careScore = 0;
-  int _positiveImpact = 0;
-  int _needsFocus = 0;
   Map<String, Map<String, dynamic>> _scoreComponents = {};
+
+  // Design Tokens based on Figma
+  static const Color _kPageBg = Color(0xFFF4F0E9);
+  static const Color _kCoral = Color(0xFFDC755C);
+  static const Color _kTealBg = Color(0xFFDCEFEA); 
+  static const Color _kGreen = Color(0xFFAEC568);
+  static const Color _kBadgeGreen = Color(0xFFE5EED4); // Soft pastel green
+  static const Color _kBadgeInactive = Color(0xFFF5F4F0);
+  static const Color _kInk = Color(0xFF211F1D);
+  static const Color _kMuted = Color(0xFF6E6A63);
+  static const Color _kCard = Colors.white;
 
   @override
   void initState() {
@@ -40,57 +51,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _fetchProfile() async {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      final dogResponse = (await primaryDogForCurrentUser())?.dog;
-          
+
+      final dogResponse = (await primaryDogForCurrentUser())?.dog ??
+          await Supabase.instance.client
+              .from('dogs')
+              .select()
+              .eq('owner_id', userId)
+              .limit(1)
+              .maybeSingle();
+
       final profileResponse = await Supabase.instance.client
           .from('profiles')
-          .select('total_points')
+          .select('daily_streak')
           .eq('id', userId)
           .single();
 
       final walksResponse = await Supabase.instance.client
           .from('walks')
-          .select('distance_meters, walk_date')
+          .select('distance_meters, walk_date, duration_seconds')
           .eq('user_id', userId);
-
-      final weightResponse = await Supabase.instance.client
-          .from('weight_history')
-          .select()
-          .eq('dog_id', dogResponse?['id'])
-          .order('recorded_date', ascending: true);
-
-      // NEW: Fetch all daily tasks to count completed quests
-      final tasksResponse = await Supabase.instance.client
-          .from('daily_tasks')
-          .select()
-          .eq('user_id', userId);
-
-      // Count individual tasks completed
-      int questCount = 0;
-      for (var task in tasksResponse) {
-        if (task['walk_done'] == true) questCount++;
-        if (task['weight_done'] == true) questCount++;
-      }
 
       double totalDistanceMeters = 0;
+      int totalSecs = 0;
       for (var walk in walksResponse) {
         totalDistanceMeters += (walk['distance_meters'] as num).toDouble();
+        totalSecs += (walk['duration_seconds'] as num).toInt();
       }
 
       setState(() {
         _dogData = dogResponse;
-        _totalPoints = profileResponse['total_points'] ?? 0;
+        _dailyStreak = profileResponse['daily_streak'] ?? 0;
+        _totalWalks = walksResponse.length;
+        _totalSeconds = totalSecs;
         _totalDistanceKm = totalDistanceMeters / 1000;
-        _weightHistory = List<Map<String, dynamic>>.from(weightResponse);
-        _totalQuests = questCount; // Update the quest count!
         
-        if (_weightHistory.length >= 2) {
-          double latest = (_weightHistory.last['weight_kg'] as num).toDouble();
-          double previous = (_weightHistory[_weightHistory.length - 2]['weight_kg'] as num).toDouble();
-          _weightChange = latest - previous;
-        }
-        // Calculate the Care Score
         _calculateCareScore(List<Map<String, dynamic>>.from(walksResponse), dogResponse);
         _isLoading = false;
       });
@@ -102,25 +96,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _calculateCareScore(List<Map<String, dynamic>> walks, Map<String, dynamic>? dog) {
     if (dog == null) return;
 
-    // 1. Activity Score (40%) - Based on last 7 days walks
     DateTime sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
     List recentWalks = walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
     
-    // We mock daily goal as 30 mins (1800 secs). We currently save duration as 1800 in the DB.
-    // So if they did 4 walks in 7 days, 4 days are 100%, 3 days are 0%. Average = (400)/7 = 57%.
     int activityScore = ((recentWalks.length * 100) / 7).round().clamp(0, 100);
-
-    // 2. Vaccinations (20%)
     int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
-
-    // 3. Microchip (15%)
     int microchipScore = dog['microchip_number'] != null ? 100 : 0;
-
-    // 4. Insurance (15%)
     int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
-
-    // 5. Vet Check-in (10%) - 100 if within 6 months, else 0
     int vetScore = 0;
+    
     if (dog['last_vet_checkup'] != null) {
       DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
       if (DateTime.now().difference(lastVet).inDays <= 180) {
@@ -128,410 +112,477 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
 
-    // Calculate overall score
     int totalScore = (activityScore * 0.40 + vaccScore * 0.20 + microchipScore * 0.15 + insuranceScore * 0.15 + vetScore * 0.10).round();
 
-    // Classify components
-    int positive = 0;
-    int focus = 0;
+    final String microchipNum = dog['microchip_number']?.toString() ?? '';
+    final String microchipStatus = microchipNum.isNotEmpty ? 'Linked · $microchipNum' : 'Not added';
     
+    final String vaccDate = dog['vaccination_date']?.toString() ?? '';
+    final String vaccStatus = vaccDate.isNotEmpty ? 'Up to date' : 'Unknown';
+    
+    final String insuranceName = dog['insurance_partner']?.toString() ?? '';
+    final String insuranceStatus = insuranceName.isNotEmpty ? insuranceName : 'Not added';
+
+    final String vetDate = dog['last_vet_checkup']?.toString() ?? '';
+    final String vetStatus = vetDate.isNotEmpty ? 'Up to date' : 'Book your next visit';
+
     Map<String, Map<String, dynamic>> components = {
       'Activity (7 days)': {'score': activityScore, 'status': '${recentWalks.length}/7 days active'},
-      'Vaccinations': {'score': vaccScore, 'status': vaccScore == 100 ? 'Up to date' : 'Unknown'},
-      'Microchip': {'score': microchipScore, 'status': microchipScore == 100 ? 'Linked' : 'Not added'},
-      'Insurance': {'score': insuranceScore, 'status': insuranceScore == 100 ? 'Active' : 'Not added'},
-      'Vet check-in': {'score': vetScore, 'status': vetScore == 100 ? 'Up to date' : 'Book your next visit'},
+      'Vaccinations': {'score': vaccScore, 'status': vaccStatus},
+      'Microchip': {'score': microchipScore, 'status': microchipStatus},
+      'Insurance': {'score': insuranceScore, 'status': insuranceStatus},
+      'Vet check-in': {'score': vetScore, 'status': vetStatus},
     };
-
-    components.forEach((key, value) {
-      int score = value['score'];
-      if (score >= 70) { positive++; }
-      else if (score < 40) { focus++; }
-    });
 
     setState(() {
       _careScore = totalScore;
-      _positiveImpact = positive;
-      _needsFocus = focus;
       _scoreComponents = components;
     });
   }
 
+  String get _formattedTime {
+    final hours = _totalSeconds ~/ 3600;
+    final minutes = (_totalSeconds % 3600) ~/ 60;
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+    return '${minutes}m';
+  }
 
-  DateTime _selectedDate = DateTime.now();
+  String get _dogSubtitle {
+    if (_dogData == null) return 'Setup your dog\'s profile';
+    final breed = _dogData!['breed'] ?? 'Unknown Breed';
+    final birthdayStr = _dogData!['birthday'];
+    
+    if (birthdayStr == null) return breed;
+    
+    final birthday = DateTime.tryParse(birthdayStr);
+    if (birthday == null) return breed;
 
-  Future<void> _logNewWeight() async {
-    _weightInputController.clear();
-    _selectedDate = DateTime.now(); // Reset date to today
+    final now = DateTime.now();
+    int years = now.year - birthday.year;
+    if (now.month < birthday.month || (now.month == birthday.month && now.day < birthday.day)) {
+      years--;
+    }
+    
+    if (years <= 0) return 'Puppy $breed';
+    return '$years year-old $breed';
+  }
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        // Use StatefulBuilder so the dialog updates when we pick a new date
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Log Weight'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Date Picker Display
-                  InkWell(
-                    onTap: () async {
-                      DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setStateDialog(() {
-                          _selectedDate = picked;
-                        });
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Date', border: OutlineInputBorder()),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
-                          const VitailIcon('calendar', size: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Weight Input
-                  TextField(
-                    controller: _weightInputController,
-                    decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                ElevatedButton(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final navigator = Navigator.of(context);
-                    try {
-                      final dogId = _dogData?['id'];
-                      if (dogId == null) return;
-
-                      final newWeight =
-                          double.tryParse(_weightInputController.text.trim());
-                      if (newWeight == null || newWeight <= 0) return;
-
-                      // One atomic RPC: upserts the weight entry (one per
-                      // calendar day), syncs dogs.weight, and awards the
-                      // daily quest bonus exactly once.
-                      final result =
-                          await Supabase.instance.client.rpc('log_weight', params: {
-                        'p_dog_id': dogId,
-                        'p_weight_kg': newWeight,
-                        'p_recorded_date':
-                            _selectedDate.toIso8601String().split('T')[0],
-                      });
-                      final pointsEarned = (result as num?)?.toInt() ?? 0;
-
-                      navigator.pop();
-                      _fetchProfile(); // Refresh UI
-
-                      if (pointsEarned > 0) {
-                        showVitailSnackVia(
-                          messenger,
-                          'Weight logged · +$pointsEarned pts',
-                          type: VitailSnackType.success,
-                        );
-                      }
-                    } on PostgrestException {
-                      showVitailSnackVia(
-                        messenger,
-                        'Could not save weight. Please try again.',
-                        type: VitailSnackType.error,
-                      );
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    );
+  Future<void> _signOut() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      showVitailSnack(context, 'Error logging out', type: VitailSnackType.error);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: VitailLoading()));
+      return const Scaffold(
+        backgroundColor: _kPageBg,
+        body: Center(child: VitailLoading()),
+      );
     }
 
-    return Scaffold(
-        appBar: AppBar(
-        title: const Text('Profile'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const VitailIcon('settings'),
-            onPressed: () async {
-              // Navigate to Settings Screen and refresh profile when returning
-              await Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (context) => const SettingsScreen())
-              );
-              _fetchProfile(); // Refresh data in case they changed the dog's name/weight
-            },
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // Dog Header
-          Center(
-            child: GestureDetector(
-              onTap: () async {
-                final changed = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditProfileScreen(dog: _dogData),
-                  ),
-                );
-                if (changed == true) _fetchProfile(); // Refresh with new data
-              },
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.green[100],
-                    backgroundImage: _dogData?['photo_url'] != null
-                        ? CachedNetworkImageProvider(_dogData!['photo_url'])
-                        : null,
-                    child: _dogData?['photo_url'] == null
-                        ? const VitailIcon('paw-print', size: 50, color: Colors.green)
-                        : null,
-                  ),
-                  // Pencil badge — opens the Edit Profile screen
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      ),
-                      child: const VitailIcon('pencil', color: Colors.white, size: 20),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
+    final String dogName = _dogData?['dog_name'] ?? 'Your Dog';
+    final String? photoUrl = _dogData?['photo_url'];
 
-          // Weight Tracker Card
-          _buildSectionCard(
-            title: 'Weight Tracker',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _weightChange >= 0 ? Colors.orange[100] : Colors.green[100],
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_weightChange >= 0 ? '+' : ''}${_weightChange.toStringAsFixed(1)}kg recently', 
-                        style: TextStyle(color: _weightChange >= 0 ? Colors.orange[800] : Colors.green[800], fontWeight: FontWeight.bold),
+    return Scaffold(
+      backgroundColor: _kPageBg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header: Settings + Avatar
+              Stack(
+                alignment: Alignment.topCenter,
+                children: [
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: InkWell(
+                      onTap: () async {
+                        await Navigator.push(context, MaterialPageRoute(builder: (context) => const SettingsScreen()));
+                        _fetchProfile();
+                      },
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: const BoxDecoration(
+                          color: _kCoral,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // The Line Chart
-                _weightHistory.length > 1 
-                  ? SizedBox(
-                      height: 100,
-                      child: LineChart(
-                        LineChartData(
-                          gridData: const FlGridData(show: false),
-                          titlesData: const FlTitlesData(show: false),
-                          borderData: FlBorderData(show: false),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: _weightHistory.asMap().entries.map((e) {
-                                return FlSpot(e.key.toDouble(), (e.value['weight_kg'] as num).toDouble());
-                              }).toList(),
-                              isCurved: true,
-                              color: Colors.green,
-                              barWidth: 4,
-                              dotData: const FlDotData(show: true),
-                              belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.1)),
+                  ),
+                  Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () async {
+                          final changed = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(builder: (context) => EditProfileScreen(dog: _dogData)),
+                          );
+                          if (changed == true) _fetchProfile();
+                        },
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 64, 
+                              backgroundColor: _kTealBg,
+                              backgroundImage: photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
+                              child: photoUrl == null ? const Icon(Icons.pets, size: 48, color: _kMuted) : null,
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 4,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: _kCoral,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: _kPageBg, width: 3),
+                                ),
+                                child: const Icon(Icons.edit, color: Colors.white, size: 20),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    )
-                  : const Text('Log at least 2 weights to see the graph', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _logNewWeight,
-                    icon: const VitailIcon('weight'),
-                    label: const Text('Log New Weight'),
+                      const SizedBox(height: 16),
+                      Text(
+                        dogName,
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: _kInk,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _dogSubtitle,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _kMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Streak Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _kTealBg,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.local_fire_department_outlined, color: _kInk, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              '$_dailyStreak days streak!',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: _kInk,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+
+              // Stats Row
+              Row(
+                children: [
+                  Expanded(child: _buildStatBox('$_totalWalks', 'WALKS')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildStatBox(_formattedTime, 'TIME')),
+                  const SizedBox(width: 10),
+                  Expanded(child: _buildStatBox('${_totalDistanceKm.toStringAsFixed(1)} km', 'DISTANCE')),
+                ],
+              ),
+
+              const SizedBox(height: 32),
+              
+              // Care Score Section
+              const Text(
+                'CARE SCORE',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
+              ),
+              const SizedBox(height: 12),
+              
+              // Main Score Ring
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 36),
+                decoration: BoxDecoration(
+                  color: _kCard,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Center(
+                  child: SizedBox(
+                    width: 140, 
+                    height: 140, 
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CircularProgressIndicator(
+                          value: _careScore > 0 ? (_careScore / 100) : 1.0,
+                          strokeWidth: 14,
+                          color: _kGreen,
+                          backgroundColor: _kTealBg,
+                        ),
+                        Center(
+                          child: Text(
+                            _careScore > 0 ? '$_careScore' : '- -',
+                            style: const TextStyle(
+                              fontSize: 42,
+                              fontWeight: FontWeight.w700,
+                              color: _kInk,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 12),
 
-          // CARE SCORE CARD
-          _buildSectionCard(
-            title: 'CARE SCORE',
-            child: Column(
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+              // Care Score Items
+              ..._scoreComponents.entries.map((entry) => _buildMenuCard(
+                title: entry.key,
+                subtitle: entry.value['status'],
+                onTap: () async {
+                  if (entry.key == 'Microchip') {
+                    final updated = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MicrochipScreen(
+                          isFromProfile: true,
+                          dogId: _dogData?['id']?.toString(),
+                          initialNumber: _dogData?['microchip_number']?.toString(),
+                        ),
+                      ),
+                    );
+                    if (updated == true) {
+                      _fetchProfile();
+                    }
+                    return;
+                  }
+                  showVitailSnack(context, '${entry.key} settings coming soon', type: VitailSnackType.info);
+                },
+              )),
+
+              const SizedBox(height: 24),
+              
+              // Badges Section
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'BADGES',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
+                  ),
+                  Text(
+                    'See all',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kCoral),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _kCard,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // The Score Ring
-                    SizedBox(
-                      width: 80,
-                      height: 80,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: _careScore / 100,
-                            strokeWidth: 8,
-                            color: Colors.green,
-                            backgroundColor: Colors.grey[200],
-                          ),
-                          Text(
-                            '$_careScore',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    // The Stats
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Updates weekly based on the last 7 days', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const VitailIcon('circle-check', color: Colors.green, size: 16),
-                              const SizedBox(width: 4),
-                              Text('$_positiveImpact positive impact', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              const VitailIcon('circle-alert', color: Colors.orange, size: 16),
-                              const SizedBox(width: 4),
-                              Text('$_needsFocus needs focus', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
+                    _buildBadge('First walk', _totalWalks >= 1),
+                    _buildBadge('5 walks', _totalWalks >= 5),
+                    _buildBadge('Park explorer', _totalDistanceKm >= 5.0),
+                    _buildBadge('30 day streak', _dailyStreak >= 30),
                   ],
                 ),
-                const SizedBox(height: 16),
-                const Divider(),
-                // The Checklist
-                Column(
-                  children: _scoreComponents.entries.map((entry) {
-                    int score = entry.value['score'];
-                    Color color = score >= 70 ? Colors.green : (score < 40 ? Colors.orange : Colors.grey);
-                    
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: VitailIcon('paw-print', size: 20, color: color),
-                      title: Text(entry.key, style: const TextStyle(fontSize: 14)),
-                      trailing: Text(entry.value['status'], style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
-                    );
-                  }).toList(),
+              ),
+
+              const SizedBox(height: 24),
+              
+              // Action Menu
+              _buildMenuCard(title: 'Invite a carer', subtitle: null, onTap: () {
+                showVitailSnack(context, 'Carer invites coming soon', type: VitailSnackType.info);
+              }),
+              _buildMenuCard(title: 'My coupons', subtitle: '2 available', onTap: () {
+                 showVitailSnack(context, 'Coupons coming soon', type: VitailSnackType.info);
+              }),
+              _buildMenuCard(title: 'Wellness history', subtitle: 'Walks, vet, weight', onTap: () {
+                showVitailSnack(context, 'Wellness history coming soon', type: VitailSnackType.info);
+              }),
+              _buildMenuCard(title: 'Notifications', subtitle: 'Reminders', onTap: () {
+                 showVitailSnack(context, 'Notifications coming soon', type: VitailSnackType.info);
+              }),
+              _buildMenuCard(title: 'Rate the app', subtitle: null, onTap: () {
+                 showVitailSnack(context, 'App rating coming soon', type: VitailSnackType.info);
+              }),
+
+              const SizedBox(height: 32),
+
+              // Log out Button
+              OutlinedButton(
+                onPressed: _signOut,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _kCoral,
+                  side: const BorderSide(color: _kCoral, width: 1.5),
+                  minimumSize: const Size.fromHeight(56),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+                child: const Text(
+                  'Log out',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+              ),
 
-          // Lifetime Milestones Card
-          _buildSectionCard(
-            title: 'Lifetime Milestones',
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMilestoneIcon('footprints', '${_totalDistanceKm.toStringAsFixed(1)}km', 'Walked'),
-                _buildMilestoneIcon('list-check', '$_totalQuests', 'Quests'), // <-- Now uses real data!
-                _buildMilestoneIcon('dollar-sign', '\$$_totalPoints', 'Rewards'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 40),
 
-          
-        ],
+              // Bottom Logo composed of individual images
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/brand/vitail-mark.png',
+                    height: 58, 
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.pets, color: _kCoral, size: 58),
+                  ),
+                  const SizedBox(width: 4),
+                  Image.asset(
+                    'assets/brand/vitail-title.png',
+                    height: 36, 
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Text('VITAIL', style: TextStyle(color: _kCoral, fontSize: 36, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // Helper widget for section containers
-  Widget _buildSectionCard({required String title, required Widget child}) {
+  Widget _buildStatBox(String value, String label) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _kTealBg,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          const SizedBox(height: 12),
-          child,
+          Text(
+            value,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _kInk),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kMuted, letterSpacing: 0.5),
+          ),
         ],
       ),
     );
   }
 
-  // Helper widget for milestone row
-  Widget _buildMilestoneIcon(String icon, String value, String label) {
+  Widget _buildBadge(String label, bool earned) {
     return Column(
       children: [
-        VitailIcon(icon, color: Colors.green, size: 28),
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: earned ? _kBadgeGreen : _kBadgeInactive,
+            shape: BoxShape.circle,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 9, 
+            fontWeight: FontWeight.w600, 
+            color: earned ? _kInk : _kMuted,
+          ),
+        )
       ],
+    );
+  }
+
+  Widget _buildMenuCard({required String title, required String? subtitle, required VoidCallback onTap}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: _kCard,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9F7F3),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kInk)),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _kMuted)),
+                    ],
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: _kMuted, size: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
