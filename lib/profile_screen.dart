@@ -31,16 +31,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _careScore = 0;
   Map<String, Map<String, dynamic>> _scoreComponents = {};
 
-  // Design Tokens based on Figma
-  static const Color _kPageBg = Color(0xFFF4F0E9);
+  // Design tokens (Figma light values) + theme-aware getters for dark mode.
+  // Light fills stay as constants; text/surface colors resolve from the
+  // app ColorScheme so the screen follows Settings' dark-mode toggle.
   static const Color _kCoral = Color(0xFFDC755C);
-  static const Color _kTealBg = Color(0xFFDCEFEA); 
+  static const Color _kTealBgLight = Color(0xFFDCEFEA);
   static const Color _kGreen = Color(0xFFAEC568);
-  static const Color _kBadgeGreen = Color(0xFFE5EED4); // Soft pastel green
-  static const Color _kBadgeInactive = Color(0xFFF5F4F0);
-  static const Color _kInk = Color(0xFF211F1D);
-  static const Color _kMuted = Color(0xFF6E6A63);
-  static const Color _kCard = Colors.white;
+  static const Color _kBadgeGreenLight = Color(0xFFE5EED4); // Soft pastel green
+  static const Color _kBadgeInactiveLight = Color(0xFFF5F4F0);
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _pageBg => Theme.of(context).colorScheme.surface;
+  Color get _ink => Theme.of(context).colorScheme.onSurface;
+  Color get _muted => Theme.of(context).colorScheme.onSurfaceVariant;
+  Color get _card => _isDark ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get _tealBg =>
+      _isDark ? const Color(0xFF22312E) : _kTealBgLight;
+  Color get _badgeEarned =>
+      _isDark ? const Color(0xFF2E3A24) : _kBadgeGreenLight;
+  Color get _badgeIdle =>
+      _isDark ? const Color(0xFF2A2A2A) : _kBadgeInactiveLight;
+  Color get _tileBg =>
+      _isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF9F7F3);
 
   @override
   void initState() {
@@ -186,9 +198,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: _kPageBg,
-        body: Center(child: VitailLoading()),
+      return Scaffold(
+        backgroundColor: _pageBg,
+        body: const Center(child: VitailLoading()),
       );
     }
 
@@ -196,7 +208,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final String? photoUrl = _dogData?['photo_url'];
 
     return Scaffold(
-      backgroundColor: _kPageBg,
+      backgroundColor: _pageBg,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -240,9 +252,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           children: [
                             CircleAvatar(
                               radius: 64, 
-                              backgroundColor: _kTealBg,
+                              backgroundColor: _tealBg,
                               backgroundImage: photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
-                              child: photoUrl == null ? const Icon(Icons.pets, size: 48, color: _kMuted) : null,
+                              child: photoUrl == null ? Icon(Icons.pets, size: 48, color: _muted) : null,
                             ),
                             Positioned(
                               bottom: 0,
@@ -252,7 +264,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 decoration: BoxDecoration(
                                   color: _kCoral,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: _kPageBg, width: 3),
+                                  border: Border.all(color: _pageBg, width: 3),
                                 ),
                                 child: const Icon(Icons.edit, color: Colors.white, size: 20),
                               ),
@@ -263,19 +275,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       const SizedBox(height: 16),
                       Text(
                         dogName,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
-                          color: _kInk,
+                          color: _ink,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _dogSubtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: _kMuted,
+                          color: _muted,
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -284,20 +296,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                         decoration: BoxDecoration(
-                          color: _kTealBg,
+                          color: _tealBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.local_fire_department_outlined, color: _kInk, size: 20),
+                            Icon(Icons.local_fire_department_outlined, color: _ink, size: 20),
                             const SizedBox(width: 8),
                             Text(
                               '$_dailyStreak days streak!',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: _kInk,
+                                color: _ink,
                               ),
                             ),
                           ],
@@ -324,9 +336,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 32),
               
               // Care Score Section
-              const Text(
+              Text(
                 'CARE SCORE',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _muted, letterSpacing: 0.5),
               ),
               const SizedBox(height: 12),
               
@@ -335,7 +347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 36),
                 decoration: BoxDecoration(
-                  color: _kCard,
+                  color: _card,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Center(
@@ -349,15 +361,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           value: _careScore > 0 ? (_careScore / 100) : 1.0,
                           strokeWidth: 14,
                           color: _kGreen,
-                          backgroundColor: _kTealBg,
+                          backgroundColor: _tealBg,
                         ),
                         Center(
                           child: Text(
                             _careScore > 0 ? '$_careScore' : '- -',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 42,
                               fontWeight: FontWeight.w700,
-                              color: _kInk,
+                              color: _ink,
                             ),
                           ),
                         ),
@@ -399,9 +411,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'BADGES',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _muted, letterSpacing: 0.5),
                   ),
                   Text(
                     'See all',
@@ -414,7 +426,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: _kCard,
+                  color: _card,
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: Row(
@@ -499,19 +511,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: _kTealBg,
+        color: _tealBg,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         children: [
           Text(
             value,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _kInk),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: _ink),
           ),
           const SizedBox(height: 4),
           Text(
             label,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kMuted, letterSpacing: 0.5),
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _muted, letterSpacing: 0.5),
           ),
         ],
       ),
@@ -525,7 +537,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           width: 50,
           height: 50,
           decoration: BoxDecoration(
-            color: earned ? _kBadgeGreen : _kBadgeInactive,
+            color: earned ? _badgeEarned : _badgeIdle,
             shape: BoxShape.circle,
           ),
         ),
@@ -536,7 +548,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           style: TextStyle(
             fontSize: 9, 
             fontWeight: FontWeight.w600, 
-            color: earned ? _kInk : _kMuted,
+            color: earned ? _ink : _muted,
           ),
         )
       ],
@@ -552,7 +564,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           decoration: BoxDecoration(
-            color: _kCard,
+            color: _card,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -561,7 +573,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF9F7F3),
+                  color: _tileBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
@@ -570,15 +582,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _kInk)),
+                    Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: _ink)),
                     if (subtitle != null && subtitle.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(subtitle, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _kMuted)),
+                      Text(subtitle, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: _muted)),
                     ],
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: _kMuted, size: 20),
+              Icon(Icons.chevron_right, color: _muted, size: 20),
             ],
           ),
         ),

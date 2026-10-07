@@ -9,7 +9,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'main.dart';
 import 'notifications.dart';
@@ -112,34 +111,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Cancel-then-schedule with a fixed ID: re-scheduling is idempotent.
       await Notifications.scheduleWalkReminder(
           hour: _reminderHour, minute: _reminderMinute);
-    }
-  }
-
-  Future<void> _openEditProfile() async {
-    try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
-      if (userId == null) return;
-      final dog = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
-      if (!mounted) return;
-      if (dog == null) {
-        showVitailSnack(context, 'No dog profile found yet.',
-            type: VitailSnackType.info);
-        return;
-      }
-      await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(
-              builder: (context) => EditProfileScreen(dog: dog)));
-    } catch (_) {
-      if (mounted) {
-        showVitailSnack(context, 'Could not load dog profile.',
-            type: VitailSnackType.error);
-      }
     }
   }
 
@@ -569,14 +540,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     trailing: VitailIcon('clock', color: muted),
                     onTap: _notificationsEnabled ? _pickReminderTime : null,
                   ),
-
-                  _sectionLabel('YOUR DOG'),
-                  _navCard(
-                    title: 'Edit dog profile',
-                    subtitle: 'Name, breed, weight and more',
-                    onTap: _openEditProfile,
-                  ),
-
                   _sectionLabel('DATA'),
                   _navCard(
                     title: 'Export my data',
