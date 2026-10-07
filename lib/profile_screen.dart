@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
+import 'microchip_screen.dart';
 import 'settings_screen.dart';
 import 'vitail_loading.dart';
 import 'vitail_snack.dart';
@@ -369,14 +370,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ..._scoreComponents.entries.map((entry) => _buildMenuCard(
                 title: entry.key,
                 subtitle: entry.value['status'],
-                onTap: () {
+                onTap: () async {
+                  if (entry.key == 'Microchip') {
+                    final updated = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MicrochipScreen(
+                          isFromProfile: true,
+                          dogId: _dogData?['id']?.toString(),
+                          initialNumber: _dogData?['microchip_number']?.toString(),
+                        ),
+                      ),
+                    );
+                    if (updated == true) {
+                      _fetchProfile();
+                    }
+                    return;
+                  }
                   showVitailSnack(context, '${entry.key} settings coming soon', type: VitailSnackType.info);
-                }
+                },
               )),
 
               const SizedBox(height: 24),
               
-              // Badges Section (NOW DYNAMIC!)
+              // Badges Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -412,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 24),
               
               // Action Menu
-              _buildMenuCard(title: 'Invite a carer', subtitle: _dogData?['microchip_number']?.toString(), onTap: () {
+              _buildMenuCard(title: 'Invite a carer', subtitle: null, onTap: () {
                 showVitailSnack(context, 'Carer invites coming soon', type: VitailSnackType.info);
               }),
               _buildMenuCard(title: 'My coupons', subtitle: '2 available', onTap: () {
