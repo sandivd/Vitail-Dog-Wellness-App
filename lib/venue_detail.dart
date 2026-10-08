@@ -11,6 +11,7 @@ import 'reward_venues.dart';
 import 'rewards_data.dart';
 import 'venue_walk.dart';
 import 'detail_image_header.dart';
+import 'vitail_snack.dart';
 
 /// One row of the `partnered_venues` table.
 ///
@@ -267,10 +268,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           });
       if (!mounted) return;
       if (offers.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No rewards are available for this venue yet.'),
-          ),
+        showVitailSnack(
+          context,
+          'No rewards are available for this venue yet.',
+          type: VitailSnackType.info,
         );
         return;
       }
@@ -297,12 +298,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not load rewards. Please try CHECK REWARDS again.',
-            ),
-          ),
+        showVitailSnack(
+          context,
+          'Could not load rewards. Please try CHECK REWARDS again.',
+          type: VitailSnackType.error,
         );
     }} finally {
       if (mounted) setState(() => _loadingReward = false);

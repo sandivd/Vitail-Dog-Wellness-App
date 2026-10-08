@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'walk_in_progress.dart';
 import 'dog_sharing.dart';
+import 'vitail_snack.dart';
 
 
 /// Starts the existing walk tracker with the venue as its planned destination.
@@ -45,12 +46,10 @@ Future<void> startVenueWalk(BuildContext context, LatLng destination) async {
     );
   } catch (_) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Could not start the walk. Check your connection, location permission and registered dog, then try again.',
-        ),
-      ),
+    showVitailSnack(
+      context,
+      'Could not start the walk. Check your connection, location permission and registered dog, then try again.',
+      type: VitailSnackType.error,
     );
   }
 }

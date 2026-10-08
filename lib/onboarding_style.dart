@@ -84,12 +84,6 @@ class OnboardingPage extends StatelessWidget {
                       clipBehavior: Clip.none,
                       alignment: Alignment.center,
                       children: [
-                        Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          style: OnboardingStyle.text(24,
-                              weight: FontWeight.w700, height: 1.3),
-                        ),
                         if (Navigator.canPop(context)) ...[
                           Align(
                             alignment: Alignment.centerLeft,
@@ -101,7 +95,6 @@ class OnboardingPage extends StatelessWidget {
                               icon: OnboardingStyle.icon('back'),
                             ),
                           ),
-                          const SizedBox(height: 10),
                         ],
                         Text(
                           title,

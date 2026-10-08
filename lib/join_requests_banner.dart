@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'dog_sharing.dart';
+import 'vitail_snack.dart';
 
 class JoinRequestsBanner extends StatefulWidget {
   const JoinRequestsBanner({super.key});
@@ -46,17 +47,19 @@ class _JoinRequestsBannerState extends State<JoinRequestsBanner> {
       setState(() =>
           _requests = _requests.where((r) => r.id != request.id).toList());
       final String who = request.requesterName ?? 'They';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(approve
-            ? '$who can now help walk ${request.dogName}.'
-            : 'Request declined.'),
-      ));
+      showVitailSnack(
+        context,
+        approve ? '$who can now help walk ${request.dogName}.' : 'Request declined.',
+        type: approve ? VitailSnackType.success : VitailSnackType.info,
+      );
     } catch (e) {
       debugPrint('Could not update join request: ${e.runtimeType}');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Couldn't update the request. Please try again."),
-        ));
+        showVitailSnack(
+          context,
+          "Couldn't update the request. Please try again.",
+          type: VitailSnackType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _busy.remove(request.id));

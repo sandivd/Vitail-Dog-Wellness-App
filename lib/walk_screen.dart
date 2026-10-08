@@ -82,8 +82,8 @@ class _WalkScreenState extends State<WalkScreen> {
   void dispose() {
     _sheetController.dispose();
     _searchController.dispose();
-    super.dispose();
     widget.onProgress?.call(null);
+    super.dispose();
   }
 
   Future<void> _locateUser() async {

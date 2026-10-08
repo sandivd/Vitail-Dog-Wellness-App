@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'dog_sharing.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
+import 'vitail_snack.dart';
 import 'waiting_for_approval_screen.dart';
 
 class JoinWithCodeScreen extends StatefulWidget {
@@ -25,7 +26,7 @@ class _JoinWithCodeScreenState extends State<JoinWithCodeScreen> {
   }
 
   void _show(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    showVitailSnack(context, text, type: VitailSnackType.error);
   }
 
   Future<void> _continue() async {

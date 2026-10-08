@@ -4,6 +4,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'dog_sharing.dart';
 import 'onboarding_style.dart';
+import 'vitail_snack.dart';
 
 class ShareCodeScreen extends StatefulWidget {
   const ShareCodeScreen({
@@ -39,9 +40,7 @@ class _ShareCodeScreenState extends State<ShareCodeScreen> {
   Future<void> _copy(String text, String label) async {
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label copied')),
-    );
+    showVitailSnack(context, '$label copied', type: VitailSnackType.success);
   }
 
   Future<void> _share(String code) async {

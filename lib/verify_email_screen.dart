@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'edit_profile_screen.dart';
+import 'home_screen.dart';
 import 'onboarding_style.dart';
+import 'vitail_snack.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   const VerifyEmailScreen({super.key, required this.dog});
@@ -44,7 +45,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     if (!mounted) return;
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => EditProfileScreen(dog: widget.dog)),
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 
@@ -55,14 +56,12 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     try {
       await Supabase.instance.client.auth.resend(type: OtpType.signup, email: email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Verification email sent.')),
-      );
+      showVitailSnack(context, 'Verification email sent.',
+          type: VitailSnackType.success);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not resend email: $e'), backgroundColor: Colors.red),
-      );
+      showVitailSnack(context, 'Could not resend email: $e',
+          type: VitailSnackType.error);
     } finally {
       if (mounted) setState(() => _resending = false);
     }
