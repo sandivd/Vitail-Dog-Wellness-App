@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'vitail_back_button.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -372,12 +373,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: Text('Edit profile', style: style(22, weight: FontWeight.w700)),
         ),
         Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            tooltip: 'Back',
-            onPressed: _isSaving ? null : () => Navigator.maybePop(context),
-            icon: icon('back'),
-          ),
+          alignment: Alignment.topLeft,
+          child: VitailBackButton(onPressed: _isSaving ? null : () => Navigator.maybePop(context)),
         ),
       ],
     );

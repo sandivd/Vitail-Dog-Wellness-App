@@ -44,6 +44,7 @@ const offers = [
 
 class FakeRewardsRepository implements RewardsRepository {
   int points = 500;
+  bool verified = true;
   int historyCalls = 0;
   bool failCatalogue = false;
   bool failHistory = false;
@@ -56,7 +57,11 @@ class FakeRewardsRepository implements RewardsRepository {
   @override
   Future<RewardsCatalogue> loadCatalogue() async {
     if (failCatalogue) throw Exception('offline');
-    return RewardsCatalogue(points: points, offers: catalogue);
+    return RewardsCatalogue(
+      points: points,
+      offers: catalogue,
+      canRedeem: verified,
+    );
   }
 
   @override
@@ -173,6 +178,46 @@ Future<void> captureFlow(WidgetTester tester, String name) async {
 }
 
 void main() {
+  testWidgets(
+    'unverified users see unlock prompt and cannot redeem with enough points',
+    (tester) async {
+      final repo = FakeRewardsRepository()..verified = false;
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock rewards'), findsOneWidget);
+      expect(find.text('Verify microchip'), findsOneWidget);
+      expect(find.text('REDEEM'), findsNothing);
+      expect(repo.redeemCalls, 0);
+      repo.verified = true;
+      await tester.pumpWidget(app(repo, active: false));
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      expect(find.text('Unlock rewards'), findsNothing);
+      expect(find.text('REDEEM'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'unverified users can view offer details but see why redeem is locked',
+    (tester) async {
+      final repo = FakeRewardsRepository()..verified = false;
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free vet wellness check'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Add a valid microchip number in Profile to unlock rewards.'),
+        findsWidgets,
+      );
+      expect(
+        find.text('You need more points to redeem this offer.'),
+        findsNothing,
+      );
+      expect(find.text('REDEEM'), findsNothing);
+      expect(repo.redeemCalls, 0);
+    },
+  );
+
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     await (FontLoader(

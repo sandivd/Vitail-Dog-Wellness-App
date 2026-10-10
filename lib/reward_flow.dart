@@ -61,9 +61,11 @@ class _RewardFlowState extends State<RewardFlow> {
       (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
     ).join(),
   );
-  bool _canRedeem(RewardOffer offer) => _points != null
-      ? _points! >= offer.pointsCost
-      : offer.id == widget.offer.id && widget.canRedeem;
+  bool _canRedeem(RewardOffer offer) =>
+      (widget.catalogue?.canRedeem ?? widget.canRedeem) &&
+      (_points != null
+          ? _points! >= offer.pointsCost
+          : offer.id == widget.offer.id && widget.canRedeem);
   final _progress = ValueNotifier<String?>(null);
   VenueInfo? _venue;
   LatLng? _userLocation;
@@ -162,7 +164,7 @@ class _RewardFlowState extends State<RewardFlow> {
   }
 
   Future<void> _redeem() async {
-    if (_busy || _reward != null) return;
+    if (_busy || _reward != null || !_canRedeem(_selectedOffer)) return;
     final offer = _selectedOffer;
     _busy = true;
     _progress.value = 'busy';
@@ -193,7 +195,7 @@ class _RewardFlowState extends State<RewardFlow> {
   }
 
   Future<void> _showRedemption() async {
-    if (_sheetOpen || _reward != null) return;
+    if (_sheetOpen || _reward != null || !_canRedeem(_selectedOffer)) return;
     _sheetOpen = true;
     await showModalBottomSheet<void>(
       context: context,
@@ -389,6 +391,9 @@ class _RewardFlowState extends State<RewardFlow> {
             key: ValueKey('offer-${offer.id}'),
             offer: offer,
             canRedeem: !_busy && _canRedeem(offer),
+            lockedMessage: widget.catalogue?.canRedeem == false
+                ? RewardOfferCard.microchipLockedMessage
+                : RewardOfferCard.insufficientPointsMessage,
             redemption: _receipts[offer.id],
             onRedeem: () {
               if (_busy || _sheetOpen) return;

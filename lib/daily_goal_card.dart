@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'activity_history_widgets.dart';
 import 'venue_detail.dart';
 
 /// Home-screen card: progress toward today's TIME goal, plus a suggested
@@ -42,20 +43,12 @@ class DailyGoalCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        // Figma "day detail card" (575:498): white card, soft shadow, no border.
+        color: activityCardColor(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: activityShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,8 +56,8 @@ class DailyGoalCard extends StatelessWidget {
           Text(
             '$_percent% of daily activity goal completed!',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
               color: colorScheme.onSurface,
               fontFamily: 'PlusJakartaSans',
             ),
@@ -82,14 +75,18 @@ class DailyGoalCard extends StatelessWidget {
                     : const Color(0xFFF8F1F0),
           ),
           if (venue != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 18),
+            // Figma "coupon divider": 1px #DED2D6 rule above the suggestion.
+            Divider(height: 1, thickness: 1, color: colorScheme.outline),
+            const SizedBox(height: 12),
             InkWell(
               borderRadius: BorderRadius.circular(10),
               onTap: onVenueTap,
               child: Row(
                 children: [
-                  SvgPicture.string(_playSvg, width: 16, height: 18),
                   const SizedBox(width: 8),
+                  SvgPicture.string(_playSvg, width: 16, height: 18),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text.rich(
                       TextSpan(
@@ -97,15 +94,15 @@ class DailyGoalCard extends StatelessWidget {
                           const TextSpan(text: 'Visit '),
                           TextSpan(
                             text: venue.name,
-                            style: TextStyle(fontWeight: FontWeight.w700),
+                            style: TextStyle(fontWeight: FontWeight.w800),
                           ),
                           const TextSpan(text: ' today!'),
                         ],
                       ),
                       style: TextStyle(
-                        fontSize: 15, // was 13
-                        fontWeight: FontWeight.w500,
-                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
                         fontFamily: 'PlusJakartaSans',
                       ),
                     ),

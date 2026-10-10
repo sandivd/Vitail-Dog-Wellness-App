@@ -295,14 +295,14 @@ class ActivityWalkCard extends StatelessWidget {
                         Text(
                           DateFormat('EEE').format(walk.date).toUpperCase(),
                           style: TextStyle(
-                            fontSize: 9,
+                            fontSize: 10,
                             color: activityMutedColor(context),
                           ),
                         ),
                         Text(
                           '${walk.date.day}',
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: 16,
                             fontWeight: FontWeight.w700,
                             color: activityInkColor(context),
                           ),
@@ -318,7 +318,7 @@ class ActivityWalkCard extends StatelessWidget {
                       Text(
                         walk.title,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w600,
                           color: activityInkColor(context),
                         ),
@@ -327,7 +327,7 @@ class ActivityWalkCard extends StatelessWidget {
                       Text(
                         walk.details,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 13,
                           color: activityMutedColor(context),
                         ),
                       ),
@@ -336,7 +336,7 @@ class ActivityWalkCard extends StatelessWidget {
                         Text(
                           walk.dog!['dog_name'] ?? 'Dog',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 13,
                             color: activityMutedColor(context),
                           ),
                         ),
@@ -398,7 +398,7 @@ class ActivitySectionLabel extends StatelessWidget {
     child: Text(
       label,
       style: TextStyle(
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: FontWeight.w600,
         color: activityMutedColor(context),
       ),

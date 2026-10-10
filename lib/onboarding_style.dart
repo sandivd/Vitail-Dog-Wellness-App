@@ -1,4 +1,5 @@
 import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -67,42 +68,36 @@ class OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canPop = Navigator.canPop(context);
     return Scaffold(
       backgroundColor: OnboardingStyle.background,
       body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (canPop)
+              VitailBackButton(
+                onPressed: busy
+                    ? null
+                    : (onBack ?? () => Navigator.maybePop(context)),
+                color: OnboardingStyle.ink,
+              ),
+            Expanded(
         child: SingleChildScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 460),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 26, 28, 32),
+                padding: EdgeInsets.fromLTRB(28, canPop ? 0 : 26, 28, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.center,
-                      children: [
-                        if (Navigator.canPop(context)) ...[
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: IconButton(
-                              tooltip: 'Back',
-                              onPressed: busy
-                                  ? null
-                                  : (onBack ?? () => Navigator.maybePop(context)),
-                              icon: OnboardingStyle.icon('back'),
-                            ),
-                          ),
-                        ],
-                        Text(
-                          title,
-                          textAlign: TextAlign.center,
-                          style: OnboardingStyle.text(24,
-                              weight: FontWeight.w700, height: 1.3),
-                        ),
-                      ],
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: OnboardingStyle.text(24,
+                          weight: FontWeight.w700, height: 1.3),
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 10),
@@ -121,6 +116,9 @@ class OnboardingPage extends StatelessWidget {
               ),
             ),
           ),
+        ),
+            ),
+          ],
         ),
       ),
     );

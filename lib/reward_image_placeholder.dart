@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 /// Shared fallback for rewards without a confirmed image.
@@ -48,4 +49,38 @@ class WhiteRewardLogo extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Round dog photo; falls back to the same Vitail-dog logo the reward
+/// offers use when there is no photo (or it fails to load).
+class DogAvatar extends StatelessWidget {
+  const DogAvatar({super.key, required this.photoUrl, required this.size});
+
+  final String? photoUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Container(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF393632)
+          : const Color(0xFFD9D5CF),
+      padding: EdgeInsets.all(size * 0.13),
+      child: const WhiteRewardLogo(),
+    );
+    final url = photoUrl;
+    return ClipOval(
+      child: SizedBox.square(
+        dimension: size,
+        child: url == null || url.isEmpty
+            ? fallback
+            : CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                placeholder: (_, _) => fallback,
+                errorWidget: (_, _, _) => fallback,
+              ),
+      ),
+    );
+  }
 }

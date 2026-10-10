@@ -1,3 +1,6 @@
+import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
+import 'microchip_screen.dart';
 import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -16,7 +19,12 @@ class RewardsScreen extends StatefulWidget {
     this.partnerId,
     this.venueName,
     this.venueLoader = loadRewardVenues,
+    this.couponsOnly = false,
   });
+
+  /// Standalone "My coupons" page (opened from Profile): back button and
+  /// only the MY REWARDS list — no wallet, tabs or catalogue.
+  final bool couponsOnly;
 
   final Future<List<VenueInfo>> Function() venueLoader;
   final RewardsRepository? repository;
@@ -50,6 +58,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? SupabaseRewardsRepository();
+    _showMine = widget.couponsOnly;
     _loadCatalogue();
     _loadRedeemed();
   }
@@ -92,6 +101,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
       setState(
         () => _catalogue = RewardsCatalogue(
           points: catalogue.points,
+          canRedeem: catalogue.canRedeem,
           offers: sortedOffers,
         ),
       );
@@ -219,6 +229,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
           receipts: _redeemed ?? [],
           venueLoader: widget.venueLoader,
           canRedeem:
+              (_catalogue?.canRedeem ?? false) &&
               !_loadingCatalogue &&
               _catalogueError == null &&
               (_catalogue?.points ?? 0) >= offer.pointsCost,
@@ -238,6 +249,47 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
 
     final colors = Theme.of(context).colorScheme;
+    if (widget.couponsOnly) {
+      return Scaffold(
+        backgroundColor: colors.surface,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Same header layout as History: back row, then the title.
+              Align(
+                alignment: Alignment.topLeft,
+                child: VitailBackButton(
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                    children: [
+                      Center(
+                        child: Text(
+                          'My coupons',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ..._myRewards(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: colors.surface,
       body: SafeArea(
@@ -258,6 +310,45 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+              if (_catalogue != null && !_catalogue!.canRedeem) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const VitailIcon('lock-keyhole'),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Unlock rewards',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Add a valid microchip number to redeem rewards. You can keep tracking walks and earning points while rewards are locked.',
+                        ),
+                        TextButton(
+                          onPressed: _loadingCatalogue
+                              ? null
+                              : () async {
+                                  await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const MicrochipScreen(
+                                        isFromProfile: true,
+                                      ),
+                                    ),
+                                  );
+                                  if (mounted) await _refresh();
+                                },
+                          child: const Text('Verify microchip'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
               _wallet(),
               const SizedBox(height: 20),
               _tabs(),
@@ -428,7 +519,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
       return [_message('No rewards available yet. Check back soon.')];
     }
     return offers.map((offer) {
-      final canAfford = _catalogue!.points >= offer.pointsCost;
+      final canAfford =
+          _catalogue!.canRedeem && _catalogue!.points >= offer.pointsCost;
       final redeemed = _activeReceipt(offer) != null;
       return _rewardCard(
         title: offer.title,
@@ -457,11 +549,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
     if (_redeemed == null || _redeemed!.isEmpty) {
       return [
-        _message(
-          'No redeemed rewards yet. Find your first treat in All rewards.',
-          action: 'Browse rewards',
-          retry: () async => _selectTab(false),
-        ),
+        widget.couponsOnly
+            ? _message('No coupons yet. Redeem a reward to see it here.')
+            : _message(
+                'No redeemed rewards yet. Find your first treat in All rewards.',
+                action: 'Browse rewards',
+                retry: () async => _selectTab(false),
+              ),
       ];
     }
     return _redeemed!

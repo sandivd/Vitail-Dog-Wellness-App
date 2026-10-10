@@ -1,4 +1,5 @@
 import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
 
 import 'onboarding_style.dart';
@@ -91,11 +92,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
               height: 48,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: IconButton(
-                  tooltip: 'Back',
-                  onPressed: () => Navigator.maybePop(context),
-                  icon: OnboardingStyle.icon('back'),
-                ),
+                child: VitailBackButton(onPressed: () => Navigator.maybePop(context), color: OnboardingStyle.ink),
               ),
             ),
             // The plan content scrolls only if it genuinely can't fit

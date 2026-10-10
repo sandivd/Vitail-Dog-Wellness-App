@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'vitail_icon.dart';
 
 import 'reward_image_placeholder.dart';
 
@@ -44,8 +44,8 @@ class DetailImageHeader extends StatelessWidget {
               errorBuilder: (_, error, stack) => const SizedBox.shrink(),
             ),
           Positioned(
-            top: top + 12,
-            left: 16,
+            top: top,
+            left: 8,
             child: Material(
               color: dark ? const Color(0xFF242321) : Colors.white,
               elevation: 2,
@@ -54,15 +54,7 @@ class DetailImageHeader extends StatelessWidget {
               child: IconButton(
                 tooltip: 'Back',
                 onPressed: () => Navigator.pop(context),
-                icon: SvgPicture.asset(
-                  'assets/icons/reward-details-back.svg',
-                  width: 24,
-                  height: 24,
-                  colorFilter: ColorFilter.mode(
-                    colors.onSurface,
-                    BlendMode.srcIn,
-                  ),
-                ),
+                icon: VitailIcon('chevron-left', color: colors.onSurface),
               ),
             ),
           ),
