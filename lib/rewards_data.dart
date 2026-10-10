@@ -1,3 +1,4 @@
+import 'microchip_validation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RewardOffer {
@@ -69,8 +70,13 @@ class RedeemedReward {
 }
 
 class RewardsCatalogue {
-  const RewardsCatalogue({required this.points, required this.offers});
+  const RewardsCatalogue({
+    required this.points,
+    required this.offers,
+    this.canRedeem = false,
+  });
   final int points;
+  final bool canRedeem;
   final List<RewardOffer> offers;
 }
 
@@ -90,6 +96,16 @@ class SupabaseRewardsRepository implements RewardsRepository {
     return id;
   }
 
+  Future<bool> _hasValidMicrochip(String userId) async {
+    final dog = await _client
+        .from('dogs')
+        .select('microchip_number')
+        .eq('owner_id', userId)
+        .maybeSingle();
+    return dog != null &&
+        microchipNumberError(dog['microchip_number']?.toString() ?? '') == null;
+  }
+
   @override
   Future<RewardsCatalogue> loadCatalogue() async {
     final userId = _userId;
@@ -98,10 +114,12 @@ class SupabaseRewardsRepository implements RewardsRepository {
         .select('total_points')
         .eq('id', userId)
         .single();
+    final eligible = await _hasValidMicrochip(userId);
     final rows = await _client.from('rewards').select();
     return RewardsCatalogue(
       points: (profile['total_points'] as num?)?.toInt() ?? 0,
       offers: rows.map(RewardOffer.fromJson).toList(),
+      canRedeem: eligible,
     );
   }
 
@@ -124,6 +142,9 @@ class SupabaseRewardsRepository implements RewardsRepository {
 
   @override
   Future<RedeemedReward> redeem(RewardOffer offer, String requestId) async {
+    if (!await _hasValidMicrochip(_userId)) {
+      throw StateError('Add a valid microchip number to unlock rewards.');
+    }
     final result = await _client.rpc(
       'redeem_offer',
       params: {'p_reward_id': offer.id, 'p_request_id': requestId},

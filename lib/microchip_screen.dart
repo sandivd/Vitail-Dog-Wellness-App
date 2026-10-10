@@ -1,3 +1,5 @@
+import 'microchip_validation.dart';
+export 'microchip_validation.dart' show microchipNumberError;
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -10,18 +12,6 @@ import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
 import 'vitail_snack.dart';
-
-String? microchipNumberError(String raw) {
-  final String value = raw.trim();
-  if (value.isEmpty) return 'Enter your dog\'s 15-digit microchip number.';
-  if (!RegExp(r'^\d{15}$').hasMatch(value)) {
-    return 'A microchip number is exactly 15 digits.';
-  }
-  if (value.startsWith('999')) {
-    return 'Numbers starting with 999 are test codes, not registered chips.';
-  }
-  return null;
-}
 
 enum _View { form, verified, failed, submitted }
 
@@ -90,12 +80,15 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
       final chipNumber = _numberController.text.trim();
 
-      var query = client.from('dogs').update({'microchip_number': chipNumber});
+      var query = client
+          .from('dogs')
+          .update({'microchip_number': chipNumber})
+          .eq('owner_id', userId);
       if (widget.dogId != null && widget.dogId!.isNotEmpty) {
-        await query.eq('id', widget.dogId!);
-      } else {
-        await query.eq('owner_id', userId);
+        query = query.eq('id', widget.dogId!);
       }
+      final saved = await query.select('id').single();
+      if (saved['id'] == null) throw StateError('Dog was not updated');
 
       if (!mounted) return;
       setState(() => _view = _View.verified);
@@ -127,49 +120,31 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       final userId = client.auth.currentUser?.id;
       if (userId == null) throw Exception('Not signed in');
 
-      final ext = _certificateFileName != null &&
-              _certificateFileName!.contains('.')
+      final ext =
+          _certificateFileName != null && _certificateFileName!.contains('.')
           ? _certificateFileName!.split('.').last.toLowerCase()
           : 'jpg';
       final fileName =
           '${userId}_certificate_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       // Upload certificate to Supabase Storage
-      await client.storage.from('dog_photos').upload(
+      await client.storage
+          .from('dog_photos')
+          .upload(
             fileName,
             _certificateFile!,
             fileOptions: const FileOptions(upsert: true),
           );
       final certUrl = client.storage.from('dog_photos').getPublicUrl(fileName);
 
-      final chipNumber = _numberController.text.trim();
-      final hasValidChip =
-          chipNumber.isNotEmpty && microchipNumberError(chipNumber) == null;
-
-      try {
-        var query = client.from('dogs').update({
-          if (hasValidChip) 'microchip_number': chipNumber,
-          'microchip_certificate_url': certUrl,
-        });
-        if (widget.dogId != null && widget.dogId!.isNotEmpty) {
-          await query.eq('id', widget.dogId!);
-        } else {
-          await query.eq('owner_id', userId);
-        }
-      } catch (_) {
-        // Fallback if microchip_certificate_url column does not exist
-        if (hasValidChip) {
-          try {
-            var query =
-                client.from('dogs').update({'microchip_number': chipNumber});
-            if (widget.dogId != null && widget.dogId!.isNotEmpty) {
-              await query.eq('id', widget.dogId!);
-            } else {
-              await query.eq('owner_id', userId);
-            }
-          } catch (_) {}
-        }
+      var query = client
+          .from('dogs')
+          .update({'microchip_certificate_url': certUrl})
+          .eq('owner_id', userId);
+      if (widget.dogId != null && widget.dogId!.isNotEmpty) {
+        query = query.eq('id', widget.dogId!);
       }
+      await query.select('id').single();
 
       if (!mounted) return;
       setState(() => _view = _View.submitted);
@@ -372,8 +347,8 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         return _uploadTab ? _uploadForm() : _numberForm();
       case _View.verified:
         return _result(
-          title: 'Microchip verified',
-          message: 'Nice, you\'re all set to redeem reward coupons too.',
+          title: 'Microchip accepted',
+          message: 'Your number meets the format requirements. Rewards are unlocked.',
           onContinue: _finish,
         );
       case _View.failed:
@@ -382,7 +357,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         return _result(
           title: 'Certificate submitted',
           message:
-              'We\'ve received your certificate. We\'ll verify it and get back to you within 24 hours.',
+              'Your certificate has been saved for review. Uploading it alone does not unlock rewards. You can enter a valid microchip number to unlock rewards.',
           onContinue: _finish,
         );
     }

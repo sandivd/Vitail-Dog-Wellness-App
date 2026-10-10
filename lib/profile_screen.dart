@@ -1,3 +1,4 @@
+import 'microchip_validation.dart';
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -113,7 +114,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     
     int activityScore = ((recentWalks.length * 100) / 7).round().clamp(0, 100);
     int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
-    int microchipScore = dog['microchip_number'] != null ? 100 : 0;
+    int microchipScore = microchipNumberError(dog['microchip_number']?.toString() ?? '') == null ? 100 : 0;
     int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
     int vetScore = 0;
     
@@ -127,7 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int totalScore = (activityScore * 0.40 + vaccScore * 0.20 + microchipScore * 0.15 + insuranceScore * 0.15 + vetScore * 0.10).round();
 
     final String microchipNum = dog['microchip_number']?.toString() ?? '';
-    final String microchipStatus = microchipNum.isNotEmpty ? 'Linked · $microchipNum' : 'Not added';
+    final String microchipStatus = microchipScore == 100 ? 'Accepted · $microchipNum' : 'Verify to unlock rewards';
     
     final String vaccDate = dog['vaccination_date']?.toString() ?? '';
     final String vaccStatus = vaccDate.isNotEmpty ? 'Up to date' : 'Unknown';

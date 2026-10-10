@@ -1,3 +1,4 @@
+import 'microchip_screen.dart';
 import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -92,6 +93,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
       setState(
         () => _catalogue = RewardsCatalogue(
           points: catalogue.points,
+          canRedeem: catalogue.canRedeem,
           offers: sortedOffers,
         ),
       );
@@ -219,6 +221,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
           receipts: _redeemed ?? [],
           venueLoader: widget.venueLoader,
           canRedeem:
+              (_catalogue?.canRedeem ?? false) &&
               !_loadingCatalogue &&
               _catalogueError == null &&
               (_catalogue?.points ?? 0) >= offer.pointsCost,
@@ -258,6 +261,45 @@ class _RewardsScreenState extends State<RewardsScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+              if (_catalogue != null && !_catalogue!.canRedeem) ...[
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.lock_outline),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Unlock rewards',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Add a valid microchip number to redeem rewards. You can keep tracking walks and earning points while rewards are locked.',
+                        ),
+                        TextButton(
+                          onPressed: _loadingCatalogue
+                              ? null
+                              : () async {
+                                  await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const MicrochipScreen(
+                                        isFromProfile: true,
+                                      ),
+                                    ),
+                                  );
+                                  if (mounted) await _refresh();
+                                },
+                          child: const Text('Verify microchip'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
               _wallet(),
               const SizedBox(height: 20),
               _tabs(),
@@ -428,7 +470,8 @@ class _RewardsScreenState extends State<RewardsScreen> {
       return [_message('No rewards available yet. Check back soon.')];
     }
     return offers.map((offer) {
-      final canAfford = _catalogue!.points >= offer.pointsCost;
+      final canAfford =
+          _catalogue!.canRedeem && _catalogue!.points >= offer.pointsCost;
       final redeemed = _activeReceipt(offer) != null;
       return _rewardCard(
         title: offer.title,
