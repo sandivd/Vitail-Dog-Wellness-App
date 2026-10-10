@@ -197,6 +197,27 @@ void main() {
     },
   );
 
+  testWidgets(
+    'unverified users can view offer details but see why redeem is locked',
+    (tester) async {
+      final repo = FakeRewardsRepository()..verified = false;
+      await tester.pumpWidget(app(repo));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Free vet wellness check'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Add a valid microchip number in Profile to unlock rewards.'),
+        findsWidgets,
+      );
+      expect(
+        find.text('You need more points to redeem this offer.'),
+        findsNothing,
+      );
+      expect(find.text('REDEEM'), findsNothing);
+      expect(repo.redeemCalls, 0);
+    },
+  );
+
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     await (FontLoader(

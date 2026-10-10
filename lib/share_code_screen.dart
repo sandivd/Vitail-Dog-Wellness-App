@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'vitail_back_button.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -171,23 +172,23 @@ class _ShareCodeScreenState extends State<ShareCodeScreen> {
     return Scaffold(
       backgroundColor: OnboardingStyle.background,
       body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            VitailBackButton(
+              onPressed: () => Navigator.maybePop(context),
+              color: OnboardingStyle.ink,
+            ),
+            Expanded(
         child: SingleChildScrollView(
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 460),
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 28, 32),
+                padding: const EdgeInsets.fromLTRB(20, 0, 28, 32),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        tooltip: 'Back',
-                        onPressed: () => Navigator.maybePop(context),
-                        icon: OnboardingStyle.icon('back'),
-                      ),
-                    ),
                     Padding(
                       padding: const EdgeInsets.only(left: 8),
                       child: Column(
@@ -227,6 +228,9 @@ class _ShareCodeScreenState extends State<ShareCodeScreen> {
               ),
             ),
           ),
+        ),
+            ),
+          ],
         ),
       ),
     );

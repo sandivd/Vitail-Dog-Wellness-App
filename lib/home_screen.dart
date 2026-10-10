@@ -3,7 +3,6 @@ import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'walk_screen.dart';
 import 'rewards_screen.dart';
 import 'profile_screen.dart';
@@ -14,6 +13,7 @@ import 'activity_history_data.dart';
 import 'activity_history_widgets.dart';
 import 'dart:math';
 import 'daily_goal_card.dart';
+import 'reward_image_placeholder.dart';
 import 'reward_venues.dart';
 import 'venue_detail.dart';
 import 'walk_in_progress.dart';
@@ -221,21 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: colorScheme.onSurfaceVariant.withValues(
-                      alpha: 0.2,
-                    ),
-                    backgroundImage: _dogPhotoUrl != null
-                        ? CachedNetworkImageProvider(_dogPhotoUrl!)
-                        : null,
-                    child: _dogPhotoUrl == null
-                        ? VitailIcon(
-                            'paw-print',
-                            color: colorScheme.onSurfaceVariant,
-                          )
-                        : null,
-                  ),
+                  DogAvatar(photoUrl: _dogPhotoUrl, size: 48),
                   const SizedBox(width: 16),
                   Text(
                     'Hi $_dogName!',
@@ -346,7 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: _buildFigmaStatCard(
                       'Streaks',
@@ -363,17 +349,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 56,
-                  child: ElevatedButton.icon(
+                  // Same button as the Explore tab's "Start walk".
+                  child: ElevatedButton(
                     onPressed: () {
                       setState(() {
                         _currentIndex = 1;
                       });
                     },
-                    icon: const VitailIcon('play', size: 24),
-                    label: const Text(
-                      'Start walk',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary,
                       foregroundColor: colorScheme.onPrimary,
@@ -381,6 +363,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(30),
                       ),
                       elevation: 0,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Start walk',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        VitailIcon('play', size: 24),
+                      ],
                     ),
                   ),
                 )
@@ -494,7 +490,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       WalkScreen(onProgress: _handleWalkProgress),
       RewardsScreen(isActive: _currentIndex == 2),
-      const ProfileScreen(),
+      ProfileScreen(isActive: _currentIndex == 3),
     ];
 
     return Scaffold(
@@ -525,6 +521,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Figma "goal card" / "biscuit card": white card, centred value and
+  /// label, soft shadow, no border; keeps the app's lucide icon on top.
   Widget _buildFigmaStatCard(
     String title,
     String value,
@@ -533,40 +531,37 @@ class _HomeScreenState extends State<HomeScreen> {
   ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(16),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: activityCardColor(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: colorScheme.onSurfaceVariant.withValues(alpha: 0.1),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: activityShadow,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           VitailIcon(icon, color: colorScheme.onSurfaceVariant),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             value,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w800,
               color: colorScheme.onSurface,
               fontFamily: 'PlusJakartaSans',
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             title,
+            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
               color: colorScheme.onSurfaceVariant,
               fontFamily: 'PlusJakartaSans',
             ),
@@ -659,7 +654,15 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 CircleAvatar(
                   backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.35),
-                  child: Icon(Icons.circle, color: colorScheme.onPrimary, size: 16),
+                  // Live-walk dot (a shape, not an icon).
+                  child: Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: colorScheme.onPrimary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(

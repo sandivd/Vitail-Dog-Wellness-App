@@ -1,8 +1,10 @@
 import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'activity_history_data.dart';
 import 'activity_history_widgets.dart';
+import 'reward_image_placeholder.dart';
 import 'vitail_loading.dart';
 
 class WalkHistoryScreen extends StatefulWidget {
@@ -121,30 +123,32 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
       // the rest of the app's dark surfaces.
       backgroundColor: dark ? const Color(0xFF121212) : activityBackground,
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    tooltip: 'Back',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const VitailIcon('chevron-left', size: 24),
-                  ),
-                  IconButton(
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                VitailBackButton(onPressed: () => Navigator.pop(context)),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: IconButton(
                     tooltip: 'Filter activity',
                     onPressed: _showFilter,
                     icon: const VitailIcon('sliders-horizontal', size: 24),
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
+            Expanded(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+            children: [
               const Center(
                 child: Text(
                   'History',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                 ),
               ),
               const SizedBox(height: 24),
@@ -175,7 +179,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                               child: Text(
                                 period.name.toUpperCase(),
                                 style: TextStyle(
-                                  fontSize: 12,
+                                  fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: _period == period
                                       ? activityInkColor(context)
@@ -217,7 +221,8 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                             : 'd MMM yyyy',
                       ).format(_selected),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: activityMutedColor(context),
                       ),
                     ),
@@ -244,7 +249,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                       child: Text(
                         'No walks in this period.',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 14,
                           color: activityMutedColor(context),
                         ),
                       ),
@@ -262,7 +267,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                     Text(
                       'No coupons in this period.',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: 14,
                         color: activityMutedColor(context),
                       ),
                     )
@@ -274,7 +279,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                       child: Text(
                         'Older coupons without a recorded date cannot be shown by period.',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 12,
                           color: activityMutedColor(context),
                         ),
                       ),
@@ -283,6 +288,9 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
               ],
             ],
           ),
+        ),
+            ),
+          ],
         ),
       ),
     );
@@ -296,7 +304,6 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
   );
 
   Widget _couponCard(ActivityCoupon coupon) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
@@ -307,15 +314,10 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: dark
-                  ? const Color(0xFF302E2B)
-                  : const Color(0xFFF9F7F3),
-              borderRadius: BorderRadius.circular(12),
-            ),
+          // Same Vitail-dog logo tile the reward offers use.
+          const SizedBox.square(
+            dimension: 50,
+            child: FittedBox(child: RewardImagePlaceholder()),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -327,7 +329,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                 Text(
                   coupon.title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: activityInkColor(context),
                   ),
@@ -336,7 +338,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                 Text(
                   coupon.details,
                   style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 13,
                     color: activityMutedColor(context),
                   ),
                 ),
@@ -357,7 +359,7 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                   child: Text(
                     coupon.collected ? 'REDEEMED' : 'IN PROGRESS',
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 10,
                       fontWeight: FontWeight.w600,
                       color: coupon.collected
                           ? const Color(0xFFAEC568)

@@ -1,3 +1,4 @@
+import 'dog_sharing.dart';
 import 'microchip_validation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -96,12 +97,18 @@ class SupabaseRewardsRepository implements RewardsRepository {
     return id;
   }
 
+  /// Rewards unlock when the dog this user is linked to (as owner or carer)
+  /// has a microchip number in the accepted 15-digit format. Same dog lookup
+  /// as the Home and Profile screens, so co-owners share the dog's state.
   Future<bool> _hasValidMicrochip(String userId) async {
-    final dog = await _client
-        .from('dogs')
-        .select('microchip_number')
-        .eq('owner_id', userId)
-        .maybeSingle();
+    final dog =
+        (await primaryDogForCurrentUser())?.dog ??
+        await _client
+            .from('dogs')
+            .select('microchip_number')
+            .eq('owner_id', userId)
+            .limit(1)
+            .maybeSingle();
     return dog != null &&
         microchipNumberError(dog['microchip_number']?.toString() ?? '') == null;
   }

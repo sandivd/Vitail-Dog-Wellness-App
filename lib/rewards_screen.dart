@@ -1,3 +1,5 @@
+import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'microchip_screen.dart';
 import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
@@ -17,7 +19,12 @@ class RewardsScreen extends StatefulWidget {
     this.partnerId,
     this.venueName,
     this.venueLoader = loadRewardVenues,
+    this.couponsOnly = false,
   });
+
+  /// Standalone "My coupons" page (opened from Profile): back button and
+  /// only the MY REWARDS list — no wallet, tabs or catalogue.
+  final bool couponsOnly;
 
   final Future<List<VenueInfo>> Function() venueLoader;
   final RewardsRepository? repository;
@@ -51,6 +58,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? SupabaseRewardsRepository();
+    _showMine = widget.couponsOnly;
     _loadCatalogue();
     _loadRedeemed();
   }
@@ -241,6 +249,47 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
 
     final colors = Theme.of(context).colorScheme;
+    if (widget.couponsOnly) {
+      return Scaffold(
+        backgroundColor: colors.surface,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Same header layout as History: back row, then the title.
+              Align(
+                alignment: Alignment.topLeft,
+                child: VitailBackButton(
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+                    children: [
+                      Center(
+                        child: Text(
+                          'My coupons',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      ..._myRewards(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Scaffold(
       backgroundColor: colors.surface,
       body: SafeArea(
@@ -268,7 +317,7 @@ class _RewardsScreenState extends State<RewardsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.lock_outline),
+                        const VitailIcon('lock-keyhole'),
                         const SizedBox(height: 8),
                         const Text(
                           'Unlock rewards',
@@ -500,11 +549,13 @@ class _RewardsScreenState extends State<RewardsScreen> {
     }
     if (_redeemed == null || _redeemed!.isEmpty) {
       return [
-        _message(
-          'No redeemed rewards yet. Find your first treat in All rewards.',
-          action: 'Browse rewards',
-          retry: () async => _selectTab(false),
-        ),
+        widget.couponsOnly
+            ? _message('No coupons yet. Redeem a reward to see it here.')
+            : _message(
+                'No redeemed rewards yet. Find your first treat in All rewards.',
+                action: 'Browse rewards',
+                retry: () async => _selectTab(false),
+              ),
       ];
     }
     return _redeemed!

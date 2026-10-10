@@ -588,8 +588,8 @@ class _VenuePhoto extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final backButton = Positioned(
-      top: MediaQuery.paddingOf(context).top + 12,
-      left: 20,
+      top: MediaQuery.paddingOf(context).top,
+      left: 8,
       child: Material(
         color: dark ? const Color(0xFF242321) : Colors.white,
         elevation: 2,

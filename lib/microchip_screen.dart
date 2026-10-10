@@ -1,4 +1,6 @@
 import 'microchip_validation.dart';
+import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 export 'microchip_validation.dart' show microchipNumberError;
 import 'dart:io';
 
@@ -185,21 +187,21 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                 ),
               ),
               ListTile(
-                leading: const Icon(Icons.camera_alt_outlined,
+                leading: const VitailIcon('camera',
                     color: OnboardingStyle.ink),
                 title: Text('Take photo of certificate',
                     style: OnboardingStyle.text(14, weight: FontWeight.w600)),
                 onTap: () => Navigator.pop(ctx, 'camera'),
               ),
               ListTile(
-                leading: const Icon(Icons.photo_library_outlined,
+                leading: const VitailIcon('images',
                     color: OnboardingStyle.ink),
                 title: Text('Choose from photo library',
                     style: OnboardingStyle.text(14, weight: FontWeight.w600)),
                 onTap: () => Navigator.pop(ctx, 'gallery'),
               ),
               ListTile(
-                leading: const Icon(Icons.attach_file_rounded,
+                leading: const VitailIcon('paperclip',
                     color: OnboardingStyle.ink),
                 title: Text('Choose document (PDF, JPG, PNG)',
                     style: OnboardingStyle.text(14, weight: FontWeight.w600)),
@@ -292,11 +294,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
               height: 48,
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: IconButton(
-                  tooltip: 'Back',
-                  onPressed: _back,
-                  icon: OnboardingStyle.icon('back'),
-                ),
+                child: VitailBackButton(onPressed: _back, color: OnboardingStyle.ink),
               ),
             ),
             Expanded(
@@ -612,8 +610,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                 color: OnboardingStyle.green.withValues(alpha: 0.18),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.verified_outlined,
+              child: const VitailIcon('badge-check',
                 size: 28,
                 color: OnboardingStyle.green,
               ),
@@ -658,7 +655,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                     color: Color(0xFFF2EFE9),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.arrow_upward,
+                  child: const VitailIcon('arrow-up',
                       size: 18, color: OnboardingStyle.muted),
                 ),
                 const SizedBox(height: 12),
@@ -679,7 +676,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                           width: 54,
                           height: 54,
                           color: const Color(0xFFFBEFED),
-                          child: const Icon(Icons.picture_as_pdf_rounded,
+                          child: const VitailIcon('file-text',
                               color: OnboardingStyle.coral, size: 28),
                         )
                       : Image.file(
@@ -691,7 +688,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                             width: 54,
                             height: 54,
                             color: const Color(0xFFF2EFE9),
-                            child: const Icon(Icons.description,
+                            child: const VitailIcon('file',
                                 color: OnboardingStyle.muted),
                           ),
                         ),
@@ -719,7 +716,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close,
+                  icon: const VitailIcon('x',
                       size: 20, color: OnboardingStyle.muted),
                   onPressed: () => setState(() {
                     _certificateFile = null;

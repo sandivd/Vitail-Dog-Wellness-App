@@ -1,9 +1,9 @@
 import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -399,18 +399,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           child: Text('Settings', style: style(22, weight: FontWeight.w700)),
         ),
         Align(
-          alignment: Alignment.centerLeft,
-          child: IconButton(
-            tooltip: 'Back',
-            onPressed: () => Navigator.maybePop(context),
-            icon: SvgPicture.asset('assets/icons/onboarding-back.svg',
-                width: 24,
-                height: 24,
-                // Black stroke baked into the SVG — invisible on dark.
-                colorFilter: _isDark
-                    ? const ColorFilter.mode(Color(0xFFF4F0E9), BlendMode.srcIn)
-                    : null),
-          ),
+          alignment: Alignment.topLeft,
+          child: VitailBackButton(onPressed: () => Navigator.maybePop(context)),
         ),
       ],
     );

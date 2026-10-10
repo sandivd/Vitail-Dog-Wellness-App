@@ -391,6 +391,9 @@ class _RewardFlowState extends State<RewardFlow> {
             key: ValueKey('offer-${offer.id}'),
             offer: offer,
             canRedeem: !_busy && _canRedeem(offer),
+            lockedMessage: widget.catalogue?.canRedeem == false
+                ? RewardOfferCard.microchipLockedMessage
+                : RewardOfferCard.insufficientPointsMessage,
             redemption: _receipts[offer.id],
             onRedeem: () {
               if (_busy || _sheetOpen) return;

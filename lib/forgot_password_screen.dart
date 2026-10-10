@@ -1,6 +1,6 @@
 import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth_style.dart';
@@ -80,18 +80,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   children: [
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        tooltip: 'Back',
-                        onPressed: () => Navigator.maybePop(context),
-                        icon: SvgPicture.asset('assets/icons/onboarding-back.svg',
-                            width: 24,
-                            height: 24,
-                            // Black stroke baked into the SVG — re-tint on dark.
-                            colorFilter: isDark
-                                ? const ColorFilter.mode(
-                                    Color(0xFFF4F0E9), BlendMode.srcIn)
-                                : null),
-                      ),
+                      child: VitailBackButton(onPressed: () => Navigator.maybePop(context)),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(30, 8, 30, 24),

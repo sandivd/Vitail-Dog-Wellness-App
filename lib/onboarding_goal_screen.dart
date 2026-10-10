@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'vitail_back_button.dart';
 
 import 'onboarding_style.dart';
 
@@ -98,11 +99,7 @@ class _GoalFlowState extends State<_GoalFlow> {
                 height: 48,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    tooltip: 'Back',
-                    onPressed: _back,
-                    icon: OnboardingStyle.icon('back'),
-                  ),
+                  child: VitailBackButton(onPressed: _back, color: OnboardingStyle.ink),
                 ),
               ),
               Expanded(
