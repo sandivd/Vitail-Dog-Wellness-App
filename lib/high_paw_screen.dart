@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'onboarding_style.dart';
 import 'microchip_screen.dart';
 import 'onboarding_goal_screen.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'vitail_snack.dart';
+import 'dart:async';
 
 class HighPawScreen extends StatefulWidget {
   final String dogName;
@@ -28,9 +30,7 @@ class HighPawScreen extends StatefulWidget {
 }
 
 class _HighPawScreenState extends State<HighPawScreen> {
-  static const int _minMinutes = 10;
-  static const int _maxMinutes = 120;
-  static const int _stepMinutes = 5;
+
 
   static const Color _teal = Color(0xFFD5E7E4);
   static const Color _tealInk = Color(0xFF5F98BD);
@@ -50,39 +50,119 @@ class _HighPawScreenState extends State<HighPawScreen> {
       'individual needs alongside advice from your vet.';
 
 
+  static const int _floorMinutes = 1;
+  static const int _ceilingMinutes = 180;
+  static const int _stepMinutes = 1;
+
+  static const int _rangeMinutes = 10;
+
   late int _minutes;
+  bool _saving = false;
+
+    Timer? _holdTimer;
+
+  void _startHold(VoidCallback step) {
+    _stopHold();
+    step();
+    int ticks = 0;
+    _holdTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
+      step();
+      if (++ticks == 10) {
+        t.cancel();
+        _holdTimer = Timer.periodic(
+            const Duration(milliseconds: 40), (_) => step());
+      }
+    });
+  }
+
+  void _stopHold() {
+    _holdTimer?.cancel();
+    _holdTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopHold();
+    super.dispose();
+  }
+
+  int get _recommended => widget.dailyGoalMins;
+  int get _low =>
+      (_recommended - _rangeMinutes).clamp(_floorMinutes, _ceilingMinutes);
+  int get _high => _recommended + _rangeMinutes;
 
   @override
   void initState() {
     super.initState();
-    _minutes = widget.dailyGoalMins.clamp(_minMinutes, _maxMinutes);
+    _minutes = _recommended.clamp(_floorMinutes, _ceilingMinutes);
   }
 
   void _nudge(int delta) {
-    final int next = (_minutes + delta).clamp(_minMinutes, _maxMinutes);
+    final int next =
+        (_minutes + delta).clamp(_floorMinutes, _ceilingMinutes);
     if (next != _minutes) setState(() => _minutes = next);
   }
 
+  String? get _limitMessage {
+    if (_minutes < _low) {
+      return "Less than $_low min wouldn't count towards your goal.";
+    }
+    if (_minutes > _high) {
+      return "More than $_high min isn't an appropriate amount for "
+          "${widget.dogName}. For any questions, please reach out to "
+          "our customer support.";
+    }
+    return null;
+  }
+
   String get _guidance {
-    final int low = ((_roundTo5(widget.dailyGoalMins * 0.8)))
-        .clamp(_minMinutes, _maxMinutes);
-    final int high = ((_roundTo5(widget.dailyGoalMins * 1.2)))
-        .clamp(_minMinutes, _maxMinutes);
     final String who = (widget.breed == null || widget.breed!.isEmpty)
         ? 'Dogs like ${widget.dogName}'
         : '${widget.breed}s';
-    return '$who typically need $low–$high min/day.';
+    return '$who typically need $_low–$_high min/day.';
   }
 
   int get _streakMinutes => (_minutes * 0.8).ceil();
 
+  Future<void> _continue() async {
+    if (_saving) return;
+    final String? dogId = widget.dogId;
 
-  static int _roundTo5(double value) => (value / 5).round() * 5;
+    if (dogId != null && _minutes != widget.dailyGoalMins) {
+      setState(() => _saving = true);
+      // Scale km with minutes, rounded down to 0.5 like ExerciseCalculator.
+      double km = widget.dailyGoalKm * _minutes / widget.dailyGoalMins;
+      km = (km * 2).floor() / 2;
+      if (km <= 0) km = 0.5;
+
+      try {
+        await Supabase.instance.client.from('dogs').update({
+          'daily_goal_minutes': _minutes,
+          'daily_goal_km': km,
+        }).eq('id', dogId);
+      } catch (_) {
+        if (mounted) {
+          setState(() => _saving = false);
+          showVitailSnack(context, "Couldn't save your walk goal. Please try again.",
+              type: VitailSnackType.error);
+        }
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      onboardingFadeRoute(MicrochipScreen(dogId: dogId)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final double progress =
-        (_minutes - _minMinutes) / (_maxMinutes - _minMinutes);
+    final int barMax =
+        (_recommended * 1.5).round().clamp(1, _ceilingMinutes);
+    final double progress = (_minutes / barMax).clamp(0.0, 1.0);
+    final double target = (_recommended / barMax).clamp(0.0, 1.0);
 
     return Scaffold(
       backgroundColor: OnboardingStyle.background,
@@ -118,7 +198,17 @@ class _HighPawScreenState extends State<HighPawScreen> {
                           const SizedBox(height: 22),
                           _sectionLabel('Walk goal', _guidance),
                           const SizedBox(height: 12),
-                          _goalCard(progress),
+                          _goalCard(progress, target),
+                          if (_limitMessage != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _limitMessage!,
+                              style: OnboardingStyle.text(12,
+                                  color: OnboardingStyle.coral,
+                                  weight: FontWeight.w500,
+                                  height: 1.4),
+                            ),
+                          ],
                           const SizedBox(height: 22),
                           _sectionLabel(
                             'Daily streak',
@@ -145,14 +235,18 @@ class _HighPawScreenState extends State<HighPawScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       ElevatedButton(
-                        onPressed: () => Navigator.pushReplacement(
-                          context,
-                          onboardingFadeRoute(MicrochipScreen(dogId: widget.dogId)),                        
-                        ),
+                        onPressed: _saving ? null : _continue,
                         style: OnboardingStyle.primaryButton,
-                        child: Text('Continue',
-                            style: OnboardingStyle.text(16,
-                                color: Colors.white)),
+                        child: _saving
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : Text('Continue',
+                                style: OnboardingStyle.text(16,
+                                    color: Colors.white)),
                       ),
                     ],
                   ),
@@ -206,7 +300,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
         ],
       );
 
-  Widget _goalCard(double progress) => Container(
+  Widget _goalCard(double progress, double target) => Container(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -220,8 +314,8 @@ class _HighPawScreenState extends State<HighPawScreen> {
                 _stepButton(
                   icon: 'minus',
                   filled: false,
-                  onTap: _minutes > _minMinutes ? () => _nudge(-_stepMinutes) : null,
-                ),
+                  onTap: _minutes > _floorMinutes ? () => _nudge(-_stepMinutes) : null,                
+                  ),
                 Expanded(
                   child: Text(
                     '$_minutes min',
@@ -233,24 +327,50 @@ class _HighPawScreenState extends State<HighPawScreen> {
                 _stepButton(
                   icon: 'plus',
                   filled: true,
-                  onTap: _minutes < _maxMinutes ? () => _nudge(_stepMinutes) : null,
-                ),
+                  onTap: _minutes < _ceilingMinutes ? () => _nudge(_stepMinutes) : null,
+                  ),
               ],
             ),
             const SizedBox(height: 18),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: _chipTrack,
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(OnboardingStyle.coral),
+            LayoutBuilder(
+              builder: (context, c) => Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      backgroundColor: _chipTrack,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          OnboardingStyle.coral),
+                    ),
+                  ),
+                  // Recommended-goal marker
+                  Positioned(
+                    left: c.maxWidth * target - 1,
+                    top: -4,
+                    child: Container(
+                      width: 2,
+                      height: 14,
+                      decoration: BoxDecoration(
+                        color: OnboardingStyle.ink,
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Recommended: $_recommended min',
+              style: OnboardingStyle.text(12,
+                  color: OnboardingStyle.muted, weight: FontWeight.w500),
             ),
           ],
         ),
-      );
+  );
 
   Widget _stepButton({
     required String icon,
@@ -259,27 +379,31 @@ class _HighPawScreenState extends State<HighPawScreen> {
   }) {
     final bool enabled = onTap != null;
     return Semantics(
-      button: true,
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: filled
-                ? (enabled
-                    ? OnboardingStyle.coral
-                    : OnboardingStyle.coral.withValues(alpha: 0.4))
-                : _chipTrack,
-            shape: BoxShape.circle,
-          ),
-          child: VitailIcon(
-            icon,
-            size: 22,
-            color: filled
-                ? Colors.white
-                : (enabled ? OnboardingStyle.ink : OnboardingStyle.muted),
+      button: true,child: GestureDetector(
+        onLongPressStart: onTap == null ? null : (_) => _startHold(onTap),
+        onLongPressEnd: (_) => _stopHold(),
+        onLongPressCancel: _stopHold,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: filled
+                  ? (enabled
+                      ? OnboardingStyle.coral
+                      : OnboardingStyle.coral.withValues(alpha: 0.4))
+                  : _chipTrack,
+              shape: BoxShape.circle,
+            ),
+            child: VitailIcon(
+              icon,
+              size: 22,
+              color: filled
+                  ? Colors.white
+                  : (enabled ? OnboardingStyle.ink : OnboardingStyle.muted),
+            ),
           ),
         ),
       ),
