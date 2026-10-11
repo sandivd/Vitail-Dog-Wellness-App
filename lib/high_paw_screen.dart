@@ -49,10 +49,8 @@ class _HighPawScreenState extends State<HighPawScreen> {
       'so always consider your dog’s age, breed, health, and '
       'individual needs alongside advice from your vet.';
 
-  static const List<String> _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   late int _minutes;
-  final Set<int> _days = <int>{};
 
   @override
   void initState() {
@@ -76,6 +74,9 @@ class _HighPawScreenState extends State<HighPawScreen> {
     return '$who typically need $low–$high min/day.';
   }
 
+  int get _streakMinutes => (_minutes * 0.8).ceil();
+
+
   static int _roundTo5(double value) => (value / 5).round() * 5;
 
   @override
@@ -95,8 +96,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
                 child: VitailBackButton(onPressed: () => Navigator.maybePop(context), color: OnboardingStyle.ink),
               ),
             ),
-            // The plan content scrolls only if it genuinely can't fit
-            // (small screens, large text scale)...
+
             Expanded(
               child: SingleChildScrollView(
                 child: Center(
@@ -121,13 +121,13 @@ class _HighPawScreenState extends State<HighPawScreen> {
                           _goalCard(progress),
                           const SizedBox(height: 22),
                           _sectionLabel(
-                            'This week',
-                            '${_days.length} of 7 days picked — miss one and catch up before Sunday.',
+                            'Daily streak',
+                            'Your streak grows by one every day you complete your walk.',
                           ),
                           const SizedBox(height: 12),
-                          _weekCard(),
-                          const SizedBox(height: 16),
                           _note(),
+                          const SizedBox(height: 16),
+                          _disclaimerCard(),
                         ],
                       ),
                     ),
@@ -135,8 +135,6 @@ class _HighPawScreenState extends State<HighPawScreen> {
                 ),
               ),
             ),
-            // ...but the Continue button and the disclaimer are PINNED:
-            // never pushed off-screen, always fully visible.
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 460),
@@ -149,14 +147,13 @@ class _HighPawScreenState extends State<HighPawScreen> {
                       ElevatedButton(
                         onPressed: () => Navigator.pushReplacement(
                           context,
-                          onboardingFadeRoute(MicrochipScreen(dogId: widget.dogId)),                        ),
+                          onboardingFadeRoute(MicrochipScreen(dogId: widget.dogId)),                        
+                        ),
                         style: OnboardingStyle.primaryButton,
                         child: Text('Continue',
                             style: OnboardingStyle.text(16,
                                 color: Colors.white)),
                       ),
-                      const SizedBox(height: 12),
-                      _disclaimerCard(),
                     ],
                   ),
                 ),
@@ -289,52 +286,6 @@ class _HighPawScreenState extends State<HighPawScreen> {
     );
   }
 
-  Widget _weekCard() => Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: OnboardingStyle.border),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            for (int i = 0; i < _dayLabels.length; i++)
-              _dayChip(i, _dayLabels[i]),
-          ],
-        ),
-      );
-
-  Widget _dayChip(int index, String label) {
-    final bool selected = _days.contains(index);
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: InkWell(
-        onTap: () => setState(() {
-          if (!_days.remove(index)) _days.add(index);
-        }),
-        customBorder: const CircleBorder(),
-        child: Container(
-          width: 38,
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: selected ? OnboardingStyle.green : _chipTrack,
-            shape: BoxShape.circle,
-          ),
-          child: Text(
-            label,
-            style: OnboardingStyle.text(
-              13,
-              color: selected ? Colors.white : OnboardingStyle.muted,
-              weight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _note() => Container(
         width: double.infinity,
@@ -345,7 +296,7 @@ class _HighPawScreenState extends State<HighPawScreen> {
           border: Border.all(color: _noteBorder),
         ),
         child: Text(
-          'Miss a day? No stress — your weekly goal still counts, so you can catch up any day before the week resets.',
+          'Reach 80% of your goal ($_streakMinutes of $_minutes min) and you finish your streak for the day.',
           style: OnboardingStyle.text(13,
               color: OnboardingStyle.muted,
               weight: FontWeight.w500,
@@ -353,9 +304,6 @@ class _HighPawScreenState extends State<HighPawScreen> {
         ),
       );
 
-  /// Vet-advice disclaimer: same "note" box shape as [_note], with a very
-  /// light red background. Lives in the pinned footer, so it is always
-  /// fully visible — compact padding/line-height to keep the footer short.
   Widget _disclaimerCard() => Container(
         width: double.infinity,
         padding: const EdgeInsets.all(14),
