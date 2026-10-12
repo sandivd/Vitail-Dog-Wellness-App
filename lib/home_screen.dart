@@ -1,22 +1,25 @@
-import 'vitail_icon.dart';
-import 'vitail_loading.dart';
+import 'dart:math';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'walk_screen.dart';
-import 'rewards_screen.dart';
-import 'profile_screen.dart';
-import 'walk_history_screen.dart';
-import 'dog_sharing.dart';
-import 'join_requests_banner.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'activity_history_data.dart';
 import 'activity_history_widgets.dart';
-import 'dart:math';
 import 'daily_goal_card.dart';
+import 'dog_sharing.dart';
+import 'join_requests_banner.dart';
+import 'profile_screen.dart';
 import 'reward_image_placeholder.dart';
 import 'reward_venues.dart';
+import 'rewards_screen.dart';
 import 'venue_detail.dart';
+import 'vitail_icon.dart';
+import 'vitail_loading.dart';
+import 'walk_history_screen.dart';
 import 'walk_in_progress.dart';
+import 'walk_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,9 +29,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<ActivityWalk> _walks = [];
-  DateTime _selectedDay = activityDay(DateTime.now());
-  bool _historyFailed = false;
   int _currentIndex = 0;
   int _totalPoints = 0;
   int _dailyStreak = 0;
@@ -40,139 +40,108 @@ class _HomeScreenState extends State<HomeScreen> {
   int _dailyGoalMins = 60;
   double _currentKm = 0.0;
   int _currentMins = 0;
+
+  WalkProgress? _activeWalk;
+  DateTime _selectedDay = activityDay(DateTime.now());
+  List<ActivityWalk> _walks = [];
   VenueInfo? _suggestedVenue;
 
   @override
   void initState() {
     super.initState();
-    _activeWalk = activeWalkProgress.value;
-    activeWalkProgress.addListener(_syncActiveWalk);
     _fetchHomeData();
-  }
-
-  void _syncActiveWalk() {
-    if (!mounted) return;
-    setState(() => _activeWalk = activeWalkProgress.value);
+    activeWalkProgress.addListener(_onActiveWalkChanged);
   }
 
   @override
   void dispose() {
-    activeWalkProgress.removeListener(_syncActiveWalk);
+    activeWalkProgress.removeListener(_onActiveWalkChanged);
     super.dispose();
   }
 
-  WalkProgress? _activeWalk;
-
-  void _handleWalkProgress(WalkProgress? progress) {
+  void _onActiveWalkChanged() {
     if (!mounted) return;
-    setState(() => _activeWalk = progress);
+    setState(() => _activeWalk = activeWalkProgress.value);
+  }
+
+  void _openSuggestedVenue() {
+    if (_suggestedVenue == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VenueDetailScreen(venue: _suggestedVenue!),
+      ),
+    );
   }
 
   Future<void> _fetchHomeData() async {
-    // Suggested venue: runs in parallel with the main load — it must never
-    // delay Home, and the card works without it.
-    _loadSuggestedVenue();
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
       final today = DateTime.now().toIso8601String().split('T')[0];
 
-      // Recompute the derived streak (anchored on the user's local today)
-      // so missed days show as broken WITHOUT needing a new walk.
-      // Best-effort: Home still loads from the last stored value if this fails.
+      // Recompute the derived streak
       try {
-        await Supabase.instance.client.rpc(
-          'recompute_streak',
-          params: {'p_today': today},
-        );
+        await Supabase.instance.client
+            .rpc('recompute_streak', params: {'p_today': today});
       } catch (_) {}
 
-            final profileRes = await Supabase.instance.client
+      final profileRes = await Supabase.instance.client
           .from('profiles')
           .select('total_points, daily_streak')
           .eq('id', userId)
+          .single();
+
+      final dogRes = await Supabase.instance.client
+          .from('dogs')
+          .select('dog_name, photo_url, daily_goal_km, daily_goal_minutes')
+          .eq('owner_id', userId)
+          .limit(1)
           .maybeSingle();
 
-      final DogShare? link = await primaryDogForCurrentUser();
-      final Map<String, dynamic>? dogRes = link?.dog;
+      final walksRes = await Supabase.instance.client
+          .from('walks')
+          .select('distance_meters, duration_seconds')
+          .eq('user_id', userId)
+          .gte('walk_date', today);
 
-      List<ActivityWalk> walks = [];
-      bool historyFailed = false;
-      try {
-        walks = await ActivityHistoryRepository().loadWalks();
-      } catch (_) {
-        historyFailed = true;
-      }
-
-      final dogId = dogRes?['id'] as String?;
       double kmToday = 0;
       int minsToday = 0;
-      if (dogId != null) {
-        final totals = await Supabase.instance.client.rpc(
-          'dog_totals_since',
-          params: {'p_dog_id': dogId, 'p_since': today},
-        ) as List;
-        if (totals.isNotEmpty) {
-          final t = totals.first as Map<String, dynamic>;
-          kmToday = (t['distance_meters'] as num).toDouble() / 1000;
-          minsToday = (t['duration_seconds'] as num).toInt() ~/ 60;
-        }
+      for (var walk in walksRes) {
+        kmToday += (walk['distance_meters'] as num).toDouble() / 1000;
+        minsToday += (walk['duration_seconds'] as num).toInt() ~/ 60;
       }
-      if (!mounted) return;
+
+      List<ActivityWalk> loadedWalks = [];
+      try {
+        loadedWalks = await ActivityHistoryRepository().loadWalks();
+      } catch (_) {}
+
+      VenueInfo? suggested;
+      try {
+        final venues = await loadRewardVenues();
+        if (venues.isNotEmpty) {
+          suggested = venues.first;
+        }
+      } catch (_) {}
 
       setState(() {
-        _walks = walks;
-        _historyFailed = historyFailed;
-        _totalPoints = profileRes?['total_points'] ?? 0;
-        _dailyStreak = profileRes?['daily_streak'] ?? 0;
+        _totalPoints = profileRes['total_points'] ?? 0;
+        _dailyStreak = profileRes['daily_streak'] ?? 0;
         _dogName = dogRes?['dog_name'] ?? 'Dog';
         _dogPhotoUrl = dogRes?['photo_url'];
         _dailyGoalKm = (dogRes?['daily_goal_km'] ?? 3.0).toDouble();
         _dailyGoalMins = (dogRes?['daily_goal_minutes'] ?? 60).toInt();
         _currentKm = kmToday;
         _currentMins = minsToday;
+        _walks = loadedWalks;
+        _suggestedVenue = suggested;
         _isLoading = false;
-      }); 
+      });
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
     }
   }
 
-  /// Picks today's suggested walk destination: a vet or park from
-  /// partnered_venues (venue_type column), seeded by the date so it's
-  /// stable all day.
-  Future<void> _loadSuggestedVenue() async {
-    try {
-      final venues = await loadRewardVenues();
-
-      // Vet/park rows only — cafés are reward partners, not walk spots.
-      // venue_type is null on rows that predate the column; null means
-      // "not eligible", so legacy café rows can never appear here.
-      final walkSpots = venues.where((v) => v.isVet || v.isPark).toList();
-      if (walkSpots.isEmpty) return;
-
-      // Prefer spots we can actually route a walk to (they have coords).
-      final withCoords = walkSpots.where((v) => v.location != null).toList();
-      final pool = withCoords.isNotEmpty ? withCoords : walkSpots;
-
-      final daySeed = DateTime.now().difference(DateTime(2024)).inDays;
-      final pick = pool[Random(daySeed).nextInt(pool.length)];
-      if (!mounted) return;
-      setState(() => _suggestedVenue = pick);
-    } catch (_) {
-      // Optional suggestion — Home is fully usable without it.
-    }
-  }
-
-  void _openSuggestedVenue() {
-    final venue = _suggestedVenue;
-    if (venue == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => VenueDetailScreen(venue: venue)),
-    );
-  }
-
-  // Custom Line Icons from Figma
   static const String homeIconSvg = '''
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M15 21V13C15 12.7348 14.8946 12.4804 14.7071 12.2929C14.5196 12.1054 14.2652 12 14 12H10C9.73478 12 9.48043 12.1054 9.29289 12.2929C9.10536 12.4804 9 12.7348 9 13V21" stroke="[[COLOR]]" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -186,7 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   static const String rewardsIconSvg = '''
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M12 6.99995V20.9999M12 6.99995C11.6383 5.50935 11.0154 4.23501 10.2127 3.34311C9.41003 2.45121 8.46469 1.98314 7.5 1.99995C6.83696 1.99995 6.20107 2.26334 5.73223 2.73218C5.26339 3.20102 5 3.83691 5 4.49995C5 5.16299 5.26339 5.79887 5.73223 6.26772C6.20107 6.73656 6.83696 6.99995 7.5 6.99995M12 6.99995C12.3617 5.50935 12.9846 4.23501 13.7873 3.34311C14.59 2.45121 15.5353 1.98314 16.5 1.99995C17.163 1.99995 17.7989 2.26334 18.2678 2.73218C18.7366 3.20102 19 3.83691 19 4.49995C19 5.16299 18.7366 5.79887 18.2678 6.26772C17.7989 6.73656 17.163 6.99995 16.5 6.99995M20 10.9999V18.9999C20 19.5304 19.7893 20.0391 19.4142 20.4142C19.0391 20.7893 18.5304 21 18 20.9999H6C5.46957 20.9999 4.96086 20.7893 4.58579 20.4142C4.21071 20.0391 4 19.5304 4 18.9999V10.9999" stroke="[[COLOR]]" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M12 6.99995V20.9999M12 6.99995C11.6383 5.50935 11.0154 4.23501 10.2127 3.34311C9.41003 2.45121 8.46469 1.98314 7.5 1.99995C6.83696 1.99995 6.20107 2.26334 5.73223 2.73218C5.26339 3.20102 5 3.83691 5 4.49995C5 5.16299 5.26339 5.79887 5.73223 6.26772C6.20107 6.73656 6.83696 6.99995 7.5 6.99995M12 6.99995C12.3617 5.50935 12.9846 4.23501 13.7873 3.34311C14.59 2.45121 15.5353 1.98314 16.5 1.99995C17.163 1.99995 17.7989 2.26334 18.2678 2.73218C18.7366 3.20102 19 3.83691 19 4.49995C19 5.16299 18.7366 5.79887 18.2678 6.26772C17.7989 6.73656 17.163 6.99995 16.5 6.99995M20 10.9999V18.9999C20 19.5304 19.7893 20.0391 19.4142 20.4142C20.0391 20.7893 18.5304 21 18 20.9999H6C5.46957 20.9999 4.96086 20.7893 4.58579 20.4142C4.21071 20.0391 4 19.5304 4 18.9999V10.9999" stroke="[[COLOR]]" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 <path d="M20 7H4C3.44772 7 3 7.44772 3 8V10C3 10.5523 3.44772 11 4 11H20C20.5523 11 21 10.5523 21 10V8C21 7.44772 20.5523 7 20 7Z" stroke="[[COLOR]]" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>''';
 
@@ -200,13 +169,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final displayedKm = _currentKm + (_activeWalk?.distanceMeters ?? 0) / 1000;
-    final displayedMins = _currentMins + ((_activeWalk?.elapsedSeconds ?? 0) ~/ 60);
 
     if (_isLoading) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
-        body: Center(child: VitailLoading()),
+        body: const Center(
+          child: VitailLoading(),
+        ),
       );
     }
 
@@ -219,9 +188,20 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const JoinRequestsBanner(),
               Row(
                 children: [
-                  DogAvatar(photoUrl: _dogPhotoUrl, size: 48),
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor:
+                        colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+                    backgroundImage: _dogPhotoUrl != null
+                        ? CachedNetworkImageProvider(_dogPhotoUrl!)
+                        : null,
+                    child: _dogPhotoUrl == null
+                        ? Icon(Icons.pets, color: colorScheme.onSurfaceVariant)
+                        : null,
+                  ),
                   const SizedBox(width: 16),
                   Text(
                     'Hi $_dogName!',
@@ -234,7 +214,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              const JoinRequestsBanner(),
               const SizedBox(height: 32),
 
               Center(
@@ -248,24 +227,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 186,
                         height: 186,
                         child: CircularProgressIndicator(
-                          value: (displayedKm / _dailyGoalKm).clamp(0.0, 1.0),
+                          value: (_currentKm / _dailyGoalKm).clamp(0.0, 1.0),
                           strokeWidth: 14,
                           color: colorScheme.secondary,
-                          backgroundColor: colorScheme.secondary.withValues(
-                            alpha: 0.2,
-                          ),
+                          backgroundColor:
+                              colorScheme.secondary.withValues(alpha: 0.2),
                         ),
                       ),
                       SizedBox(
                         width: 150,
                         height: 150,
                         child: CircularProgressIndicator(
-                          value: (displayedMins / _dailyGoalMins).clamp(0.0, 1.0),
+                          value:
+                              (_currentMins / _dailyGoalMins).clamp(0.0, 1.0),
                           strokeWidth: 10,
                           color: colorScheme.tertiary,
-                          backgroundColor: colorScheme.tertiary.withValues(
-                            alpha: 0.2,
-                          ),
+                          backgroundColor:
+                              colorScheme.tertiary.withValues(alpha: 0.2),
                         ),
                       ),
                       Column(
@@ -273,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            '${displayedKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
+                            '${_currentKm.toStringAsFixed(1)}/${_dailyGoalKm.toStringAsFixed(1)}',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
@@ -293,9 +271,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-
                           Text(
-                            '$displayedMins/$_dailyGoalMins',
+                            '$_currentMins/$_dailyGoalMins',
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.w800,
@@ -326,20 +303,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Expanded(
                     child: _buildFigmaStatCard(
-                      'Points earned',
-                      '$_totalPoints pts',
-                      'star',
-                      context,
-                    ),
+                        'Points earned', '$_totalPoints pts', 'star', context),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: _buildFigmaStatCard(
-                      'Streaks',
-                      '$_dailyStreak days',
-                      'flame',
-                      context,
-                    ),
+                        'Streaks', '$_dailyStreak days', 'flame', context),
                   ),
                 ],
               ),
@@ -349,7 +318,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   width: double.infinity,
                   height: 56,
-                  // Same button as the Explore tab's "Start walk".
                   child: ElevatedButton(
                     onPressed: () {
                       setState(() {
@@ -417,93 +385,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 currentMinutes: _currentMins,
                 goalMinutes: _dailyGoalMins,
                 venue: _suggestedVenue,
-                onVenueTap:
-                    _suggestedVenue == null ? null : _openSuggestedVenue,
+                onVenueTap: _suggestedVenue == null ? null : _openSuggestedVenue,
               ),
               const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: activityBlue,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          WalkHistoryScreen(initialDate: _selectedDay),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        'Activity History',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(width: 4),
-                      VitailIcon(
-                        'chevron-right',
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 28),
-              const ActivitySectionLabel('MY WALKS'),
-              if (_historyFailed)
-                Row(
-                  children: [
-                    const Expanded(child: Text('Could not load walks.')),
-                    TextButton(
-                      onPressed: _fetchHomeData,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                )
-              else if (!_walks.any(
-                (walk) => activityDay(walk.date) == _selectedDay,
-              ))
-                Text(
-                  'No walks on this day. Start a walk to add one.',
-                  style: TextStyle(
-                      fontSize: 12, color: activityMutedColor(context)),
-                )
-              else
-                for (final walk in _walks.where(
-                  (walk) => activityDay(walk.date) == _selectedDay,
-                ))
-                  ActivityWalkCard(walk: walk),
             ],
           ),
         ),
       ),
-      WalkScreen(onProgress: _handleWalkProgress),
+      const WalkScreen(),
       RewardsScreen(isActive: _currentIndex == 2),
       ProfileScreen(isActive: _currentIndex == 3),
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _currentIndex, children: screens),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: screens,
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: colorScheme.surface,
           border: Border(
-            top: BorderSide(
-              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
-              width: 1,
-            ),
-          ),
+              top: BorderSide(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.2),
+                  width: 1)),
         ),
         padding: EdgeInsets.only(
           top: 8.0,
@@ -521,112 +426,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// Figma "goal card" / "biscuit card": white card, centred value and
-  /// label, soft shadow, no border; keeps the app's lucide icon on top.
-  Widget _buildFigmaStatCard(
-    String title,
-    String value,
-    String icon,
-    BuildContext context,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      decoration: BoxDecoration(
-        color: activityCardColor(context),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: activityShadow,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          VitailIcon(icon, color: colorScheme.onSurfaceVariant),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: colorScheme.onSurface,
-              fontFamily: 'PlusJakartaSans',
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: colorScheme.onSurfaceVariant,
-              fontFamily: 'PlusJakartaSans',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCustomNavItem(
-    int index,
-    String label,
-    String svgString,
-    BuildContext context,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-    bool isActive = _currentIndex == index;
-
-    // Active is primary, inactive is muted grey
-    String hexColor = isActive
-        ? '#${colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'
-        : '#${colorScheme.onSurfaceVariant.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
-
-    String coloredSvg = svgString.replaceAll('[[COLOR]]', hexColor);
-
-    return Expanded(
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          if (index == 1 &&
-              _activeWalk != null &&
-              Navigator.of(context).canPop()) {
-            Navigator.of(context).pop();
-            return;
-          }
-
-          setState(() {
-            _currentIndex = index;
-            if (index == 0) _fetchHomeData();
-          });
-        },
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SvgPicture.string(coloredSvg, height: 24, width: 24),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive
-                    ? colorScheme.primary
-                    : colorScheme.onSurfaceVariant,
-                fontSize: 12,
-                fontFamily: 'PlusJakartaSans',
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
   Widget _buildActiveWalkPanel(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final progress = _activeWalk!;
+    final progress = _activeWalk;
+    if (progress == null) return const SizedBox.shrink();
     final minutes = progress.elapsedSeconds ~/ 60;
     final seconds = (progress.elapsedSeconds % 60).toString().padLeft(2, '0');
     final time = '$minutes:$seconds';
@@ -653,8 +456,8 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.35),
-                  // Live-walk dot (a shape, not an icon).
+                  backgroundColor:
+                      colorScheme.onPrimary.withValues(alpha: 0.35),
                   child: Container(
                     width: 14,
                     height: 14,
@@ -692,11 +495,98 @@ class _HomeScreenState extends State<HomeScreen> {
               child: LinearProgressIndicator(
                 value: fraction,
                 minHeight: 14,
-                backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.35),
-                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+                backgroundColor:
+                    colorScheme.onPrimary.withValues(alpha: 0.35),
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
               ),
             ),
             const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFigmaStatCard(
+    String title,
+    String value,
+    String icon,
+    BuildContext context,
+  ) {
+    return Container(
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: activityCardColor(context),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: activityShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          VitailIcon(icon, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomNavItem(
+      int index, String label, String svgString, BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    bool isActive = _currentIndex == index;
+
+    String hexColor = isActive
+        ? '#${colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'
+        : '#${colorScheme.onSurfaceVariant.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
+    String coloredSvg = svgString.replaceAll('[[COLOR]]', hexColor);
+
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() {
+            _currentIndex = index;
+            if (index == 0) _fetchHomeData();
+          });
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SvgPicture.string(coloredSvg, height: 24, width: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                fontFamily: 'PlusJakartaSans',
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
           ],
         ),
       ),
