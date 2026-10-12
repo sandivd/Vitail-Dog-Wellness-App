@@ -4,10 +4,9 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'dog_sharing.dart';
+import 'care_score_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
-import 'microchip_screen.dart';
 import 'settings_screen.dart';
 import 'vitail_loading.dart';
 import 'vitail_snack.dart';
@@ -27,14 +26,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _totalWalks = 0;
   int _totalSeconds = 0;
   double _totalDistanceKm = 0.0;
-  
+
   int _careScore = 0;
   Map<String, Map<String, dynamic>> _scoreComponents = {};
 
   // Design Tokens based on Figma
   static const Color _kPageBg = Color(0xFFF4F0E9);
   static const Color _kCoral = Color(0xFFDC755C);
-  static const Color _kTealBg = Color(0xFFDCEFEA); 
+  static const Color _kTealBg = Color(0xFFDCEFEA);
   static const Color _kGreen = Color(0xFFAEC568);
   static const Color _kBadgeGreen = Color(0xFFE5EED4); // Soft pastel green
   static const Color _kBadgeInactive = Color(0xFFF5F4F0);
@@ -52,13 +51,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
 
-      final dogResponse = (await primaryDogForCurrentUser())?.dog ??
-          await Supabase.instance.client
-              .from('dogs')
-              .select()
-              .eq('owner_id', userId)
-              .limit(1)
-              .maybeSingle();
+      final dogResponse = await Supabase.instance.client
+          .from('dogs')
+          .select()
+          .eq('owner_id', userId)
+          .limit(1)
+          .maybeSingle();
 
       final profileResponse = await Supabase.instance.client
           .from('profiles')
@@ -84,7 +82,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _totalWalks = walksResponse.length;
         _totalSeconds = totalSecs;
         _totalDistanceKm = totalDistanceMeters / 1000;
-        
+
         _calculateCareScore(List<Map<String, dynamic>>.from(walksResponse), dogResponse);
         _isLoading = false;
       });
@@ -98,13 +96,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     DateTime sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
     List recentWalks = walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
-    
+
     int activityScore = ((recentWalks.length * 100) / 7).round().clamp(0, 100);
     int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
     int microchipScore = dog['microchip_number'] != null ? 100 : 0;
     int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
     int vetScore = 0;
-    
+
     if (dog['last_vet_checkup'] != null) {
       DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
       if (DateTime.now().difference(lastVet).inDays <= 180) {
@@ -116,10 +114,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final String microchipNum = dog['microchip_number']?.toString() ?? '';
     final String microchipStatus = microchipNum.isNotEmpty ? 'Linked · $microchipNum' : 'Not added';
-    
+
     final String vaccDate = dog['vaccination_date']?.toString() ?? '';
     final String vaccStatus = vaccDate.isNotEmpty ? 'Up to date' : 'Unknown';
-    
+
     final String insuranceName = dog['insurance_partner']?.toString() ?? '';
     final String insuranceStatus = insuranceName.isNotEmpty ? insuranceName : 'Not added';
 
@@ -140,6 +138,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
+  void _openCareScore() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CareScoreScreen(
+          careScore: _careScore,
+          scoreComponents: _scoreComponents,
+          dogData: _dogData,
+        ),
+      ),
+    );
+  }
+
   String get _formattedTime {
     final hours = _totalSeconds ~/ 3600;
     final minutes = (_totalSeconds % 3600) ~/ 60;
@@ -150,12 +161,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String get _dogSubtitle {
-    if (_dogData == null) return 'Setup your dog\'s profile';
+    if (_dogData == null) return "Setup your dog's profile";
     final breed = _dogData!['breed'] ?? 'Unknown Breed';
     final birthdayStr = _dogData!['birthday'];
-    
+
     if (birthdayStr == null) return breed;
-    
+
     final birthday = DateTime.tryParse(birthdayStr);
     if (birthday == null) return breed;
 
@@ -164,7 +175,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (now.month < birthday.month || (now.month == birthday.month && now.day < birthday.day)) {
       years--;
     }
-    
+
     if (years <= 0) return 'Puppy $breed';
     return '$years year-old $breed';
   }
@@ -239,7 +250,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         child: Stack(
                           children: [
                             CircleAvatar(
-                              radius: 64, 
+                              radius: 64,
                               backgroundColor: _kTealBg,
                               backgroundImage: photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
                               child: photoUrl == null ? const Icon(Icons.pets, size: 48, color: _kMuted) : null,
@@ -279,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // Streak Pill
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -307,7 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
 
               // Stats Row
@@ -322,79 +333,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
 
               const SizedBox(height: 32),
-              
+
               // Care Score Section
-              const Text(
-                'CARE SCORE',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'CARE SCORE',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
+                  ),
+                  InkWell(
+                    onTap: _openCareScore,
+                    child: const Text(
+                      'View details',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kCoral),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
-              
-              // Main Score Ring
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 36),
-                decoration: BoxDecoration(
-                  color: _kCard,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Center(
-                  child: SizedBox(
-                    width: 140, 
-                    height: 140, 
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CircularProgressIndicator(
-                          value: _careScore > 0 ? (_careScore / 100) : 1.0,
-                          strokeWidth: 14,
-                          color: _kGreen,
-                          backgroundColor: _kTealBg,
-                        ),
-                        Center(
-                          child: Text(
-                            _careScore > 0 ? '$_careScore' : '- -',
-                            style: const TextStyle(
-                              fontSize: 42,
-                              fontWeight: FontWeight.w700,
-                              color: _kInk,
+
+              // Main Score Ring (clickable to open Care Score)
+              InkWell(
+                onTap: _openCareScore,
+                borderRadius: BorderRadius.circular(24),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 36),
+                  decoration: BoxDecoration(
+                    color: _kCard,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x0A000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: SizedBox(
+                      width: 140,
+                      height: 140,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CircularProgressIndicator(
+                            value: _careScore > 0 ? (_careScore / 100) : 1.0,
+                            strokeWidth: 14,
+                            color: _kGreen,
+                            backgroundColor: _kTealBg,
+                          ),
+                          Center(
+                            child: Text(
+                              _careScore > 0 ? '$_careScore' : '- -',
+                              style: const TextStyle(
+                                fontSize: 42,
+                                fontWeight: FontWeight.w700,
+                                color: _kInk,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
               const SizedBox(height: 12),
 
-              // Care Score Items
+              // Care Score Items (each item opens Care Score)
               ..._scoreComponents.entries.map((entry) => _buildMenuCard(
                 title: entry.key,
                 subtitle: entry.value['status'],
-                onTap: () async {
-                  if (entry.key == 'Microchip') {
-                    final updated = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MicrochipScreen(
-                          isFromProfile: true,
-                          dogId: _dogData?['id']?.toString(),
-                          initialNumber: _dogData?['microchip_number']?.toString(),
-                        ),
-                      ),
-                    );
-                    if (updated == true) {
-                      _fetchProfile();
-                    }
-                    return;
-                  }
-                  showVitailSnack(context, '${entry.key} settings coming soon', type: VitailSnackType.info);
-                },
+                onTap: _openCareScore,
               )),
 
               const SizedBox(height: 24),
-              
+
               // Badges Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -403,7 +419,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     'BADGES',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kMuted, letterSpacing: 0.5),
                   ),
-                  Text(
+                  const Text(
                     'See all',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kCoral),
                   ),
@@ -429,9 +445,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
 
               const SizedBox(height: 24),
-              
+
               // Action Menu
-              _buildMenuCard(title: 'Invite a carer', subtitle: null, onTap: () {
+              _buildMenuCard(title: 'Invite a carer', subtitle: _dogData?['microchip_number']?.toString(), onTap: () {
                 showVitailSnack(context, 'Carer invites coming soon', type: VitailSnackType.info);
               }),
               _buildMenuCard(title: 'My coupons', subtitle: '2 available', onTap: () {
@@ -466,27 +482,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 40),
 
-              // Bottom Logo composed of individual images
+              // Bottom Logo
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Image.asset(
                     'assets/brand/vitail-mark.png',
-                    height: 58, 
+                    height: 58,
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const Icon(Icons.pets, color: _kCoral, size: 58),
                   ),
                   const SizedBox(width: 4),
                   Image.asset(
                     'assets/brand/vitail-title.png',
-                    height: 36, 
+                    height: 36,
                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) => const Text('VITAIL', style: TextStyle(color: _kCoral, fontSize: 36, fontWeight: FontWeight.w800)),
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 40),
             ],
           ),
@@ -534,8 +550,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           label,
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: 9, 
-            fontWeight: FontWeight.w600, 
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
             color: earned ? _kInk : _kMuted,
           ),
         )
