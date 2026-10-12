@@ -206,9 +206,15 @@ class RewardOfferCard extends StatelessWidget {
     this.redemption,
     this.onCheckIn,
     this.onShowCode,
+    this.lockedMessage = insufficientPointsMessage,
   });
+  static const insufficientPointsMessage =
+      'You need more points to redeem this offer.';
+  static const microchipLockedMessage =
+      'Add a valid microchip number in Profile to unlock rewards.';
   final RewardOffer offer;
   final bool canRedeem;
+  final String lockedMessage;
   final VoidCallback onRedeem;
   final RedeemedReward? redemption;
   final VoidCallback? onCheckIn;
@@ -332,7 +338,7 @@ class RewardOfferCard extends StatelessWidget {
           if (redemption == null && !canRedeem) ...[
             const SizedBox(height: 8),
             Text(
-              'You need more points to redeem this offer.',
+              lockedMessage,
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 14, color: colors.onSurfaceVariant),
             ),

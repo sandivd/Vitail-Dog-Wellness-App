@@ -301,10 +301,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           });
       if (!mounted) return;
       if (offers.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No rewards are available for this venue yet.'),
-          ),
+        showVitailSnack(
+          context,
+          'No rewards are available for this venue yet.',
+          type: VitailSnackType.info,
         );
         return;
       }
@@ -331,12 +331,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
       );
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not load rewards. Please try CHECK REWARDS again.',
-            ),
-          ),
+        showVitailSnack(
+          context,
+          'Could not load rewards. Please try CHECK REWARDS again.',
+          type: VitailSnackType.error,
         );
     }} finally {
       if (mounted) setState(() => _loadingReward = false);
@@ -641,8 +639,8 @@ class _VenuePhoto extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final backButton = Positioned(
-      top: MediaQuery.paddingOf(context).top + 12,
-      left: 20,
+      top: MediaQuery.paddingOf(context).top,
+      left: 8,
       child: Material(
         color: dark ? const Color(0xFF242321) : Colors.white,
         elevation: 2,

@@ -1,4 +1,5 @@
 import 'vitail_loading.dart';
+import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -12,7 +13,6 @@ class OnboardingView extends StatelessWidget {
     required this.loading, this.photo,
     required this.deSexed, required this.onDeSexed,
     required this.colourController,
-    required this.walkTime, required this.onWalkTime,
     required this.healthImpact, required this.onHealthImpact});
 
   final TextEditingController nameController, weightController;
@@ -33,8 +33,6 @@ class OnboardingView extends StatelessWidget {
 
   final TextEditingController colourController;
 
-  final String? walkTime;
-  final ValueChanged<String> onWalkTime;
 
   final String? healthImpact;
   final ValueChanged<String> onHealthImpact;
@@ -125,18 +123,17 @@ class OnboardingView extends StatelessWidget {
       fontFamily: 'PlusJakartaSans', colorScheme: ColorScheme.fromSeed(seedColor: coral),
       textTheme: ThemeData.light().textTheme.apply(fontFamily: 'PlusJakartaSans', bodyColor: ink, displayColor: ink)),
     child: Scaffold(backgroundColor: background,
-      body: SafeArea(child: SingleChildScrollView(
+      body: SafeArea(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (Navigator.canPop(context))
+          VitailBackButton(color: ink,
+            onPressed: loading ? null : () => Navigator.maybePop(context)),
+        Expanded(child: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(padding: const EdgeInsets.fromLTRB(28, 26, 28, 32),
+          child: Padding(padding: EdgeInsets.fromLTRB(28, Navigator.canPop(context) ? 0 : 26, 28, 32),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Stack(clipBehavior: Clip.none, alignment: Alignment.center, children: [
-                const Text('Tell us about your dog', textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
-                if (Navigator.canPop(context)) Positioned(left: -24, top: -6,
-                  child: IconButton(tooltip: 'Back', onPressed: loading ? null : () => Navigator.maybePop(context),
-                    icon: icon('back'))),
-              ]),
+              const Text('Tell us about your dog', textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700)),
               const SizedBox(height: 32),
 
               // Photo
@@ -212,10 +209,6 @@ class OnboardingView extends StatelessWidget {
                   hintStyle: TextStyle(color: hasBirthday ? ink : hintGrey, fontSize: 14)))),
               const SizedBox(height: 16),
 
-              field('Usually walks in the *',
-                choiceRow(const ['Morning', 'Afternoon', 'Evening'], walkTime, onWalkTime, upper: false)),
-              const SizedBox(height: 16),
-
               field('Health condition *',
                 dropdown('Select an option', healthImpact, healthOptions, onHealthImpact)),
               const SizedBox(height: 16),
@@ -237,6 +230,7 @@ class OnboardingView extends StatelessWidget {
           ),
         )),
       )),
+      ])),
     ),
   );
 }

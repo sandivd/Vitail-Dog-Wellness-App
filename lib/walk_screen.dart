@@ -7,8 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'venue_detail.dart';
 import 'walk_in_progress.dart';
 import 'vitail_snack.dart';
-
-enum _RouteMode { longest }
+import 'dog_sharing.dart';
 
 class WalkScreen extends StatefulWidget {
   const WalkScreen({super.key, this.onProgress});
@@ -35,8 +34,6 @@ class _WalkScreenState extends State<WalkScreen> {
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
   final TextEditingController _searchController = TextEditingController();
-
-  _RouteMode _routeMode = _RouteMode.longest;
 
   LatLng? _currentPosition;
   LatLng? _droppedPin;
@@ -85,8 +82,8 @@ class _WalkScreenState extends State<WalkScreen> {
   void dispose() {
     _sheetController.dispose();
     _searchController.dispose();
-    super.dispose();
     widget.onProgress?.call(null);
+    super.dispose();
   }
 
   Future<void> _locateUser() async {
@@ -170,7 +167,6 @@ class _WalkScreenState extends State<WalkScreen> {
   void _dropPinAt(LatLng point) {
     setState(() {
       _droppedPin = point;
-      _routeMode = _RouteMode.longest;
     });
     _mapController?.animateCamera(CameraUpdate.newLatLng(point));
   }
@@ -184,9 +180,7 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 
   Set<Polyline> _buildPolylines(Color lineColor) {
-    if (_routeMode == _RouteMode.longest &&
-        _currentPosition != null &&
-        _droppedPin != null) {
+    if (_currentPosition != null && _droppedPin != null) {
       return {
         Polyline(
           polylineId: const PolylineId('pin_route'),
@@ -229,14 +223,8 @@ class _WalkScreenState extends State<WalkScreen> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      // Single dog per user — fetch it directly instead of routing through
-      // a dog-selection screen.
-      final dog = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
+      
+      final dog = (await primaryDogForCurrentUser())?.dog;
 
       if (!mounted) return;
 
@@ -255,10 +243,10 @@ class _WalkScreenState extends State<WalkScreen> {
         if (!mounted) return;
       }
 
-      final hasPlannedRoute =
-          _currentPosition != null && routeDestination != null;
+      final LatLng? start = _currentPosition;
+      final LatLng? end = routeDestination;
 
-      if (routeDestination != null && !hasPlannedRoute) {
+      if (end != null && start == null) {
         showVitailSnack(
           context,
           'Couldnt get your location, so the route wont be shown.',
@@ -271,9 +259,7 @@ class _WalkScreenState extends State<WalkScreen> {
         MaterialPageRoute(
           builder: (context) => WalkInProgress(
             dog: dog,
-            plannedRoute: hasPlannedRoute
-                ? [_currentPosition!, routeDestination]
-                : null,
+            plannedRoute: (start != null && end != null) ? [start, end] : null,
             onProgress: widget.onProgress,
           ),
         ),
@@ -370,14 +356,6 @@ class _WalkScreenState extends State<WalkScreen> {
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Route mode toggle — one bar, selected side shown as a
-                  // green pill.
-                  _RouteModeToggle(
-                    mode: _routeMode,
-                    onChanged: (mode) => setState(() => _routeMode = mode),
                   ),
                 ],
               ),
@@ -583,80 +561,6 @@ class _WalkScreenState extends State<WalkScreen> {
             },
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Segmented bar for choosing between "Last route" and "Longest route" —
-/// one pill-shaped container, with the selected side highlighted as a
-/// solid green pill.
-class _RouteModeToggle extends StatelessWidget {
-  const _RouteModeToggle({required this.mode, required this.onChanged});
-
-  final _RouteMode mode;
-  final ValueChanged<_RouteMode> onChanged;
-
-  // Matches the green used for mood chips / points pill elsewhere in the
-  // app (see walk_summary.dart's _kGreen) — not in ColorScheme, so hardcoded
-  // to stay consistent with those other hardcoded Figma tokens.
-  static const Color _kGreen = Color(0xFFAEC568);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RouteModeSegment extends StatelessWidget {
-  const _RouteModeSegment({
-    required this.label,
-    required this.selected,
-    required this.selectedColor,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final Color selectedColor;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: selected ? selectedColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-        ),
       ),
     );
   }

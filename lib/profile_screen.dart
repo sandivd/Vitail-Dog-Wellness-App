@@ -1,18 +1,28 @@
-import 'vitail_icon.dart';
-import 'vitail_loading.dart';
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
-import 'settings_screen.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+
+import 'care_score_screen.dart';
+import 'dog_sharing.dart';
 import 'edit_profile_screen.dart';
+import 'login_screen.dart';
+import 'microchip_screen.dart';
+import 'microchip_validation.dart';
+import 'rewards_data.dart';
+import 'rewards_screen.dart';
+import 'settings_screen.dart';
+import 'share_code_screen.dart';
+import 'vitail_icon.dart';
+import 'vitail_loading.dart';
 import 'vitail_snack.dart';
+import 'walk_history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.isActive = true});
+
+  final bool isActive;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -20,17 +30,36 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _dogData;
-  int _totalPoints = 0;
   bool _isLoading = true;
-  double _totalDistanceKm = 0.0;
-  List<Map<String, dynamic>> _weightHistory = [];
-  double _weightChange = 0.0;
-  final _weightInputController = TextEditingController();
-  int _totalQuests = 0;
+  int _profileRequest = 0;
+
+  int _dailyStreak = 0;
+  String? _dogRole;
+  int? _availableCoupons;
+
   int _careScore = 0;
-  int _positiveImpact = 0;
-  int _needsFocus = 0;
   Map<String, Map<String, dynamic>> _scoreComponents = {};
+
+  // Design tokens (Figma light values) + theme-aware getters for dark mode.
+  static const Color _kCoral = Color(0xFFDC755C);
+  static const Color _kTealBgLight = Color(0xFFDCEFEA);
+  static const Color _kGreen = Color(0xFFAEC568);
+
+  bool get _isDark => Theme.of(context).brightness == Brightness.dark;
+  Color get _pageBg => Theme.of(context).colorScheme.surface;
+  Color get _ink => Theme.of(context).colorScheme.onSurface;
+  Color get _muted => Theme.of(context).colorScheme.onSurfaceVariant;
+  Color get _card => _isDark ? const Color(0xFF1E1E1E) : Colors.white;
+  Color get _tealBg => _isDark ? const Color(0xFF2E3A44) : _kTealBgLight;
+  Color get _tileBg => _isDark ? const Color(0xFF282828) : const Color(0xFFF9F7F3);
+
+  static const List<BoxShadow> _cardShadow = [
+    BoxShadow(
+      color: Color(0x0F000000),
+      blurRadius: 10,
+      offset: Offset(0, 3),
+    ),
+  ];
 
   @override
   void initState() {
@@ -38,69 +67,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fetchProfile();
   }
 
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _fetchProfile();
+    }
+  }
+
   Future<void> _fetchProfile() async {
+    final request = ++_profileRequest;
     try {
       final userId = Supabase.instance.client.auth.currentUser!.id;
-      
-      final dogResponse = await Supabase.instance.client
-          .from('dogs')
-          .select()
-          .eq('owner_id', userId)
-          .limit(1)
-          .maybeSingle();
-          
+
+      final link = await primaryDogForCurrentUser();
+      final dogResponse = link?.dog ??
+          await Supabase.instance.client
+              .from('dogs')
+              .select()
+              .eq('owner_id', userId)
+              .limit(1)
+              .maybeSingle();
+
       final profileResponse = await Supabase.instance.client
           .from('profiles')
-          .select('total_points')
+          .select('daily_streak')
           .eq('id', userId)
           .single();
 
       final walksResponse = await Supabase.instance.client
           .from('walks')
-          .select('distance_meters, walk_date')
+          .select('distance_meters, walk_date, duration_seconds')
           .eq('user_id', userId);
 
-      final weightResponse = await Supabase.instance.client
-          .from('weight_history')
-          .select()
-          .eq('dog_id', dogResponse?['id'])
-          .order('recorded_date', ascending: true);
+      // "My coupons" subtitle: redeemed rewards not yet collected. Optional –
+      // the rest of the profile still loads if this request fails.
+      int? coupons;
+      try {
+        final redeemed = await SupabaseRewardsRepository().loadRedeemed();
+        coupons = redeemed.where((r) => !r.isCollected).length;
+      } catch (_) {}
 
-      // NEW: Fetch all daily tasks to count completed quests
-      final tasksResponse = await Supabase.instance.client
-          .from('daily_tasks')
-          .select()
-          .eq('user_id', userId);
-
-      // Count individual tasks completed
-      int questCount = 0;
-      for (var task in tasksResponse) {
-        if (task['walk_done'] == true) questCount++;
-        if (task['weight_done'] == true) questCount++;
-      }
-
-      double totalDistanceMeters = 0;
-      for (var walk in walksResponse) {
-        totalDistanceMeters += (walk['distance_meters'] as num).toDouble();
-      }
-
+      if (!mounted || request != _profileRequest) return;
       setState(() {
         _dogData = dogResponse;
-        _totalPoints = profileResponse['total_points'] ?? 0;
-        _totalDistanceKm = totalDistanceMeters / 1000;
-        _weightHistory = List<Map<String, dynamic>>.from(weightResponse);
-        _totalQuests = questCount; // Update the quest count!
-        
-        if (_weightHistory.length >= 2) {
-          double latest = (_weightHistory.last['weight_kg'] as num).toDouble();
-          double previous = (_weightHistory[_weightHistory.length - 2]['weight_kg'] as num).toDouble();
-          _weightChange = latest - previous;
-        }
-        // Calculate the Care Score
+        _dogRole = link?.role;
+        _availableCoupons = coupons;
+        _dailyStreak = profileResponse['daily_streak'] ?? 0;
+
         _calculateCareScore(List<Map<String, dynamic>>.from(walksResponse), dogResponse);
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted || request != _profileRequest) return;
       setState(() => _isLoading = false);
     }
   }
@@ -108,439 +127,513 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _calculateCareScore(List<Map<String, dynamic>> walks, Map<String, dynamic>? dog) {
     if (dog == null) return;
 
-    // 1. Activity Score (40%) - Based on last 7 days walks
-    DateTime sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
-    List recentWalks = walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
-    
-    // We mock daily goal as 30 mins (1800 secs). We currently save duration as 1800 in the DB.
-    // So if they did 4 walks in 7 days, 4 days are 100%, 3 days are 0%. Average = (400)/7 = 57%.
-    int activityScore = ((recentWalks.length * 100) / 7).round().clamp(0, 100);
+    final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+    final recentWalks =
+        walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
 
-    // 2. Vaccinations (20%)
-    int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
+    final activeDays = recentWalks
+        .map((w) => DateTime.parse(w['walk_date']).toLocal())
+        .map((d) => DateTime(d.year, d.month, d.day))
+        .toSet()
+        .length
+        .clamp(0, 7);
 
-    // 3. Microchip (15%)
-    int microchipScore = dog['microchip_number'] != null ? 100 : 0;
-
-    // 4. Insurance (15%)
-    int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
-
-    // 5. Vet Check-in (10%) - 100 if within 6 months, else 0
+    final int activityScore = ((activeDays * 100) / 7).round().clamp(0, 100);
+    final int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
+    final int microchipScore =
+        microchipNumberError(dog['microchip_number']?.toString() ?? '') == null ? 100 : 0;
+    final int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
     int vetScore = 0;
+
     if (dog['last_vet_checkup'] != null) {
-      DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
+      final DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
       if (DateTime.now().difference(lastVet).inDays <= 180) {
         vetScore = 100;
       }
     }
 
-    // Calculate overall score
-    int totalScore = (activityScore * 0.40 + vaccScore * 0.20 + microchipScore * 0.15 + insuranceScore * 0.15 + vetScore * 0.10).round();
+    final int totalScore = (activityScore * 0.40 +
+            vaccScore * 0.20 +
+            microchipScore * 0.15 +
+            insuranceScore * 0.15 +
+            vetScore * 0.10)
+        .round();
 
-    // Classify components
-    int positive = 0;
-    int focus = 0;
-    
-    Map<String, Map<String, dynamic>> components = {
-      'Activity (7 days)': {'score': activityScore, 'status': '${recentWalks.length}/7 days active'},
-      'Vaccinations': {'score': vaccScore, 'status': vaccScore == 100 ? 'Up to date' : 'Unknown'},
-      'Microchip': {'score': microchipScore, 'status': microchipScore == 100 ? 'Linked' : 'Not added'},
-      'Insurance': {'score': insuranceScore, 'status': insuranceScore == 100 ? 'Active' : 'Not added'},
-      'Vet check-in': {'score': vetScore, 'status': vetScore == 100 ? 'Up to date' : 'Book your next visit'},
+    final String microchipNum = dog['microchip_number']?.toString() ?? '';
+    final String microchipStatus =
+        microchipScore == 100 ? 'Accepted · $microchipNum' : 'Verify to unlock rewards';
+
+    final String vaccDate = dog['vaccination_date']?.toString() ?? '';
+    final String vaccStatus = vaccDate.isNotEmpty ? 'Up to date' : 'Unknown';
+
+    final String insuranceName = dog['insurance_partner']?.toString() ?? '';
+    final String insuranceStatus = insuranceName.isNotEmpty ? insuranceName : 'Not added';
+
+    final String vetDate = dog['last_vet_checkup']?.toString() ?? '';
+    final String vetStatus = vetDate.isNotEmpty ? 'Up to date' : 'Book your next visit';
+
+    final Map<String, Map<String, dynamic>> components = {
+      'Activity (7 days)': {'score': activityScore, 'status': '$activeDays/7 days active'},
+      'Vaccinations': {'score': vaccScore, 'status': vaccStatus},
+      'Microchip': {'score': microchipScore, 'status': microchipStatus},
+      'Insurance': {'score': insuranceScore, 'status': insuranceStatus},
+      'Vet check-in': {'score': vetScore, 'status': vetStatus},
     };
-
-    components.forEach((key, value) {
-      int score = value['score'];
-      if (score >= 70) { positive++; }
-      else if (score < 40) { focus++; }
-    });
 
     setState(() {
       _careScore = totalScore;
-      _positiveImpact = positive;
-      _needsFocus = focus;
       _scoreComponents = components;
     });
   }
 
+  void _openCareScore() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CareScoreScreen(
+          careScore: _careScore,
+          scoreComponents: _scoreComponents,
+          dogData: _dogData,
+        ),
+      ),
+    );
+  }
 
-  DateTime _selectedDate = DateTime.now();
+  String get _dogSubtitle {
+    if (_dogData == null) return "Setup your dog's profile";
+    final breed = _dogData!['breed'] ?? 'Unknown Breed';
+    final birthdayStr = _dogData!['birthday'];
 
-  Future<void> _logNewWeight() async {
-    _weightInputController.clear();
-    _selectedDate = DateTime.now(); // Reset date to today
+    if (birthdayStr == null) return breed;
 
-    await showDialog(
-      context: context,
-      builder: (context) {
-        // Use StatefulBuilder so the dialog updates when we pick a new date
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              title: const Text('Log Weight'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Date Picker Display
-                  InkWell(
-                    onTap: () async {
-                      DateTime? picked = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime.now(),
-                      );
-                      if (picked != null) {
-                        setStateDialog(() {
-                          _selectedDate = picked;
-                        });
-                      }
-                    },
-                    child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Date', border: OutlineInputBorder()),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
-                          const VitailIcon('calendar', size: 20),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Weight Input
-                  TextField(
-                    controller: _weightInputController,
-                    decoration: const InputDecoration(labelText: 'Weight (kg)', border: OutlineInputBorder()),
-                    keyboardType: TextInputType.number,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-                ElevatedButton(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final navigator = Navigator.of(context);
-                    try {
-                      final dogId = _dogData?['id'];
-                      if (dogId == null) return;
+    final birthday = DateTime.tryParse(birthdayStr);
+    if (birthday == null) return breed;
 
-                      final newWeight =
-                          double.tryParse(_weightInputController.text.trim());
-                      if (newWeight == null || newWeight <= 0) return;
+    final now = DateTime.now();
+    int years = now.year - birthday.year;
+    if (now.month < birthday.month || (now.month == birthday.month && now.day < birthday.day)) {
+      years--;
+    }
 
-                      // One atomic RPC: upserts the weight entry (one per
-                      // calendar day), syncs dogs.weight, and awards the
-                      // daily quest bonus exactly once.
-                      final result =
-                          await Supabase.instance.client.rpc('log_weight', params: {
-                        'p_dog_id': dogId,
-                        'p_weight_kg': newWeight,
-                        'p_recorded_date':
-                            _selectedDate.toIso8601String().split('T')[0],
-                      });
-                      final pointsEarned = (result as num?)?.toInt() ?? 0;
+    if (years <= 0) return 'Puppy $breed';
+    return '$years year-old $breed';
+  }
 
-                      navigator.pop();
-                      _fetchProfile(); // Refresh UI
+  Future<void> _signOut() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } catch (_) {
+      showVitailSnack(context, 'Error logging out', type: VitailSnackType.error);
+    }
+  }
 
-                      if (pointsEarned > 0) {
-                        showVitailSnackVia(
-                          messenger,
-                          'Weight logged · +$pointsEarned pts',
-                          type: VitailSnackType.success,
-                        );
-                      }
-                    } on PostgrestException {
-                      showVitailSnackVia(
-                        messenger,
-                        'Could not save weight. Please try again.',
-                        type: VitailSnackType.error,
-                      );
-                    }
-                  },
-                  child: const Text('Save'),
-                ),
-              ],
-            );
-          }
-        );
-      },
+  bool get _microchipAccepted =>
+      microchipNumberError(_dogData?['microchip_number']?.toString() ?? '') == null;
+
+  Future<void> _openActivityHistory() => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const WalkHistoryScreen()),
+      );
+
+  Future<void> _openMyCoupons() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const RewardsScreen()),
+    );
+    _fetchProfile();
+  }
+
+  Future<void> _openMicrochip() async {
+    final updated = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MicrochipScreen(
+          isFromProfile: true,
+          dogId: _dogData?['id']?.toString(),
+          initialNumber: _dogData?['microchip_number']?.toString(),
+        ),
+      ),
+    );
+    if (updated == true) _fetchProfile();
+  }
+
+  void _openInviteCarer() {
+    final dogId = _dogData?['id']?.toString();
+    if (dogId == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (routeContext) => ShareCodeScreen(
+          dogId: dogId,
+          dogName: _dogData?['dog_name']?.toString() ?? 'your dog',
+          onDone: () => Navigator.pop(routeContext),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(body: Center(child: VitailLoading()));
+      return Scaffold(
+        backgroundColor: _pageBg,
+        body: const Center(child: VitailLoading()),
+      );
     }
 
-    String insurance = _dogData?['insurance_partner'] ?? 'Bow Wow Meow';
-    String vaccDate = _dogData?['vaccination_date'] ?? 'Aug 2026';
+    final String dogName = _dogData?['dog_name'] ?? 'Your Dog';
+    final String? photoUrl = _dogData?['photo_url'];
+    final String microchipNum = _dogData?['microchip_number']?.toString() ?? '';
+    final bool canInvite = _dogData?['id'] != null && _dogRole != 'carer';
 
     return Scaffold(
-        appBar: AppBar(
-        title: const Text('Profile'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const VitailIcon('settings'),
-            onPressed: () async {
-              // Navigate to Settings Screen and refresh profile when returning
-              await Navigator.push(
-                context, 
-                MaterialPageRoute(builder: (context) => const SettingsScreen())
-              );
-              _fetchProfile(); // Refresh data in case they changed the dog's name/weight
-            },
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          // Dog Header
-          Center(
-            child: GestureDetector(
-              onTap: () async {
-                final changed = await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => EditProfileScreen(dog: _dogData),
-                  ),
-                );
-                if (changed == true) _fetchProfile(); // Refresh with new data
-              },
-              child: Stack(
+      backgroundColor: _pageBg,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Header: settings + avatar (Figma 1038:186)
+              Stack(
+                alignment: Alignment.topCenter,
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.green[100],
-                    backgroundImage: _dogData?['photo_url'] != null
-                        ? CachedNetworkImageProvider(_dogData!['photo_url'])
-                        : null,
-                    child: _dogData?['photo_url'] == null
-                        ? const VitailIcon('paw-print', size: 50, color: Colors.green)
-                        : null,
-                  ),
-                  // Pencil badge — opens the Edit Profile screen
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                  Align(
+                    alignment: Alignment.topRight,
+                    child: Semantics(
+                      button: true,
+                      label: 'Settings',
+                      child: InkWell(
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                          );
+                          _fetchProfile();
+                        },
+                        customBorder: const CircleBorder(),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: const BoxDecoration(
+                            color: _kCoral,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const VitailIcon('settings', color: Colors.white, size: 22),
+                        ),
                       ),
-                      child: const VitailIcon('pencil', color: Colors.white, size: 20),
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
+                  Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () async {
+                          final changed = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(builder: (context) => EditProfileScreen(dog: _dogData)),
+                          );
+                          if (changed == true) _fetchProfile();
+                        },
+                        child: SizedBox(
+                          width: 136,
+                          height: 132,
+                          child: Stack(
+                            children: [
+                              CircleAvatar(
+                                radius: 64,
+                                backgroundColor: _tealBg,
+                                backgroundImage:
+                                    photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
+                                child: photoUrl == null
+                                    ? Icon(Icons.pets, size: 48, color: _muted)
+                                    : null,
+                              ),
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: const BoxDecoration(
+                                    color: _kCoral,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: const VitailIcon(
+                                    'pencil',
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        dogName,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _dogSubtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: _muted,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
 
-          // Weight Tracker Card
-          _buildSectionCard(
-            title: 'Weight Tracker',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Progress', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _weightChange >= 0 ? Colors.orange[100] : Colors.green[100],
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '${_weightChange >= 0 ? '+' : ''}${_weightChange.toStringAsFixed(1)}kg recently', 
-                        style: TextStyle(color: _weightChange >= 0 ? Colors.orange[800] : Colors.green[800], fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                // The Line Chart
-                _weightHistory.length > 1 
-                  ? SizedBox(
-                      height: 100,
-                      child: LineChart(
-                        LineChartData(
-                          gridData: const FlGridData(show: false),
-                          titlesData: const FlTitlesData(show: false),
-                          borderData: FlBorderData(show: false),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: _weightHistory.asMap().entries.map((e) {
-                                return FlSpot(e.key.toDouble(), (e.value['weight_kg'] as num).toDouble());
-                              }).toList(),
-                              isCurved: true,
-                              color: Colors.green,
-                              barWidth: 4,
-                              dotData: const FlDotData(show: true),
-                              belowBarData: BarAreaData(show: true, color: Colors.green.withValues(alpha: 0.1)),
+                      // Streak Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _tealBg,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.local_fire_department_outlined, color: _ink, size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              '$_dailyStreak days streak!',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: _ink,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                    )
-                  : const Text('Log at least 2 weights to see the graph', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _logNewWeight,
-                    icon: const VitailIcon('weight'),
-                    label: const Text('Log New Weight'),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 22),
+              Text(
+                'CARE SCORE',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: _muted,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // Care score card (tap opens CareScoreScreen)
+              InkWell(
+                onTap: _openCareScore,
+                borderRadius: BorderRadius.circular(22),
+                child: Container(
+                  height: 143,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: _card,
+                    borderRadius: BorderRadius.circular(22),
+                    boxShadow: _cardShadow,
+                  ),
+                  child: SizedBox.square(
+                    dimension: 90,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CircularProgressIndicator(
+                          value: _careScore > 0 ? (_careScore / 100) : 1.0,
+                          strokeWidth: 10,
+                          color: _kGreen,
+                          backgroundColor: _tealBg,
+                        ),
+                        Center(
+                          child: Text(
+                            _careScore > 0 ? '$_careScore' : '--',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                              color: _ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
+              ),
 
-          // CARE SCORE CARD
-          _buildSectionCard(
-            title: 'CARE SCORE',
-            child: Column(
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // The Score Ring
-                    SizedBox(
-                      width: 80,
-                      height: 80,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: _careScore / 100,
-                            strokeWidth: 8,
-                            color: Colors.green,
-                            backgroundColor: Colors.grey[200],
+              const SizedBox(height: 20),
+
+              _buildRow(
+                icon: 'footprints',
+                title: 'Activity History',
+                subtitle: _scoreComponents['Activity (7 days)']?['status'] as String?,
+                onTap: _openActivityHistory,
+              ),
+              _buildRow(
+                icon: 'microchip',
+                title: 'Microchip',
+                subtitle: _microchipAccepted
+                    ? 'Accepted · $microchipNum'
+                    : 'Verify to unlock rewards',
+                subtitleColor: _microchipAccepted ? _kGreen : null,
+                onTap: _openMicrochip,
+              ),
+              _buildRow(
+                icon: 'ticket',
+                title: 'My coupons',
+                subtitle: switch (_availableCoupons) {
+                  null => null,
+                  0 => 'None ready to collect',
+                  final n => '$n available',
+                },
+                onTap: _openMyCoupons,
+              ),
+              if (canInvite)
+                _buildRow(
+                  icon: 'user-plus',
+                  title: 'Invite a carer',
+                  subtitle: 'Share your dog code',
+                  onTap: _openInviteCarer,
+                ),
+
+              const SizedBox(height: 40),
+
+              // Log out
+              SizedBox(
+                height: 52,
+                child: OutlinedButton(
+                  onPressed: _signOut,
+                  style: OutlinedButton.styleFrom(
+                    backgroundColor: _card,
+                    foregroundColor: _kCoral,
+                    side: const BorderSide(color: _kCoral),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                  child: const Text(
+                    'Log out',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Bottom logo
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/brand/vitail-mark.png',
+                    height: 58,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.pets, color: _kCoral, size: 58),
+                  ),
+                  const SizedBox(width: 4),
+                  Image.asset(
+                    'assets/brand/vitail-title.png',
+                    height: 36,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Text('VITAIL',
+                        style: TextStyle(
+                            color: _kCoral, fontSize: 36, fontWeight: FontWeight.w800)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRow({
+    required String icon,
+    required String title,
+    required String? subtitle,
+    required VoidCallback onTap,
+    Color? subtitleColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _cardShadow,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 72),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: _tileBg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: VitailIcon(icon, size: 20, color: _ink),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: _ink,
                           ),
+                        ),
+                        if (subtitle != null && subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 2),
                           Text(
-                            '$_careScore',
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight:
+                                  subtitleColor != null ? FontWeight.w700 : FontWeight.w500,
+                              color: subtitleColor ?? _muted,
+                            ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 24),
-                    // The Stats
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Updates weekly based on the last 7 days', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const VitailIcon('circle-check', color: Colors.green, size: 16),
-                              const SizedBox(width: 4),
-                              Text('$_positiveImpact positive impact', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                            ],
-                          ),
-                          Row(
-                            children: [
-                              const VitailIcon('circle-alert', color: Colors.orange, size: 16),
-                              const SizedBox(width: 4),
-                              Text('$_needsFocus needs focus', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                const Divider(),
-                // The Checklist
-                Column(
-                  children: _scoreComponents.entries.map((entry) {
-                    int score = entry.value['score'];
-                    Color color = score >= 70 ? Colors.green : (score < 40 ? Colors.orange : Colors.grey);
-                    
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: VitailIcon('paw-print', size: 20, color: color),
-                      title: Text(entry.key, style: const TextStyle(fontSize: 14)),
-                      trailing: Text(entry.value['status'], style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
-                    );
-                  }).toList(),
-                ),
-              ],
+                  ),
+                  VitailIcon('chevron-right', color: _muted, size: 20),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Lifetime Milestones Card
-          _buildSectionCard(
-            title: 'Lifetime Milestones',
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildMilestoneIcon('footprints', '${_totalDistanceKm.toStringAsFixed(1)}km', 'Walked'),
-                _buildMilestoneIcon('list-check', '$_totalQuests', 'Quests'), // <-- Now uses real data!
-                _buildMilestoneIcon('dollar-sign', '\$$_totalPoints', 'Rewards'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          
-        ],
+        ),
       ),
-    );
-  }
-
-  // Helper widget for section containers
-  Widget _buildSectionCard({required String title, required Widget child}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-
-  // Helper widget for milestone row
-  Widget _buildMilestoneIcon(String icon, String value, String label) {
-    return Column(
-      children: [
-        VitailIcon(icon, color: Colors.green, size: 28),
-        const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-      ],
     );
   }
 }

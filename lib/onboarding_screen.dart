@@ -9,6 +9,7 @@ import 'dog_photo_sheet.dart';
 import 'exercise_data.dart';
 import 'high_paw_screen.dart';
 import 'onboarding_goal_screen.dart';
+import 'share_code_screen.dart';
 import 'vitail_snack.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -26,14 +27,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _selectedBreed;
   DateTime? _birthday;
   String? _selectedSex;
-    String? _deSexed;
-  String? _walkTime;
+  String? _deSexed;
   XFile? _imageFile;
   bool _isLoading = false;
   String _ownerActivityLevel = 'moderate';
   String? _healthImpact;
 
   bool _dogSaved = false;
+  String? _dogId;
   int? _dailyGoalMins;
   double? _dailyGoalKm;
 
@@ -64,7 +65,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     }
   }
 
-    Future<void> _saveToDatabase() async {
+  Future<void> _saveToDatabase() async {
         final missing = <String>[
       if (_dogNameController.text.trim().isEmpty) 'name',
       if (!['Male', 'Female'].contains(_selectedSex)) 'sex',
@@ -72,7 +73,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (double.tryParse(_weightController.text.trim()) == null) 'weight',
       if (_selectedBreed == null) 'breed',
       if (_birthday == null) 'date of birth',
-      if (_walkTime == null) 'usual walk time',
       if (_healthImpact == null) 'health condition',
     ];
     if (missing.isNotEmpty) {
@@ -140,22 +140,21 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'recorded_date': DateTime.now().toIso8601String(),
         });
 
+        _dogId = dogResponse['id'].toString();
         _dogSaved = true;
       }
 
       if (!mounted) return;
 
-      startOnboardingGoals(
+      Navigator.push<void>(
         context,
-        nextScreenBuilder: (goals) {
-          debugPrint('Onboarding goals: $goals');
-          return HighPawScreen(
+        onboardingFadeRoute<void>(
+          ShareCodeScreen(
+            dogId: _dogId!,
             dogName: _dogNameController.text.trim(),
-            dailyGoalMins: _dailyGoalMins!,
-            dailyGoalKm: _dailyGoalKm!,
-            breed: _selectedBreed,
-          );
-        },
+            onDone: _startGoals,
+          ),
+        ),
       );
     } catch (_) {
       if (mounted) {
@@ -166,6 +165,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _startGoals() {
+    if (!mounted) return;
+    startOnboardingGoals(
+      context,
+      nextScreenBuilder: (goals) {
+        debugPrint('Onboarding goals: $goals');
+        return HighPawScreen(
+          dogName: _dogNameController.text.trim(),
+          dailyGoalMins: _dailyGoalMins!,
+          dailyGoalKm: _dailyGoalKm!,
+          breed: _selectedBreed,
+          dogId: _dogId,
+        );
+      },
+    );
   }
 
   @override
@@ -196,8 +212,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     deSexed: _deSexed,
     onDeSexed: (value) => setState(() => _deSexed = value),
     colourController: _colourController,
-    walkTime: _walkTime,
-    onWalkTime: (value) => setState(() => _walkTime = value),
     healthImpact: _healthImpact,
     onHealthImpact: (value) => setState(() => _healthImpact = value),
   );

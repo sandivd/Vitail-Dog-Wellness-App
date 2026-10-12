@@ -1,5 +1,6 @@
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dog_sharing.dart';
 
 DateTime activityDay(DateTime date) =>
     DateTime(date.year, date.month, date.day);
@@ -73,13 +74,14 @@ class ActivityHistoryRepository {
     final client = Supabase.instance.client;
     final id = client.auth.currentUser?.id;
     if (id == null) throw StateError('Sign in to view activity.');
+    final link = await primaryDogForCurrentUser();
+    final dogId = link?.dog['id']?.toString();
     final rows = await client
         .from('walks')
         .select()
-        .eq('user_id', id)
+        .or(walksVisibleFilter(id, dogId))
         .order('walk_date', ascending: false);
-    final dogs = await client.from('dogs').select().eq('owner_id', id);
-    final byId = {for (final dog in dogs) dog['id'].toString(): dog};
+    final byId = {if (dogId != null) dogId: link!.dog};
     final walks = [
       for (final row in rows)
         ActivityWalk(row, dog: byId[row['dog_id']?.toString()]),

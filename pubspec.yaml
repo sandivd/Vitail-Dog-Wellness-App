@@ -1,5 +1,5 @@
 name: vitail
-description: "A new Flutter project."
+description: "A dog wellness and walking tracker"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -46,6 +46,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   share_plus: ^13.3.0
   path_provider: ^2.1.6
+  file_picker: ^13.1.0
+  google_mlkit_text_recognition: ^0.17.1
+  pdfx: ^2.11.0
   flutter_local_notifications: ^22.3.1
   flutter_timezone: ^5.1.0
   timezone: ^0.11.1
@@ -61,6 +64,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -127,3 +131,13 @@ flutter_native_splash:
   # android_12:
   #   image: assets/logo.png
   #   color: "#4CAF50"
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/brand/app-icon.png"
+  # Adaptive icon: mark on transparent → white background layer, so the
+  # launcher's circular crop shows a white circle, not black/teal corners.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/brand/app-icon.png"
+  remove_alpha_ios: true

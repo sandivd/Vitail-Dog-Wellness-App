@@ -5,6 +5,8 @@ import 'login_view.dart';
 import 'register_screen.dart';
 import 'auth_routing.dart';
 import 'forgot_password_screen.dart';
+import 'join_with_code_screen.dart';
+import 'onboarding_goal_screen.dart';
 import 'vitail_snack.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -85,6 +87,13 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _continueWithCode() {
+    Navigator.push(
+      context,
+      onboardingFadeRoute<void>(const JoinWithCodeScreen()),
+    );
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -106,6 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       onSignUp: () => Navigator.push(context,
         MaterialPageRoute(builder: (context) => const RegisterScreen())),
+      onContinueWithCode: _continueWithCode
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'vitail_icon.dart';
+import 'vitail_back_button.dart';
 import 'vitail_loading.dart';
 import 'dart:io';
 
@@ -311,11 +312,14 @@ class _WalkSummaryState extends State<WalkSummary> {
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
+        leadingWidth: 56,
         leading: widget.savedWalk != null
-            ? IconButton(
-                tooltip: 'Back',
-                onPressed: () => Navigator.pop(context),
-                icon: const VitailIcon('chevron-left', color: _kInk),
+            ? Align(
+                alignment: Alignment.topLeft,
+                child: VitailBackButton(
+                  onPressed: () => Navigator.pop(context),
+                  color: _kInk,
+                ),
               )
             : null,
         title: const Text(
