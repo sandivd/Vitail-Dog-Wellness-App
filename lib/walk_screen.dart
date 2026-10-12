@@ -249,7 +249,7 @@ class _WalkScreenState extends State<WalkScreen> {
       if (end != null && start == null) {
         showVitailSnack(
           context,
-          'Couldn’t get your location, so the route won’t be shown.',
+          'Couldnt get your location, so the route wont be shown.',
           type: VitailSnackType.info,
         );
       }

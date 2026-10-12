@@ -9,13 +9,16 @@ import 'package:intl/intl.dart';
 import 'reward_flow.dart';
 import 'reward_venues.dart';
 import 'rewards_data.dart';
+// import 'dog_sharing.dart';
+import 'exercise_data.dart';
 import 'venue_walk.dart';
 import 'detail_image_header.dart';
 import 'vitail_snack.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// One row of the `partnered_venues` table.
 ///
-/// Reads: partner_id, venue_name, closing_time, venue_details, points, and the
+/// Reads: partner_id, venue_name, closing_time, venue_details, and the
 /// location from EITHER numeric `latitude` + `longitude` columns (preferred)
 /// OR the older text `coordinates` column. Missing columns are fine — they
 /// just come through as null.
@@ -26,7 +29,6 @@ class VenueInfo {
     required this.closingTime,
     required this.location,
     required this.details,
-    this.points,
     this.photoUrl,
     this.venueType,
   });
@@ -37,7 +39,6 @@ class VenueInfo {
     closingTime: row['closing_time']?.toString(),
     location: _locationFromRow(row),
     details: row['venue_details']?.toString() ?? '',
-    points: _asInt(row['points']),
     photoUrl: _asPhotoUrl(row['photo_url']),
     venueType: row['venue_type']?.toString(),
   );
@@ -54,9 +55,6 @@ class VenueInfo {
 
   bool get isVet => venueType == 'vet';
   bool get isPark => venueType == 'park';
-
-  /// Points a walker can earn by visiting (`points` column, int4).
-  final int? points;
 
   /// Venue photo (`photo_url` column, text). Null when empty or not a web URL.
   final String? photoUrl;
@@ -117,12 +115,6 @@ class VenueInfo {
         uri.hasAuthority &&
         (uri.scheme == 'http' || uri.scheme == 'https');
     return isWebUrl ? text : null;
-  }
-
-  static int? _asInt(dynamic value) {
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value.trim());
-    return null;
   }
 
   /// Null for values that can't be real coordinates (e.g. swapped or junk).
@@ -224,12 +216,14 @@ class VenueDetailScreen extends StatefulWidget {
     this.onCheckRewards,
     this.rewardsRepository,
     this.venueLoader = loadRewardVenues,
+    this.dailyGoalKmLoader,
   });
 
   final RewardsRepository? rewardsRepository;
   final Future<List<VenueInfo>> Function() venueLoader;
   final VoidCallback? onCheckRewards;
   final VenueInfo venue;
+  final Future<double?> Function()? dailyGoalKmLoader;
 
   /// The user's position if the caller already has it. If null, this screen
   /// looks it up itself so the distance still fills in.
@@ -247,6 +241,45 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   bool _locating = false;
   bool _startingWalk = false;
   bool _loadingReward = false;
+  double? _dailyGoalKm;
+  bool _loadingDailyGoal = true;
+
+  Future<double?> _loadDailyGoalKm() async {
+    final client = Supabase.instance.client;
+    // final linkedDog = (await primaryDogForCurrentUser())?.dog;
+    final userId = client.auth.currentUser?.id;
+    final dog =
+        // linkedDog ??
+        (userId == null
+            ? null
+            : await client
+                .from('dogs')
+                .select('daily_goal_km')
+                .eq('owner_id', userId)
+                .limit(1)
+                .maybeSingle());
+    final goalKm = dog?['daily_goal_km'];
+    if (goalKm is! num || !goalKm.isFinite || goalKm <= 0) return null;
+    return goalKm.toDouble();
+  }
+
+  Future<void> _loadDailyWalkGoal() async {
+    try {
+      final loader = widget.dailyGoalKmLoader ?? _loadDailyGoalKm;
+      final goalKm = await loader();
+      if (mounted) setState(() => _dailyGoalKm = goalKm);
+    } catch (_) {
+      if (mounted) {
+        showVitailSnack(
+          context,
+          'Could not load your daily walk goal for the points estimate.',
+          type: VitailSnackType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingDailyGoal = false);
+    }
+  }
 
   Future<void> _checkRewards() async {
     if (_loadingReward) return;
@@ -312,6 +345,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   void initState() {
     super.initState();
     _userLocation = widget.userLocation;
+    _loadDailyWalkGoal();
     if (_userLocation == null) {
       _locating = true;
       _locateUser();
@@ -371,7 +405,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
-    final points = venue.points;
+    final points = _dailyGoalKm == null
+        ? null
+        : ExerciseCalculator.pointsForDistanceMeters(_dailyGoalKm! * 1000);
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -492,9 +528,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     color: colors.onSurfaceVariant,
                   ),
                 ),
-                // Points card: only the points that can be earned here, and
-                // only when the venue actually offers some.
-                if (points != null && points > 0) ...[
+                if (!_loadingDailyGoal) ...[
                   const SizedBox(height: 24),
                   Container(
                     width: double.infinity,
@@ -513,13 +547,30 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                         ),
                       ],
                     ),
-                    child: Text(
-                      '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        color: colors.onSurface,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          points == null
+                              ? 'Walk goal unavailable'
+                              : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          points == null
+                              ? 'Set a daily walk goal to estimate points.'
+                              : 'Estimated from your daily walk goal.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

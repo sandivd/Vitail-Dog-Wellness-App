@@ -1,6 +1,12 @@
 class ExerciseCalculator {
   // It pulls the breed names from the existing JSON data
   static List<String> get dogBreeds => breedData.keys.toList()..sort();
+
+  static int pointsForDistanceMeters(double distanceMeters) {
+    if (!distanceMeters.isFinite || distanceMeters <= 0) return 0;
+    return (distanceMeters / 100).floor();
+  }
+
   static const Map<String, dynamic> constants = {
     "size_rules": {
       "small": {"max_weight_kg": 9.99, "multiplier": 0.8, "pace_kmh": 3.0},

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'exercise_data.dart';
 import 'vitail_snack.dart';
 
 // ---------------------------------------------------------------------------
@@ -119,7 +120,8 @@ class _WalkSummaryState extends State<WalkSummary> {
     super.dispose();
   }
 
-  int get _baseDistancePoints => (widget.distanceMeters / 100).floor();
+  int get _baseDistancePoints =>
+      ExerciseCalculator.pointsForDistanceMeters(widget.distanceMeters);
 
   Future<void> _computePointsPreview() async {
     try {
