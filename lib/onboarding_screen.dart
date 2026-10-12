@@ -27,8 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _selectedBreed;
   DateTime? _birthday;
   String? _selectedSex;
-    String? _deSexed;
-  String? _walkTime;
+  String? _deSexed;
   XFile? _imageFile;
   bool _isLoading = false;
   String _ownerActivityLevel = 'moderate';
@@ -74,7 +73,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (double.tryParse(_weightController.text.trim()) == null) 'weight',
       if (_selectedBreed == null) 'breed',
       if (_birthday == null) 'date of birth',
-      if (_walkTime == null) 'usual walk time',
       if (_healthImpact == null) 'health condition',
     ];
     if (missing.isNotEmpty) {
@@ -214,8 +212,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     deSexed: _deSexed,
     onDeSexed: (value) => setState(() => _deSexed = value),
     colourController: _colourController,
-    walkTime: _walkTime,
-    onWalkTime: (value) => setState(() => _walkTime = value),
     healthImpact: _healthImpact,
     onHealthImpact: (value) => setState(() => _healthImpact = value),
   );

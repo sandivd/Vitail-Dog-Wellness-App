@@ -13,7 +13,6 @@ class OnboardingView extends StatelessWidget {
     required this.loading, this.photo,
     required this.deSexed, required this.onDeSexed,
     required this.colourController,
-    required this.walkTime, required this.onWalkTime,
     required this.healthImpact, required this.onHealthImpact});
 
   final TextEditingController nameController, weightController;
@@ -34,8 +33,6 @@ class OnboardingView extends StatelessWidget {
 
   final TextEditingController colourController;
 
-  final String? walkTime;
-  final ValueChanged<String> onWalkTime;
 
   final String? healthImpact;
   final ValueChanged<String> onHealthImpact;
@@ -210,10 +207,6 @@ class OnboardingView extends StatelessWidget {
               field('Date of birth *', TextField(readOnly: true, onTap: loading ? null : onBirthday,
                 controller: null, decoration: decoration(birthdayLabel, suffix: icon('calendar')).copyWith(
                   hintStyle: TextStyle(color: hasBirthday ? ink : hintGrey, fontSize: 14)))),
-              const SizedBox(height: 16),
-
-              field('Usually walks in the *',
-                choiceRow(const ['Morning', 'Afternoon', 'Evening'], walkTime, onWalkTime, upper: false)),
               const SizedBox(height: 16),
 
               field('Health condition *',
