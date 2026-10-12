@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:vitail/reward_flow.dart';
 import 'package:vitail/reward_details_screen.dart';
 import 'rewards_screen_test.dart' show FakeRewardsRepository;
@@ -25,6 +26,33 @@ RewardOffer offer({String? id, String name = 'Other'}) => RewardOffer(
 );
 
 void main() {
+  testWidgets('venue points estimate comes from the dog walk goal', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VenueDetailScreen(
+          venue: VenueInfo.fromJson({
+            'partner_id': 'a',
+            'venue_name': 'Cafe',
+            'points': 999,
+          }),
+          userLocation: const LatLng(0, 0),
+          dailyGoalKmLoader: () async => 2.5,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Estimated from your daily walk goal.'),
+      500,
+    );
+
+    expect(find.text('+ 25 pts'), findsOneWidget);
+    expect(find.text('+ 999 pts'), findsNothing);
+    expect(find.text('Estimated from your daily walk goal.'), findsOneWidget);
+  });
+
   testWidgets('Explore opens all venue offers and Back returns to venue', (
     tester,
   ) async {

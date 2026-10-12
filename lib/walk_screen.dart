@@ -261,7 +261,7 @@ class _WalkScreenState extends State<WalkScreen> {
       if (routeDestination != null && !hasPlannedRoute) {
         showVitailSnack(
           context,
-          'Couldn’t get your location, so the route won’t be shown.',
+          'Couldnt get your location, so the route wont be shown.',
           type: VitailSnackType.info,
         );
       }
@@ -272,7 +272,7 @@ class _WalkScreenState extends State<WalkScreen> {
           builder: (context) => WalkInProgress(
             dog: dog,
             plannedRoute: hasPlannedRoute
-                ? [_currentPosition!, routeDestination!]
+                ? [_currentPosition!, routeDestination]
                 : null,
             onProgress: widget.onProgress,
           ),

@@ -17,7 +17,7 @@
 ## Key Features
 
 - **Live GPS Walk Tracking:** Accurate, real-time route mapping using Google Maps SDK and the device's Fused Location Provider.
-- **Rewards & Perks System:** Earn points for every meter walked and redeem them for partner vouchers and premium perks (e.g., free grooming, council fee waivers).
+- **Rewards & Perks System:** Earn points for every 100 metres walked and redeem them for partner vouchers and premium perks (e.g., free grooming, council fee waivers).
 - **Dynamic Weight Tracker:** Log your dog's weight history with a calendar date-picker and visualize their progress on an interactive line chart (MyFitnessPal style!).
 - **Gamification & Streaks:** Maintain daily walking streaks and complete weekly quests (e.g., "Walk 1km", "Log Weight") for bonus points.
 - **Pet-Friendly Venues:** Explore a curated list of local dog parks, beaches, and cafes with list/map toggle views.
@@ -52,5 +52,4 @@ The app follows a **Client-Server Architecture** utilizing a **Backend-as-a-Serv
 - The **Flutter client** acts as a thick client, communicating directly with Supabase's auto-generated REST APIs (PostgREST).
 - **Security** is enforced at the database level using PostgreSQL Row Level Security (RLS), ensuring users can only access and modify their own dog's data, walks, and photos.
 - **Image Optimization** is handled client-side before upload, downscaling and compressing images to optimize network performance and storage costs.
-
 
