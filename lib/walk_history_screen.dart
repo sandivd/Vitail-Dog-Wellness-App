@@ -1,3 +1,4 @@
+import 'vitail_colors.dart';
 import 'vitail_icon.dart';
 import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
@@ -140,155 +141,158 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
               ],
             ),
             Expanded(
-        child: RefreshIndicator(
-          onRefresh: _load,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-            children: [
-              const Center(
-                child: Text(
-                  'History',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Period pill: soft-cream track -> soft dark; selected segment
-              // and text now resolve through the adaptive helpers.
-              Container(
-                height: 46,
-                padding: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: dark
-                      ? const Color(0xFF302E2B)
-                      : const Color(0xFFF9F7F3),
-                  borderRadius: BorderRadius.circular(23),
-                ),
-                child: Row(
+              child: RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
                   children: [
-                    for (final period in HistoryPeriod.values)
-                      Expanded(
-                        child: Material(
-                          color: _period == period
-                              ? activityCardColor(context)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(21),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(21),
-                            onTap: () => setState(() => _period = period),
-                            child: Center(
-                              child: Text(
-                                period.name.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: _period == period
-                                      ? activityInkColor(context)
-                                      : activityMutedColor(context),
+                    const Center(
+                      child: Text(
+                        'History',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Period pill: soft-cream track -> soft dark; selected segment
+                    // and text now resolve through the adaptive helpers.
+                    Container(
+                      height: 46,
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: dark
+                            ? const Color(0xFF302E2B)
+                            : const Color(0xFFF9F7F3),
+                        borderRadius: BorderRadius.circular(23),
+                      ),
+                      child: Row(
+                        children: [
+                          for (final period in HistoryPeriod.values)
+                            Expanded(
+                              child: Material(
+                                color: _period == period
+                                    ? activityCardColor(context)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(21),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(21),
+                                  onTap: () => setState(() => _period = period),
+                                  child: Center(
+                                    child: Text(
+                                      period.name.toUpperCase(),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _period == period
+                                            ? activityInkColor(context)
+                                            : activityMutedColor(context),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    ActivityDateStrip(
+                      selected: _selected,
+                      walks: _walks,
+                      compact: true,
+                      onChanged: (date) => setState(() => _selected = date),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          tooltip: 'Previous period',
+                          onPressed: () => _movePeriod(-1),
+                          icon: const VitailIcon('chevron-left', size: 18),
+                        ),
+                        TextButton(
+                          onPressed: () => pickActivityDate(
+                            context,
+                            _selected,
+                            (date) => setState(() => _selected = date),
+                          ),
+                          child: Text(
+                            DateFormat(
+                              _period == HistoryPeriod.months
+                                  ? 'MMMM yyyy'
+                                  : 'd MMM yyyy',
+                            ).format(_selected),
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: activityMutedColor(context),
+                            ),
                           ),
                         ),
-                      ),
+                        IconButton(
+                          tooltip: 'Next period',
+                          onPressed: _selected == activityDay(DateTime.now())
+                              ? null
+                              : () => _movePeriod(1),
+                          icon: const VitailIcon('chevron-right', size: 18),
+                        ),
+                      ],
+                    ),
+                    if (_loading)
+                      const Center(child: VitailLoading())
+                    else ...[
+                      if (_filter != 'Coupons') ...[
+                        const ActivitySectionLabel('WALKS'),
+                        if (_walkFailed)
+                          _retry('Could not load walks.')
+                        else if (walks.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 24),
+                            child: Text(
+                              'No walks in this period.',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: activityMutedColor(context),
+                              ),
+                            ),
+                          )
+                        else
+                          for (final walk in walks)
+                            ActivityWalkCard(walk: walk, showDog: true),
+                      ],
+                      if (_filter != 'Walks') ...[
+                        const SizedBox(height: 8),
+                        const ActivitySectionLabel('COUPONS'),
+                        if (_couponFailed)
+                          _retry('Could not load coupons.')
+                        else if (coupons.isEmpty)
+                          Text(
+                            'No coupons in this period.',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: activityMutedColor(context),
+                            ),
+                          )
+                        else
+                          for (final coupon in coupons) _couponCard(coupon),
+                        if (_coupons.any((coupon) => coupon.date == null))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              'Older coupons without a recorded date cannot be shown by period.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: activityMutedColor(context),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ],
                   ],
                 ),
               ),
-              const SizedBox(height: 18),
-              ActivityDateStrip(
-                selected: _selected,
-                walks: _walks,
-                compact: true,
-                onChanged: (date) => setState(() => _selected = date),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    tooltip: 'Previous period',
-                    onPressed: () => _movePeriod(-1),
-                    icon: const VitailIcon('chevron-left', size: 18),
-                  ),
-                  TextButton(
-                    onPressed: () => pickActivityDate(
-                      context,
-                      _selected,
-                      (date) => setState(() => _selected = date),
-                    ),
-                    child: Text(
-                      DateFormat(
-                        _period == HistoryPeriod.months
-                            ? 'MMMM yyyy'
-                            : 'd MMM yyyy',
-                      ).format(_selected),
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: activityMutedColor(context),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Next period',
-                    onPressed: _selected == activityDay(DateTime.now())
-                        ? null
-                        : () => _movePeriod(1),
-                    icon: const VitailIcon('chevron-right', size: 18),
-                  ),
-                ],
-              ),
-              if (_loading)
-                const Center(child: VitailLoading())
-              else ...[
-                if (_filter != 'Coupons') ...[
-                  const ActivitySectionLabel('WALKS'),
-                  if (_walkFailed)
-                    _retry('Could not load walks.')
-                  else if (walks.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: Text(
-                        'No walks in this period.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: activityMutedColor(context),
-                        ),
-                      ),
-                    )
-                  else
-                    for (final walk in walks)
-                      ActivityWalkCard(walk: walk, showDog: true),
-                ],
-                if (_filter != 'Walks') ...[
-                  const SizedBox(height: 8),
-                  const ActivitySectionLabel('COUPONS'),
-                  if (_couponFailed)
-                    _retry('Could not load coupons.')
-                  else if (coupons.isEmpty)
-                    Text(
-                      'No coupons in this period.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: activityMutedColor(context),
-                      ),
-                    )
-                  else
-                    for (final coupon in coupons) _couponCard(coupon),
-                  if (_coupons.any((coupon) => coupon.date == null))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: Text(
-                        'Older coupons without a recorded date cannot be shown by period.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: activityMutedColor(context),
-                        ),
-                      ),
-                    ),
-                ],
-              ],
-            ],
-          ),
-        ),
             ),
           ],
         ),
@@ -352,8 +356,11 @@ class _WalkHistoryScreenState extends State<WalkHistoryScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: coupon.collected
-                        ? const Color(0xFFEAF0D8)
-                        : const Color(0xFFF5D6CE),
+                        ? VitailColors.of(context).greenPale
+                        : VitailColors.of(context).tint(
+                            const Color(0xFFF5D6CE),
+                            const Color(0xFF49312C),
+                          ),
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Text(

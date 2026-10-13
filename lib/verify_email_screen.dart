@@ -17,13 +17,18 @@ class VerifyEmailScreen extends StatefulWidget {
 }
 
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
+  OnboardingStyle get _style => OnboardingStyle.of(context);
+
   Timer? _pollTimer;
   bool _resending = false;
 
   @override
   void initState() {
     super.initState();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _checkVerified());
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _checkVerified(),
+    );
   }
 
   @override
@@ -54,14 +59,23 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     if (email == null || _resending) return;
     setState(() => _resending = true);
     try {
-      await Supabase.instance.client.auth.resend(type: OtpType.signup, email: email);
+      await Supabase.instance.client.auth.resend(
+        type: OtpType.signup,
+        email: email,
+      );
       if (!mounted) return;
-      showVitailSnack(context, 'Verification email sent.',
-          type: VitailSnackType.success);
+      showVitailSnack(
+        context,
+        'Verification email sent.',
+        type: VitailSnackType.success,
+      );
     } catch (e) {
       if (!mounted) return;
-      showVitailSnack(context, 'Could not resend email: $e',
-          type: VitailSnackType.error);
+      showVitailSnack(
+        context,
+        'Could not resend email: $e',
+        type: VitailSnackType.error,
+      );
     } finally {
       if (mounted) setState(() => _resending = false);
     }
@@ -69,7 +83,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final email = Supabase.instance.client.auth.currentUser?.email ?? 'your email';
+    final email =
+        Supabase.instance.client.auth.currentUser?.email ?? 'your email';
     return OnboardingPage(
       title: 'Check your email',
       children: [
@@ -79,26 +94,42 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         Text(
           "We've sent a verification link to $email. Verify to finish joining as a carer.",
           textAlign: TextAlign.center,
-          style: OnboardingStyle.text(13, color: OnboardingStyle.muted, weight: FontWeight.w500, height: 1.5),
+          style: _style.text(
+            13,
+            color: _style.muted,
+            weight: FontWeight.w500,
+            height: 1.5,
+          ),
         ),
         const SizedBox(height: 8),
         Center(
           child: TextButton(
             onPressed: _resending ? null : _resendEmail,
-            child: Text('Resend email', style: OnboardingStyle.text(13, color: OnboardingStyle.coral, weight: FontWeight.w600)),
+            child: Text(
+              'Resend email',
+              style: _style.text(
+                13,
+                color: _style.coral,
+                weight: FontWeight.w600,
+              ),
+            ),
           ),
         ),
         const SizedBox(height: 12),
         ElevatedButton(
           onPressed: _goToProfile,
-          style: OnboardingStyle.primaryButton,
-          child: Text('Continue', style: OnboardingStyle.text(16, color: Colors.white)),
+          style: _style.primaryButton,
+          child: Text('Continue', style: _style.text(16, color: Colors.white)),
         ),
         const SizedBox(height: 8),
         Center(
           child: Text(
             'You can keep using the app while you verify',
-            style: OnboardingStyle.text(12, color: OnboardingStyle.muted, weight: FontWeight.w500),
+            style: _style.text(
+              12,
+              color: _style.muted,
+              weight: FontWeight.w500,
+            ),
           ),
         ),
       ],

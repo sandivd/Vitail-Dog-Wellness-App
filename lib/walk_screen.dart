@@ -1,3 +1,4 @@
+import 'vitail_map_style.dart';
 import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -116,7 +117,9 @@ class _WalkScreenState extends State<WalkScreen> {
       // select() with no column list = every column. VenueInfo.fromJson picks
       // out what it needs (incl. optional latitude/longitude/points), so this
       // keeps working before and after those columns are added.
-      final rows = await Supabase.instance.client.from('partnered_venues').select();
+      final rows = await Supabase.instance.client
+          .from('partnered_venues')
+          .select();
 
       if (!mounted) return;
       setState(() {
@@ -134,6 +137,7 @@ class _WalkScreenState extends State<WalkScreen> {
       });
     }
   }
+
   void _retryVenues() {
     setState(() {
       _loadingVenues = true;
@@ -148,10 +152,8 @@ class _WalkScreenState extends State<WalkScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => VenueDetailScreen(
-          venue: venue,
-          userLocation: _currentPosition,
-        ),
+        builder: (_) =>
+            VenueDetailScreen(venue: venue, userLocation: _currentPosition),
       ),
     );
   }
@@ -223,14 +225,16 @@ class _WalkScreenState extends State<WalkScreen> {
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) return;
 
-      
       final dog = (await primaryDogForCurrentUser())?.dog;
 
       if (!mounted) return;
 
       if (dog == null) {
-        showVitailSnack(context, 'No dog found. Please register a dog first.',
-            type: VitailSnackType.error);
+        showVitailSnack(
+          context,
+          'No dog found. Please register a dog first.',
+          type: VitailSnackType.error,
+        );
         return;
       }
 
@@ -266,8 +270,11 @@ class _WalkScreenState extends State<WalkScreen> {
       );
     } catch (_) {
       if (mounted) {
-        showVitailSnack(context, 'Could not start the walk. Please try again.',
-            type: VitailSnackType.error);
+        showVitailSnack(
+          context,
+          'Could not start the walk. Please try again.',
+          type: VitailSnackType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _isStartingWalk = false);
@@ -285,9 +292,12 @@ class _WalkScreenState extends State<WalkScreen> {
           // Map fills the whole screen; overlays and the sheet sit on top.
           Positioned.fill(
             child: GoogleMap(
+              style: vitailMapStyle(context),
               onMapCreated: (c) => _mapController = c,
-              initialCameraPosition:
-                  const CameraPosition(target: _melbourne, zoom: 14.0),
+              initialCameraPosition: const CameraPosition(
+                target: _melbourne,
+                zoom: 14.0,
+              ),
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               markers: _markers,
@@ -325,10 +335,14 @@ class _WalkScreenState extends State<WalkScreen> {
                             textInputAction: TextInputAction.search,
                             decoration: InputDecoration(
                               hintText: 'Search parks, cafés, vets...',
-                              hintStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 15),
+                              hintStyle: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 15,
+                              ),
                               border: InputBorder.none,
-                              contentPadding:
-                                  const EdgeInsets.symmetric(horizontal: 22),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 22,
+                              ),
                             ),
                           ),
                         ),
@@ -351,8 +365,11 @@ class _WalkScreenState extends State<WalkScreen> {
                               ),
                             ],
                           ),
-                          child: VitailIcon('locate-fixed',
-                              color: colorScheme.secondary, size: 22),
+                          child: VitailIcon(
+                            'locate-fixed',
+                            color: colorScheme.secondary,
+                            size: 22,
+                          ),
                         ),
                       ),
                     ],
@@ -367,14 +384,17 @@ class _WalkScreenState extends State<WalkScreen> {
           Positioned(
             left: 20,
             right: 20,
-            bottom: MediaQuery.sizeOf(context).height * _sheetCollapsedSize + 20,
+            bottom:
+                MediaQuery.sizeOf(context).height * _sheetCollapsedSize + 20,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Distance / time summary pill
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: colorScheme.onSurface,
                     borderRadius: BorderRadius.circular(24),
@@ -398,8 +418,9 @@ class _WalkScreenState extends State<WalkScreen> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colorScheme.primary,
                       foregroundColor: colorScheme.onPrimary,
-                      disabledBackgroundColor:
-                          colorScheme.primary.withValues(alpha: 0.6),
+                      disabledBackgroundColor: colorScheme.primary.withValues(
+                        alpha: 0.6,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
@@ -446,7 +467,9 @@ class _WalkScreenState extends State<WalkScreen> {
               return Container(
                 decoration: BoxDecoration(
                   color: colorScheme.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(28),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black26,
@@ -620,15 +643,17 @@ class _VenueCard extends StatelessWidget {
                       height: 56,
                       fit: BoxFit.cover,
                       // Decode at thumbnail size, not full resolution.
-                      cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).round(),
-                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                        if (wasSynchronouslyLoaded) return child;
-                        return AnimatedOpacity(
-                          opacity: frame == null ? 0 : 1,
-                          duration: const Duration(milliseconds: 250),
-                          child: child,
-                        );
-                      },
+                      cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context))
+                          .round(),
+                      frameBuilder:
+                          (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded) return child;
+                            return AnimatedOpacity(
+                              opacity: frame == null ? 0 : 1,
+                              duration: const Duration(milliseconds: 250),
+                              child: child,
+                            );
+                          },
                       errorBuilder: (context, error, stackTrace) =>
                           const SizedBox.shrink(),
                     ),
@@ -649,12 +674,17 @@ class _VenueCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     subtitle,
-                    style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
                     decoration: BoxDecoration(
                       color: tagColor,
                       borderRadius: BorderRadius.circular(20),
@@ -678,7 +708,6 @@ class _VenueCard extends StatelessWidget {
     );
   }
 }
-
 
 // Command: E:\user\Android_Studio\SDK\platform-tools\adb.exe -s emulator-5554 shell am force-stop com.example.vitail
 // Flutter: Installing build\app\outputs\flutter-apk\app-debug.apk...

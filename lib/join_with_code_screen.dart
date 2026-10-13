@@ -1,3 +1,4 @@
+import 'vitail_colors.dart';
 import 'package:flutter/material.dart';
 
 import 'dog_sharing.dart';
@@ -14,6 +15,10 @@ class JoinWithCodeScreen extends StatefulWidget {
 }
 
 class _JoinWithCodeScreenState extends State<JoinWithCodeScreen> {
+  VitailColors get _colors => VitailColors.of(context);
+
+  OnboardingStyle get _style => OnboardingStyle.of(context);
+
   final TextEditingController _codeController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   bool _busy = false;
@@ -60,78 +65,74 @@ class _JoinWithCodeScreenState extends State<JoinWithCodeScreen> {
   }
 
   OutlineInputBorder _border(Color color) => OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: color),
-      );
+    borderRadius: BorderRadius.circular(14),
+    borderSide: BorderSide(color: color),
+  );
 
   InputDecoration _decoration(String hint) => InputDecoration(
-        hintText: hint,
-        hintStyle: OnboardingStyle.text(14,
-            color: OnboardingStyle.muted, weight: FontWeight.w400),
-        filled: true,
-        fillColor: Colors.white,
-        counterText: '',
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        enabledBorder: _border(OnboardingStyle.border),
-        disabledBorder: _border(OnboardingStyle.border),
-        focusedBorder: _border(OnboardingStyle.coral),
-        border: _border(OnboardingStyle.border),
-      );
+    hintText: hint,
+    hintStyle: _style.text(14, color: _style.muted, weight: FontWeight.w400),
+    filled: true,
+    fillColor: _colors.card,
+    counterText: '',
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    enabledBorder: _border(_style.border),
+    disabledBorder: _border(_style.border),
+    focusedBorder: _border(_style.coral),
+    border: _border(_style.border),
+  );
 
   @override
   Widget build(BuildContext context) => OnboardingPage(
-        title: 'Join with a code',
-        subtitle: "Ask the dog's owner for their invite code",
-        busy: _busy,
-        children: [
-          const SizedBox(height: 28),
-          Text('Invite code',
-              style: OnboardingStyle.text(13, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _codeController,
-            enabled: !_busy,
-            textCapitalization: TextCapitalization.characters,
-            textInputAction: TextInputAction.next,
-            style: OnboardingStyle.text(14, weight: FontWeight.w500),
-            decoration: _decoration('e.g. AUG-7F3K'),
-          ),
-          const SizedBox(height: 16),
-          Text('Your name',
-              style: OnboardingStyle.text(13, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: _nameController,
-            enabled: !_busy,
-            maxLength: 40,
-            textCapitalization: TextCapitalization.words,
-            onSubmitted: (_) => _continue(),
-            style: OnboardingStyle.text(14, weight: FontWeight.w500),
-            decoration: _decoration('So the owner knows who you are'),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _busy ? null : _continue,
-            style: OnboardingStyle.primaryButton,
-            child: _busy
-                ? const SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.5, color: OnboardingStyle.muted),
-                  )
-                : Text('Send request',
-                    style: OnboardingStyle.text(16, color: Colors.white)),
-          ),
-          const SizedBox(height: 8),
-          Center(
-            child: Text(
-              "The dog's owner will be asked to approve you",
-              style: OnboardingStyle.text(12,
-                  color: OnboardingStyle.muted, weight: FontWeight.w500),
-            ),
-          ),
-        ],
-      );
+    title: 'Join with a code',
+    subtitle: "Ask the dog's owner for their invite code",
+    busy: _busy,
+    children: [
+      const SizedBox(height: 28),
+      Text('Invite code', style: _style.text(13, weight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: _codeController,
+        enabled: !_busy,
+        textCapitalization: TextCapitalization.characters,
+        textInputAction: TextInputAction.next,
+        style: _style.text(14, weight: FontWeight.w500),
+        decoration: _decoration('e.g. AUG-7F3K'),
+      ),
+      const SizedBox(height: 16),
+      Text('Your name', style: _style.text(13, weight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      TextField(
+        controller: _nameController,
+        enabled: !_busy,
+        maxLength: 40,
+        textCapitalization: TextCapitalization.words,
+        onSubmitted: (_) => _continue(),
+        style: _style.text(14, weight: FontWeight.w500),
+        decoration: _decoration('So the owner knows who you are'),
+      ),
+      const SizedBox(height: 20),
+      ElevatedButton(
+        onPressed: _busy ? null : _continue,
+        style: _style.primaryButton,
+        child: _busy
+            ? SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: _style.muted,
+                ),
+              )
+            : Text('Send request', style: _style.text(16, color: Colors.white)),
+      ),
+      const SizedBox(height: 8),
+      Center(
+        child: Text(
+          "The dog's owner will be asked to approve you",
+          style: _style.text(12, color: _style.muted, weight: FontWeight.w500),
+        ),
+      ),
+    ],
+  );
 }

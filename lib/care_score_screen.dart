@@ -1,3 +1,4 @@
+import 'vitail_colors.dart';
 import 'package:flutter/material.dart';
 import 'vitail_icon.dart';
 import 'vitail_snack.dart';
@@ -13,17 +14,6 @@ class CareScoreScreen extends StatelessWidget {
   final int careScore;
   final Map<String, Map<String, dynamic>> scoreComponents;
   final Map<String, dynamic>? dogData;
-
-  // Design tokens matching the Figma design & Vitail styling
-  static const Color _kPageBg = Color(0xFFF4F0E9);
-  static const Color _kCard = Colors.white;
-  static const Color _kInk = Color(0xFF211F1D);
-  static const Color _kMuted = Color(0xFF6E6A63);
-  static const Color _kGreen = Color(0xFFAEC568);
-  static const Color _kTealRingBg = Color(0xFFDCEFEA);
-  static const Color _kTagBg = Color(0xFFF7F5F0);
-  static const Color _kCheerBg = Color(0xFFE8EFCF);
-  static const Color _kCheerText = Color(0xFF5A7224);
 
   int get _positiveImpactCount {
     return scoreComponents.values
@@ -46,8 +36,9 @@ class CareScoreScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = VitailColors.of(context);
     return Scaffold(
-      backgroundColor: _kPageBg,
+      backgroundColor: colors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -62,7 +53,7 @@ class CareScoreScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Main Score Card
-                    _buildMainScoreCard(),
+                    _buildMainScoreCard(context),
 
                     const SizedBox(height: 14),
 
@@ -72,7 +63,7 @@ class CareScoreScreen extends StatelessWidget {
                     const SizedBox(height: 20),
 
                     // Bottom Encouragement Banner
-                    _buildEncouragementBanner(),
+                    _buildEncouragementBanner(context),
                   ],
                 ),
               ),
@@ -84,6 +75,7 @@ class CareScoreScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
+    final colors = VitailColors.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Stack(
@@ -94,16 +86,16 @@ class CareScoreScreen extends StatelessWidget {
             child: IconButton(
               tooltip: 'Back',
               onPressed: () => Navigator.maybePop(context),
-              icon: const VitailIcon('chevron-left', size: 24, color: _kInk),
+              icon: VitailIcon('chevron-left', size: 24, color: colors.ink),
             ),
           ),
-          const Text(
+          Text(
             'Care Score',
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
               fontSize: 22,
               fontWeight: FontWeight.w700,
-              color: _kInk,
+              color: colors.ink,
             ),
           ),
         ],
@@ -111,12 +103,13 @@ class CareScoreScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMainScoreCard() {
+  Widget _buildMainScoreCard(BuildContext context) {
+    final colors = VitailColors.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 28, 20, 24),
       decoration: BoxDecoration(
-        color: _kCard,
+        color: colors.card,
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
           BoxShadow(
@@ -138,17 +131,19 @@ class CareScoreScreen extends StatelessWidget {
                 CircularProgressIndicator(
                   value: careScore > 0 ? (careScore / 100) : 1.0,
                   strokeWidth: 12,
-                  color: _kGreen,
-                  backgroundColor: careScore > 0 ? _kTealRingBg : _kGreen.withValues(alpha: 0.25),
+                  color: colors.green,
+                  backgroundColor: careScore > 0
+                      ? colors.tint(const Color(0xFFDCEFEA), colors.teal)
+                      : colors.green.withValues(alpha: 0.25),
                 ),
                 Center(
                   child: Text(
                     careScore > 0 ? '$careScore' : '--',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
                       fontSize: 34,
                       fontWeight: FontWeight.w700,
-                      color: _kInk,
+                      color: colors.ink,
                     ),
                   ),
                 ),
@@ -160,24 +155,24 @@ class CareScoreScreen extends StatelessWidget {
 
           Text(
             _scoreStatusText,
-            style: const TextStyle(
+            style: TextStyle(
               fontFamily: 'PlusJakartaSans',
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: _kInk,
+              color: colors.ink,
             ),
           ),
 
           const SizedBox(height: 6),
 
-          const Text(
+          Text(
             'Updates weekly based on the last 7 days',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'PlusJakartaSans',
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: _kMuted,
+              color: colors.muted,
             ),
           ),
 
@@ -190,17 +185,17 @@ class CareScoreScreen extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: _kTagBg,
+                    color: colors.tint(const Color(0xFFF7F5F0)),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Text(
                     '$_positiveImpactCount positive impact',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: _kInk,
+                      color: colors.ink,
                     ),
                   ),
                 ),
@@ -210,17 +205,17 @@ class CareScoreScreen extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: _kTagBg,
+                    color: colors.tint(const Color(0xFFF7F5F0)),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: Text(
                     '$_needsFocusCount needs focus',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'PlusJakartaSans',
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: _kInk,
+                      color: colors.ink,
                     ),
                   ),
                 ),
@@ -233,6 +228,7 @@ class CareScoreScreen extends StatelessWidget {
   }
 
   List<Widget> _buildComponentCards(BuildContext context) {
+    final colors = VitailColors.of(context);
     // Specific icon mappings for each card
     final iconMap = {
       'Activity (7 days)': 'flame',
@@ -261,7 +257,7 @@ class CareScoreScreen extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              color: _kCard,
+              color: colors.card,
               borderRadius: BorderRadius.circular(20),
               boxShadow: const [
                 BoxShadow(
@@ -278,11 +274,11 @@ class CareScoreScreen extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: _kTagBg,
+                    color: colors.tint(const Color(0xFFF7F5F0)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Center(
-                    child: VitailIcon(iconName, size: 20, color: _kMuted),
+                    child: VitailIcon(iconName, size: 20, color: colors.muted),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -294,22 +290,22 @@ class CareScoreScreen extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'PlusJakartaSans',
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: _kInk,
+                          color: colors.ink,
                         ),
                       ),
                       if (subtitle.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           subtitle,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: 'PlusJakartaSans',
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
-                            color: _kMuted,
+                            color: colors.muted,
                           ),
                         ),
                       ],
@@ -317,7 +313,7 @@ class CareScoreScreen extends StatelessWidget {
                   ),
                 ),
 
-                const VitailIcon('chevron-right', size: 18, color: _kMuted),
+                VitailIcon('chevron-right', size: 18, color: colors.muted),
               ],
             ),
           ),
@@ -326,22 +322,23 @@ class CareScoreScreen extends StatelessWidget {
     }).toList();
   }
 
-  Widget _buildEncouragementBanner() {
+  Widget _buildEncouragementBanner(BuildContext context) {
+    final colors = VitailColors.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       decoration: BoxDecoration(
-        color: _kCheerBg,
+        color: colors.tint(const Color(0xFFE8EFCF), colors.greenPale),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Text(
+      child: Text(
         'Your pet is doing great! Keep it up 🐾',
         textAlign: TextAlign.center,
         style: TextStyle(
           fontFamily: 'PlusJakartaSans',
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: _kCheerText,
+          color: colors.greenInk,
         ),
       ),
     );
