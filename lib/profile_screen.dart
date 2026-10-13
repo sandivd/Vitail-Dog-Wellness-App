@@ -1,23 +1,21 @@
-import 'dart:io';
-
-import 'package:cached_network_image/cached_network_image.dart';
+import 'microchip_validation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'care_score_screen.dart';
 import 'dog_sharing.dart';
+import 'reward_image_placeholder.dart';
+import 'rewards_data.dart';
+import 'rewards_screen.dart';
+import 'share_code_screen.dart';
+import 'vitail_icon.dart';
+import 'walk_history_screen.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'microchip_screen.dart';
-import 'microchip_validation.dart';
-import 'rewards_data.dart';
-import 'rewards_screen.dart';
 import 'settings_screen.dart';
-import 'share_code_screen.dart';
-import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'vitail_snack.dart';
-import 'walk_history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, this.isActive = true});
@@ -36,11 +34,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _dailyStreak = 0;
   String? _dogRole;
   int? _availableCoupons;
-
+  
   int _careScore = 0;
   Map<String, Map<String, dynamic>> _scoreComponents = {};
 
   // Design tokens (Figma light values) + theme-aware getters for dark mode.
+  // Light fills stay as constants; text/surface colors resolve from the
+  // app ColorScheme so the screen follows Settings' dark-mode toggle.
   static const Color _kCoral = Color(0xFFDC755C);
   static const Color _kTealBgLight = Color(0xFFDCEFEA);
   static const Color _kGreen = Color(0xFFAEC568);
@@ -51,15 +51,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color get _muted => Theme.of(context).colorScheme.onSurfaceVariant;
   Color get _card => _isDark ? const Color(0xFF1E1E1E) : Colors.white;
   Color get _tealBg => _isDark ? const Color(0xFF2E3A44) : _kTealBgLight;
-  Color get _tileBg => _isDark ? const Color(0xFF282828) : const Color(0xFFF9F7F3);
-
-  static const List<BoxShadow> _cardShadow = [
-    BoxShadow(
-      color: Color(0x0F000000),
-      blurRadius: 10,
-      offset: Offset(0, 3),
-    ),
-  ];
+  Color get _tileBg =>
+      _isDark ? const Color(0xFF282828) : const Color(0xFFF9F7F3);
 
   @override
   void initState() {
@@ -70,9 +63,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void didUpdateWidget(covariant ProfileScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) {
-      _fetchProfile();
-    }
+    if (widget.isActive && !oldWidget.isActive) _fetchProfile();
   }
 
   Future<void> _fetchProfile() async {
@@ -100,7 +91,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .select('distance_meters, walk_date, duration_seconds')
           .eq('user_id', userId);
 
-      // "My coupons" subtitle: redeemed rewards not yet collected. Optional –
+;
+      // "My coupons" subtitle: redeemed rewards not yet collected. Optional —
       // the rest of the profile still loads if this request fails.
       int? coupons;
       try {
@@ -114,7 +106,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _dogRole = link?.role;
         _availableCoupons = coupons;
         _dailyStreak = profileResponse['daily_streak'] ?? 0;
-
+        
         _calculateCareScore(List<Map<String, dynamic>>.from(walksResponse), dogResponse);
         _isLoading = false;
       });
@@ -127,52 +119,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _calculateCareScore(List<Map<String, dynamic>> walks, Map<String, dynamic>? dog) {
     if (dog == null) return;
 
-    final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
-    final recentWalks =
-        walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
-
+    DateTime sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+    List recentWalks = walks.where((w) => DateTime.parse(w['walk_date']).isAfter(sevenDaysAgo)).toList();
+    
     final activeDays = recentWalks
         .map((w) => DateTime.parse(w['walk_date']).toLocal())
         .map((d) => DateTime(d.year, d.month, d.day))
         .toSet()
         .length
         .clamp(0, 7);
-
-    final int activityScore = ((activeDays * 100) / 7).round().clamp(0, 100);
-    final int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
-    final int microchipScore =
-        microchipNumberError(dog['microchip_number']?.toString() ?? '') == null ? 100 : 0;
-    final int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
+    int activityScore = ((activeDays * 100) / 7).round().clamp(0, 100);
+    int vaccScore = dog['vaccination_status'] == 'up_to_date' ? 100 : 0;
+    int microchipScore = microchipNumberError(dog['microchip_number']?.toString() ?? '') == null ? 100 : 0;
+    int insuranceScore = dog['insurance_status'] == 'active' ? 100 : 0;
     int vetScore = 0;
-
+    
     if (dog['last_vet_checkup'] != null) {
-      final DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
+      DateTime lastVet = DateTime.parse(dog['last_vet_checkup']);
       if (DateTime.now().difference(lastVet).inDays <= 180) {
         vetScore = 100;
       }
     }
 
-    final int totalScore = (activityScore * 0.40 +
-            vaccScore * 0.20 +
-            microchipScore * 0.15 +
-            insuranceScore * 0.15 +
-            vetScore * 0.10)
-        .round();
+    int totalScore = (activityScore * 0.40 + vaccScore * 0.20 + microchipScore * 0.15 + insuranceScore * 0.15 + vetScore * 0.10).round();
 
     final String microchipNum = dog['microchip_number']?.toString() ?? '';
-    final String microchipStatus =
-        microchipScore == 100 ? 'Accepted · $microchipNum' : 'Verify to unlock rewards';
-
+    final String microchipStatus = microchipScore == 100 ? 'Accepted · $microchipNum' : 'Verify to unlock rewards';
+    
     final String vaccDate = dog['vaccination_date']?.toString() ?? '';
     final String vaccStatus = vaccDate.isNotEmpty ? 'Up to date' : 'Unknown';
-
+    
     final String insuranceName = dog['insurance_partner']?.toString() ?? '';
     final String insuranceStatus = insuranceName.isNotEmpty ? insuranceName : 'Not added';
 
     final String vetDate = dog['last_vet_checkup']?.toString() ?? '';
     final String vetStatus = vetDate.isNotEmpty ? 'Up to date' : 'Book your next visit';
 
-    final Map<String, Map<String, dynamic>> components = {
+    Map<String, Map<String, dynamic>> components = {
       'Activity (7 days)': {'score': activityScore, 'status': '$activeDays/7 days active'},
       'Vaccinations': {'score': vaccScore, 'status': vaccStatus},
       'Microchip': {'score': microchipScore, 'status': microchipStatus},
@@ -200,12 +183,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   String get _dogSubtitle {
-    if (_dogData == null) return "Setup your dog's profile";
+    if (_dogData == null) return 'Setup your dog\'s profile';
     final breed = _dogData!['breed'] ?? 'Unknown Breed';
     final birthdayStr = _dogData!['birthday'];
-
+    
     if (birthdayStr == null) return breed;
-
+    
     final birthday = DateTime.tryParse(birthdayStr);
     if (birthday == null) return breed;
 
@@ -214,7 +197,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (now.month < birthday.month || (now.month == birthday.month && now.day < birthday.day)) {
       years--;
     }
-
+    
     if (years <= 0) return 'Puppy $breed';
     return '$years year-old $breed';
   }
@@ -234,19 +217,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   bool get _microchipAccepted =>
-      microchipNumberError(_dogData?['microchip_number']?.toString() ?? '') == null;
+      microchipNumberError(_dogData?['microchip_number']?.toString() ?? '') ==
+      null;
 
   Future<void> _openActivityHistory() => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const WalkHistoryScreen()),
-      );
+    context,
+    MaterialPageRoute(builder: (_) => const WalkHistoryScreen()),
+  );
 
   Future<void> _openMyCoupons() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const RewardsScreen()),
+      MaterialPageRoute(builder: (_) => const RewardsScreen(couponsOnly: true)),
     );
-    _fetchProfile();
+    _fetchProfile(); // coupon count may change after collecting
   }
 
   Future<void> _openMicrochip() async {
@@ -277,6 +261,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
+
+  static const List<BoxShadow> _cardShadow = [
+    BoxShadow(color: Color(0x0F000000), blurRadius: 10, offset: Offset(0, 3)),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -313,7 +301,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: () async {
                           await Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                            MaterialPageRoute(
+                              builder: (context) => const SettingsScreen(),
+                            ),
                           );
                           _fetchProfile();
                         },
@@ -324,104 +314,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             color: _kCoral,
                             shape: BoxShape.circle,
                           ),
-                          child: const VitailIcon('settings', color: Colors.white, size: 22),
+                          child: const VitailIcon(
+                            'settings',
+                            color: Colors.white,
+                            size: 22,
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      GestureDetector(
-                        onTap: () async {
-                          final changed = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(builder: (context) => EditProfileScreen(dog: _dogData)),
-                          );
-                          if (changed == true) _fetchProfile();
-                        },
-                        child: SizedBox(
-                          width: 136,
-                          height: 132,
-                          child: Stack(
-                            children: [
-                              CircleAvatar(
-                                radius: 64,
-                                backgroundColor: _tealBg,
-                                backgroundImage:
-                                    photoUrl != null ? CachedNetworkImageProvider(photoUrl) : null,
-                                child: photoUrl == null
-                                    ? Icon(Icons.pets, size: 48, color: _muted)
-                                    : null,
-                              ),
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: const BoxDecoration(
-                                    color: _kCoral,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: const VitailIcon(
-                                    'pencil',
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
-                                ),
-                              ),
-                            ],
+                  Padding(
+                    padding: const EdgeInsets.only(top: 30),
+                    child: GestureDetector(
+                      onTap: () async {
+                        final changed = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                EditProfileScreen(dog: _dogData),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        dogName,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w700,
-                          color: _ink,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _dogSubtitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: _muted,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Streak Pill
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: _tealBg,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        );
+                        if (changed == true) _fetchProfile();
+                      },
+                      child: SizedBox(
+                        width: 136,
+                        height: 132,
+                        child: Stack(
                           children: [
-                            Icon(Icons.local_fire_department_outlined, color: _ink, size: 20),
-                            const SizedBox(width: 8),
-                            Text(
-                              '$_dailyStreak days streak!',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: _ink,
+                            DogAvatar(photoUrl: photoUrl, size: 128),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: const BoxDecoration(
+                                  color: _kCoral,
+                                  shape: BoxShape.circle,
+                                ),
+                                alignment: Alignment.center,
+                                child: const VitailIcon(
+                                  'pencil',
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                dogName,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: _ink,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _dogSubtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: _muted,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Streak pill
+              Center(
+                child: Container(
+                  width: 203,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: _tealBg,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      VitailIcon('flame', color: _ink, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$_dailyStreak days streak!',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: _ink,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
 
               const SizedBox(height: 22),
@@ -460,7 +452,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         Center(
                           child: Text(
-                            _careScore > 0 ? '$_careScore' : '--',
+                            _careScore > 0 ? '$_careScore' : '– –',
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w700,
@@ -473,13 +465,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
 
               _buildRow(
                 icon: 'footprints',
                 title: 'Activity History',
-                subtitle: _scoreComponents['Activity (7 days)']?['status'] as String?,
+                subtitle:
+                    _scoreComponents['Activity (7 days)']?['status'] as String?,
                 onTap: _openActivityHistory,
               ),
               _buildRow(
@@ -542,20 +534,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     'assets/brand/vitail-mark.png',
                     height: 58,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.pets, color: _kCoral, size: 58),
+                    errorBuilder: (_, _, _) =>
+                        const VitailIcon('paw-print', color: _kCoral, size: 58),
                   ),
                   const SizedBox(width: 4),
                   Image.asset(
                     'assets/brand/vitail-title.png',
                     height: 36,
                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Text('VITAIL',
-                        style: TextStyle(
-                            color: _kCoral, fontSize: 36, fontWeight: FontWeight.w800)),
+                    errorBuilder: (_, _, _) => const Text(
+                      'VITAIL',
+                      style: TextStyle(
+                        color: _kCoral,
+                        fontSize: 36,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 16),
             ],
           ),
         ),
@@ -602,7 +600,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           title,
@@ -618,8 +615,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             subtitle,
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight:
-                                  subtitleColor != null ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: subtitleColor != null
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                               color: subtitleColor ?? _muted,
                             ),
                           ),
