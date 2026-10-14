@@ -26,31 +26,35 @@ RewardOffer offer({String? id, String name = 'Other'}) => RewardOffer(
 );
 
 void main() {
-  testWidgets('venue points estimate comes from the dog walk goal', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: VenueDetailScreen(
-          venue: VenueInfo.fromJson({
-            'partner_id': 'a',
-            'venue_name': 'Cafe',
-            'points': 999,
-          }),
-          userLocation: const LatLng(0, 0),
-          dailyGoalKmLoader: () async => 2.5,
+  testWidgets('venue points estimate uses each venue distance', (tester) async {
+    Future<void> openVenue(double longitude) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: VenueDetailScreen(
+            venue: VenueInfo.fromJson({
+              'partner_id': 'a',
+              'venue_name': 'Cafe',
+              'latitude': 0,
+              'longitude': longitude,
+              'points': 999,
+            }),
+            userLocation: const LatLng(0, 0),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Estimated from your daily walk goal.'),
-      500,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openVenue(0.01);
+    expect(find.text('+ 11 pts'), findsOneWidget);
+    expect(find.text('+ 999 pts'), findsNothing);
+    expect(
+      find.text('Estimated from your distance to this venue.'),
+      findsOneWidget,
     );
 
-    expect(find.text('+ 25 pts'), findsOneWidget);
-    expect(find.text('+ 999 pts'), findsNothing);
-    expect(find.text('Estimated from your daily walk goal.'), findsOneWidget);
+    await openVenue(0.02);
+    expect(find.text('+ 22 pts'), findsOneWidget);
   });
 
   testWidgets('Explore opens all venue offers and Back returns to venue', (

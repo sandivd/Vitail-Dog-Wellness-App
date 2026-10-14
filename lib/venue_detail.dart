@@ -14,7 +14,6 @@ import 'exercise_data.dart';
 import 'venue_walk.dart';
 import 'detail_image_header.dart';
 import 'vitail_snack.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// One row of the `partnered_venues` table.
 ///
@@ -216,14 +215,12 @@ class VenueDetailScreen extends StatefulWidget {
     this.onCheckRewards,
     this.rewardsRepository,
     this.venueLoader = loadRewardVenues,
-    this.dailyGoalKmLoader,
   });
 
   final RewardsRepository? rewardsRepository;
   final Future<List<VenueInfo>> Function() venueLoader;
   final VoidCallback? onCheckRewards;
   final VenueInfo venue;
-  final Future<double?> Function()? dailyGoalKmLoader;
 
   /// The user's position if the caller already has it. If null, this screen
   /// looks it up itself so the distance still fills in.
@@ -241,45 +238,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   bool _locating = false;
   bool _startingWalk = false;
   bool _loadingReward = false;
-  double? _dailyGoalKm;
-  bool _loadingDailyGoal = true;
-
-  Future<double?> _loadDailyGoalKm() async {
-    final client = Supabase.instance.client;
-    // final linkedDog = (await primaryDogForCurrentUser())?.dog;
-    final userId = client.auth.currentUser?.id;
-    final dog =
-        // linkedDog ??
-        (userId == null
-            ? null
-            : await client
-                .from('dogs')
-                .select('daily_goal_km')
-                .eq('owner_id', userId)
-                .limit(1)
-                .maybeSingle());
-    final goalKm = dog?['daily_goal_km'];
-    if (goalKm is! num || !goalKm.isFinite || goalKm <= 0) return null;
-    return goalKm.toDouble();
-  }
-
-  Future<void> _loadDailyWalkGoal() async {
-    try {
-      final loader = widget.dailyGoalKmLoader ?? _loadDailyGoalKm;
-      final goalKm = await loader();
-      if (mounted) setState(() => _dailyGoalKm = goalKm);
-    } catch (_) {
-      if (mounted) {
-        showVitailSnack(
-          context,
-          'Could not load your daily walk goal for the points estimate.',
-          type: VitailSnackType.error,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loadingDailyGoal = false);
-    }
-  }
 
   Future<void> _checkRewards() async {
     if (_loadingReward) return;
@@ -336,7 +294,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           'Could not load rewards. Please try CHECK REWARDS again.',
           type: VitailSnackType.error,
         );
-    }} finally {
+      }
+    } finally {
       if (mounted) setState(() => _loadingReward = false);
     }
   }
@@ -345,7 +304,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   void initState() {
     super.initState();
     _userLocation = widget.userLocation;
-    _loadDailyWalkGoal();
     if (_userLocation == null) {
       _locating = true;
       _locateUser();
@@ -405,9 +363,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
-    final points = _dailyGoalKm == null
+    final distanceMeters = venue.distanceMetersFrom(_userLocation);
+    final points = distanceMeters == null
         ? null
-        : ExerciseCalculator.pointsForDistanceMeters(_dailyGoalKm! * 1000);
+        : ExerciseCalculator.pointsForDistanceMeters(distanceMeters);
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -472,6 +431,56 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
+                    vertical: 22,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        points == null
+                            ? (_locating
+                                  ? 'Calculating points…'
+                                  : 'Points unavailable')
+                            : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        points != null
+                            ? 'Estimated from your distance to this venue.'
+                            : _locating
+                            ? 'Locating you to estimate points.'
+                            : venue.location == null
+                            ? 'This venue location is unavailable.'
+                            : 'Enable location to estimate points for this venue.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
                     vertical: 18,
                   ),
                   decoration: BoxDecoration(
@@ -528,52 +537,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     color: colors.onSurfaceVariant,
                   ),
                 ),
-                if (!_loadingDailyGoal) ...[
-                  const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 22,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          points == null
-                              ? 'Walk goal unavailable'
-                              : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                            color: colors.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          points == null
-                              ? 'Set a daily walk goal to estimate points.'
-                              : 'Estimated from your daily walk goal.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ]),
             ),
           ),
