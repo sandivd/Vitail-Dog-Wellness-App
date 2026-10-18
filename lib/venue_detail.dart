@@ -218,6 +218,7 @@ class VenueDetailScreen extends StatefulWidget {
     this.onStartWalk,
     this.onCheckRewards,
     this.rewardsRepository,
+    this.routeDistanceEstimator,
     this.venueLoader = loadRewardVenues,
   });
 
@@ -240,6 +241,10 @@ class VenueDetailScreen extends StatefulWidget {
 
 class _VenueDetailScreenState extends State<VenueDetailScreen> {
   LatLng? _userLocation;
+  double? _routeDistanceMeters;
+  bool _estimatingRoute = false;
+  bool _routeEstimateUnavailable = false;
+  int _routeRequestId = 0;
   bool _locating = false;
   bool _startingWalk = false;
   bool _loadingReward = false;
