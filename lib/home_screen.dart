@@ -33,6 +33,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _totalPoints = 0;
   int _dailyStreak = 0;
   bool _isLoading = true;
+  bool _activeWalkUpdateScheduled = false;
+  WalkProgress? _pendingActiveWalk;
 
   String _dogName = 'Dog';
   String? _dogPhotoUrl;
@@ -50,7 +52,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _fetchHomeData();
-    activeWalkProgress.addListener(_onActiveWalkChanged);
+  }
+
+  void _syncActiveWalk() {
+    _queueActiveWalkUpdate(activeWalkProgress.value);
   }
 
   @override
@@ -59,19 +64,34 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  void _onActiveWalkChanged() {
-    if (!mounted) return;
-    setState(() => _activeWalk = activeWalkProgress.value);
+  WalkProgress? _activeWalk;
+
+  void _handleWalkProgress(WalkProgress? progress) {
+    _queueActiveWalkUpdate(progress);
   }
 
-  void _openSuggestedVenue() {
-    if (_suggestedVenue == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VenueDetailScreen(venue: _suggestedVenue!),
-      ),
-    );
+  void _queueActiveWalkUpdate(WalkProgress? progress) {
+    if (!mounted) return;
+    _pendingActiveWalk = progress;
+    if (_activeWalkUpdateScheduled) return;
+
+    _activeWalkUpdateScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _activeWalkUpdateScheduled = false;
+      if (!mounted) return;
+
+      final progress = _pendingActiveWalk;
+      final current = _activeWalk;
+      final unchanged = current == null
+          ? progress == null
+          : progress != null &&
+                current.elapsedSeconds == progress.elapsedSeconds &&
+                current.distanceMeters == progress.distanceMeters;
+      if (unchanged) return;
+
+      setState(() => _activeWalk = progress);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _fetchHomeData() async {
@@ -106,9 +126,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
       double kmToday = 0;
       int minsToday = 0;
-      for (var walk in walksRes) {
-        kmToday += (walk['distance_meters'] as num).toDouble() / 1000;
-        minsToday += (walk['duration_seconds'] as num).toInt() ~/ 60;
+      if (dogId != null) {
+        final totals =
+            await Supabase.instance.client.rpc(
+                  'dog_totals_since',
+                  params: {'p_dog_id': dogId, 'p_since': today},
+                )
+                as List;
+        if (totals.isNotEmpty) {
+          final t = totals.first as Map<String, dynamic>;
+          kmToday = (t['distance_meters'] as num).toDouble() / 1000;
+          minsToday = (t['duration_seconds'] as num).toInt() ~/ 60;
+        }
       }
 
       List<ActivityWalk> loadedWalks = [];
@@ -169,6 +198,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final displayedKm = _currentKm + (_activeWalk?.distanceMeters ?? 0) / 1000;
+    final displayedMins =
+        _currentMins + ((_activeWalk?.elapsedSeconds ?? 0) ~/ 60);
 
     if (_isLoading) {
       return Scaffold(
@@ -238,8 +270,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 150,
                         height: 150,
                         child: CircularProgressIndicator(
-                          value:
-                              (_currentMins / _dailyGoalMins).clamp(0.0, 1.0),
+                          value: (displayedMins / _dailyGoalMins).clamp(
+                            0.0,
+                            1.0,
+                          ),
                           strokeWidth: 10,
                           color: colorScheme.tertiary,
                           backgroundColor:
@@ -385,9 +419,76 @@ class _HomeScreenState extends State<HomeScreen> {
                 currentMinutes: _currentMins,
                 goalMinutes: _dailyGoalMins,
                 venue: _suggestedVenue,
-                onVenueTap: _suggestedVenue == null ? null : _openSuggestedVenue,
+                onVenueTap: _suggestedVenue == null
+                    ? null
+                    : _openSuggestedVenue,
               ),
               const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: activityBlue,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          WalkHistoryScreen(initialDate: _selectedDay),
+                    ),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Activity History',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(width: 4),
+                      VitailIcon(
+                        'chevron-right',
+                        size: 16,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              const ActivitySectionLabel('MY WALKS'),
+              if (_historyFailed)
+                Row(
+                  children: [
+                    const Expanded(child: Text('Could not load walks.')),
+                    TextButton(
+                      onPressed: _fetchHomeData,
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                )
+              else if (!_walks.any(
+                (walk) => activityDay(walk.date) == _selectedDay,
+              ))
+                Text(
+                  'No walks on this day. Start a walk to add one.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: activityMutedColor(context),
+                  ),
+                )
+              else
+                for (final walk in _walks.where(
+                  (walk) => activityDay(walk.date) == _selectedDay,
+                ))
+                  ActivityWalkCard(walk: walk),
             ],
           ),
         ),
@@ -426,6 +527,110 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Figma "goal card" / "biscuit card": white card, centred value and
+  /// label, soft shadow, no border; keeps the app's lucide icon on top.
+  Widget _buildFigmaStatCard(
+    String title,
+    String value,
+    String icon,
+    BuildContext context,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      decoration: BoxDecoration(
+        color: activityCardColor(context),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: activityShadow,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          VitailIcon(icon, color: colorScheme.onSurfaceVariant),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
+              fontFamily: 'PlusJakartaSans',
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurfaceVariant,
+              fontFamily: 'PlusJakartaSans',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCustomNavItem(
+    int index,
+    String label,
+    String svgString,
+    BuildContext context,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    bool isActive = _currentIndex == index;
+
+    // Active is primary, inactive is muted grey
+    String hexColor = isActive
+        ? '#${colorScheme.primary.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}'
+        : '#${colorScheme.onSurfaceVariant.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
+    String coloredSvg = svgString.replaceAll('[[COLOR]]', hexColor);
+
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          if (index == 1 &&
+              _activeWalk != null &&
+              Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+            return;
+          }
+
+          setState(() {
+            _currentIndex = index;
+            if (index == 0) _fetchHomeData();
+          });
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SvgPicture.string(coloredSvg, height: 24, width: 24),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive
+                    ? colorScheme.primary
+                    : colorScheme.onSurfaceVariant,
+                fontSize: 12,
+                fontFamily: 'PlusJakartaSans',
+                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildActiveWalkPanel(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final progress = _activeWalk;
@@ -434,8 +639,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final seconds = (progress.elapsedSeconds % 60).toString().padLeft(2, '0');
     final time = '$minutes:$seconds';
     final distance = (progress.distanceMeters / 1000).toStringAsFixed(1);
-    final fraction =
-        (progress.elapsedSeconds / (_dailyGoalMins * 60)).clamp(0.0, 1.0);
+    final fraction = (progress.elapsedSeconds / (_dailyGoalMins * 60)).clamp(
+      0.0,
+      1.0,
+    );
 
     return InkWell(
       onTap: () {
@@ -456,8 +663,10 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor:
-                      colorScheme.onPrimary.withValues(alpha: 0.35),
+                  backgroundColor: colorScheme.onPrimary.withValues(
+                    alpha: 0.35,
+                  ),
+                  // Live-walk dot (a shape, not an icon).
                   child: Container(
                     width: 14,
                     height: 14,
@@ -495,10 +704,10 @@ class _HomeScreenState extends State<HomeScreen> {
               child: LinearProgressIndicator(
                 value: fraction,
                 minHeight: 14,
-                backgroundColor:
-                    colorScheme.onPrimary.withValues(alpha: 0.35),
-                valueColor:
-                    AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+                backgroundColor: colorScheme.onPrimary.withValues(alpha: 0.35),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  colorScheme.onPrimary,
+                ),
               ),
             ),
             const SizedBox(height: 12),

@@ -41,7 +41,24 @@
 
 **External APIs:**
 - Google Maps SDK for Android/iOS
+- Google Routes API (walking-route estimates; called through a Supabase Edge Function)
 - Google Play Services Location
+
+### Walking route estimates
+
+Venue point estimates use Google's walking-route distance instead of straight-line
+distance. To configure the server-side route lookup, enable the Google Routes API
+and billing in Google Cloud, then set the key as a Supabase secret and deploy the
+function from the linked project:
+
+```sh
+supabase secrets set GOOGLE_ROUTES_API_KEY=your_key
+supabase functions deploy estimate-walking-route
+```
+
+Keep this key in Supabase; do not add it to the Flutter app or commit it to the
+repository. The venue estimate is based on the suggested pedestrian route and
+may differ from the final points because the walked GPS route can change.
 
 ---
 
@@ -52,4 +69,3 @@ The app follows a **Client-Server Architecture** utilizing a **Backend-as-a-Serv
 - The **Flutter client** acts as a thick client, communicating directly with Supabase's auto-generated REST APIs (PostgREST).
 - **Security** is enforced at the database level using PostgreSQL Row Level Security (RLS), ensuring users can only access and modify their own dog's data, walks, and photos.
 - **Image Optimization** is handled client-side before upload, downscaling and compressing images to optimize network performance and storage costs.
-

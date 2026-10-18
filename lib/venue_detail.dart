@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'reward_flow.dart';
 import 'reward_venues.dart';
@@ -15,6 +16,9 @@ import 'venue_walk.dart';
 import 'detail_image_header.dart';
 import 'vitail_snack.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+typedef WalkingRouteDistanceEstimator =
+    Future<double?> Function(LatLng origin, LatLng destination);
 
 /// One row of the `partnered_venues` table.
 ///
@@ -216,7 +220,7 @@ class VenueDetailScreen extends StatefulWidget {
     this.onCheckRewards,
     this.rewardsRepository,
     this.venueLoader = loadRewardVenues,
-    this.dailyGoalKmLoader,
+    this.routeDistanceEstimator,
   });
 
   final RewardsRepository? rewardsRepository;
@@ -231,6 +235,7 @@ class VenueDetailScreen extends StatefulWidget {
 
   /// Optional override for the destination walk.
   final Future<void> Function()? onStartWalk;
+  final WalkingRouteDistanceEstimator? routeDistanceEstimator;
 
   @override
   State<VenueDetailScreen> createState() => _VenueDetailScreenState();
@@ -241,45 +246,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   bool _locating = false;
   bool _startingWalk = false;
   bool _loadingReward = false;
-  double? _dailyGoalKm;
-  bool _loadingDailyGoal = true;
-
-  Future<double?> _loadDailyGoalKm() async {
-    final client = Supabase.instance.client;
-    // final linkedDog = (await primaryDogForCurrentUser())?.dog;
-    final userId = client.auth.currentUser?.id;
-    final dog =
-        // linkedDog ??
-        (userId == null
-            ? null
-            : await client
-                .from('dogs')
-                .select('daily_goal_km')
-                .eq('owner_id', userId)
-                .limit(1)
-                .maybeSingle());
-    final goalKm = dog?['daily_goal_km'];
-    if (goalKm is! num || !goalKm.isFinite || goalKm <= 0) return null;
-    return goalKm.toDouble();
-  }
-
-  Future<void> _loadDailyWalkGoal() async {
-    try {
-      final loader = widget.dailyGoalKmLoader ?? _loadDailyGoalKm;
-      final goalKm = await loader();
-      if (mounted) setState(() => _dailyGoalKm = goalKm);
-    } catch (_) {
-      if (mounted) {
-        showVitailSnack(
-          context,
-          'Could not load your daily walk goal for the points estimate.',
-          type: VitailSnackType.error,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loadingDailyGoal = false);
-    }
-  }
+  bool _estimatingRoute = false;
+  bool _routeEstimateUnavailable = false;
+  double? _routeDistanceMeters;
+  int _routeRequestId = 0;
 
   Future<void> _checkRewards() async {
     if (_loadingReward) return;
@@ -349,7 +319,85 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     if (_userLocation == null) {
       _locating = true;
       _locateUser();
+    } else {
+      _estimateWalkingRoute(_userLocation!);
     }
+  }
+
+  @override
+  void didUpdateWidget(covariant VenueDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final routeInputsChanged =
+        oldWidget.venue.location != widget.venue.location ||
+        oldWidget.userLocation != widget.userLocation ||
+        oldWidget.routeDistanceEstimator != widget.routeDistanceEstimator;
+    if (!routeInputsChanged) return;
+
+    _userLocation = widget.userLocation ?? _userLocation;
+    final origin = _userLocation;
+    if (origin != null) _estimateWalkingRoute(origin);
+  }
+
+  Future<void> _estimateWalkingRoute(LatLng origin) async {
+    final destination = widget.venue.location;
+    if (destination == null) return;
+
+    final requestId = ++_routeRequestId;
+    if (mounted) {
+      setState(() {
+        _estimatingRoute = true;
+        _routeEstimateUnavailable = false;
+        _routeDistanceMeters = null;
+      });
+    }
+
+    try {
+      final distanceMeters = widget.routeDistanceEstimator != null
+          ? await widget.routeDistanceEstimator!(origin, destination)
+          : await _requestWalkingRoute(origin, destination);
+      if (distanceMeters == null ||
+          !distanceMeters.isFinite ||
+          distanceMeters < 0) {
+        throw const FormatException('Walking route distance is unavailable.');
+      }
+      if (!mounted || requestId != _routeRequestId) return;
+      setState(() => _routeDistanceMeters = distanceMeters);
+    } catch (error) {
+      debugPrint('Could not estimate walking route: $error');
+      if (!mounted || requestId != _routeRequestId) return;
+      setState(() {
+        _routeEstimateUnavailable = true;
+        _routeDistanceMeters = null;
+      });
+    } finally {
+      if (mounted && requestId == _routeRequestId) {
+        setState(() => _estimatingRoute = false);
+      }
+    }
+  }
+
+  Future<double?> _requestWalkingRoute(
+    LatLng origin,
+    LatLng destination,
+  ) async {
+    final response = await Supabase.instance.client.functions.invoke(
+      'estimate-walking-route',
+      body: {
+        'origin': {'latitude': origin.latitude, 'longitude': origin.longitude},
+        'destination': {
+          'latitude': destination.latitude,
+          'longitude': destination.longitude,
+        },
+      },
+    );
+    final data = response.data;
+    if (response.status < 200 ||
+        response.status >= 300 ||
+        data is! Map ||
+        data['distanceMeters'] is! num) {
+      throw StateError('Walking route service returned an invalid response.');
+    }
+    return (data['distanceMeters'] as num).toDouble();
   }
 
   Future<void> _locateUser() async {
@@ -367,9 +415,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
 
       final position = await Geolocator.getCurrentPosition();
       if (!mounted) return;
-      setState(() {
-        _userLocation = LatLng(position.latitude, position.longitude);
-      });
+      final location = LatLng(position.latitude, position.longitude);
+      setState(() => _userLocation = location);
+      await _estimateWalkingRoute(location);
     } catch (_) {
       // The distance simply stays unavailable.
     } finally {
@@ -391,12 +439,13 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   }
 
   String get _distanceLabel {
-    final venue = widget.venue;
-    if (venue.location == null) return 'Distance unavailable';
-    if (_userLocation == null) {
-      return _locating ? 'Locating…' : 'Distance unavailable';
+    final meters = _routeDistanceMeters;
+    if (meters == null) {
+      if (_estimatingRoute) return 'Calculating route…';
+      return 'Route distance unavailable';
     }
-    return venue.distanceLabelFrom(_userLocation);
+    if (meters < 1000) return '${meters.round()} m by route';
+    return '${(meters / 1000).toStringAsFixed(1)} km by route';
   }
 
   @override
@@ -405,9 +454,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
-    final points = _dailyGoalKm == null
+    final points = _routeDistanceMeters == null
         ? null
-        : ExerciseCalculator.pointsForDistanceMeters(_dailyGoalKm! * 1000);
+        : ExerciseCalculator.pointsForDistanceMeters(_routeDistanceMeters!);
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -465,6 +514,60 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     child: Text(
                       _loadingReward ? 'LOADING REWARD…' : 'CHECK REWARDS',
                     ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 22,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.06),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        points == null
+                            ? (_estimatingRoute
+                                  ? 'Calculating route points…'
+                                  : 'Route points unavailable')
+                            : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: colors.onSurface,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        points != null
+                            ? 'Estimated from a walking route to this venue; actual points may vary.'
+                            : _estimatingRoute
+                            ? 'Estimating points from a walking route.'
+                            : _routeEstimateUnavailable
+                            ? 'Walking route could not be estimated.'
+                            : _locating
+                            ? 'Locating you to estimate the walking route.'
+                            : venue.location == null
+                            ? 'This venue location is unavailable.'
+                            : 'Enable location to estimate route points for this venue.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 24),

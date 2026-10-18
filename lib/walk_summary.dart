@@ -1,6 +1,7 @@
 import 'vitail_icon.dart';
 import 'vitail_back_button.dart';
 import 'vitail_loading.dart';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -809,6 +810,23 @@ class _RouteMapPreview extends StatefulWidget {
 
 class _RouteMapPreviewState extends State<_RouteMapPreview> {
   GoogleMapController? _controller;
+  Timer? _mapStartTimer;
+  bool _mapReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapStartTimer = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) setState(() => _mapReady = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _mapStartTimer?.cancel();
+    _controller = null;
+    super.dispose();
+  }
 
   LatLngBounds _boundsFor(List<LatLng> points) {
     double minLat = points.first.latitude;
@@ -831,7 +849,8 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.points.length < 2) {
+    final colors = VitailColors.of(context);
+    if (widget.points.length < 2 || !_mapReady) {
       return _placeholder(context);
     }
 
@@ -862,8 +881,8 @@ class _RouteMapPreviewState extends State<_RouteMapPreview> {
           onMapCreated: (controller) {
             _controller = controller;
             final bounds = _boundsFor(widget.points);
-            // Give the map a beat to lay out before fitting bounds.
-            Future.delayed(const Duration(milliseconds: 300), () {
+            _mapStartTimer?.cancel();
+            _mapStartTimer = Timer(const Duration(milliseconds: 300), () {
               _controller?.animateCamera(
                 CameraUpdate.newLatLngBounds(bounds, 36),
               );
