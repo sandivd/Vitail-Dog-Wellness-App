@@ -1,3 +1,4 @@
+import 'vitail_colors.dart';
 import 'vitail_icon.dart';
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
@@ -233,9 +234,12 @@ class _RewardFlowState extends State<RewardFlow> {
                       Container(
                         width: 72,
                         height: 72,
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFFF2F6E7),
+                          color: VitailColors.of(sheetContext).tint(
+                            const Color(0xFFF2F6E7),
+                            VitailColors.of(sheetContext).greenPale,
+                          ),
                         ),
                         padding: const EdgeInsets.all(16),
                         child: SvgPicture.asset(

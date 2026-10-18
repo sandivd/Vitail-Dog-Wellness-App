@@ -1,49 +1,58 @@
+import 'vitail_colors.dart';
 import 'vitail_icon.dart';
 import 'vitail_back_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class OnboardingStyle {
-  const OnboardingStyle._();
+  const OnboardingStyle._(this.colors);
 
-  static const Color background = Color(0xFFF4F0E9);
-  static const Color ink = Color(0xFF211F1D);
-  static const Color muted = Color(0xFF6E6A63);
-  static const Color border = Color(0xFFDAD6CD);
-  static const Color green = Color(0xFFAEC568);
-  static const Color coral = Color(0xFFCD533B);
+  factory OnboardingStyle.of(BuildContext context) =>
+      OnboardingStyle._(VitailColors.of(context));
+
+  final VitailColors colors;
+
+  Color get background => colors.background;
+  Color get ink => colors.ink;
+  Color get muted => colors.muted;
+  Color get border => colors.tint(const Color(0xFFDAD6CD), colors.border);
+  Color get green => colors.green;
+  Color get coral => colors.tint(const Color(0xFFCD533B), colors.coral);
+  Color get card => colors.card;
 
   static const String font = 'PlusJakartaSans';
 
-  static TextStyle text(
+  TextStyle text(
     double size, {
-    Color color = ink,
+    Color? color,
     FontWeight weight = FontWeight.w600,
     double? height,
-  }) =>
-      TextStyle(
-        fontFamily: font,
-        fontSize: size,
-        fontWeight: weight,
-        color: color,
-        height: height,
-      );
+  }) => TextStyle(
+    fontFamily: font,
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? ink,
+    height: height,
+  );
 
-  static ButtonStyle get primaryButton => ElevatedButton.styleFrom(
-        backgroundColor: coral,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: border,
-        disabledForegroundColor: muted,
-        minimumSize: const Size.fromHeight(56),
-        elevation: 0,
-        shape: const StadiumBorder(),
-      );
+  ButtonStyle get primaryButton => ElevatedButton.styleFrom(
+    backgroundColor: coral,
+    foregroundColor: Colors.white,
+    disabledBackgroundColor: border,
+    disabledForegroundColor: muted,
+    minimumSize: const Size.fromHeight(56),
+    elevation: 0,
+    shape: const StadiumBorder(),
+  );
 
-  static Widget icon(String name, {double size = 24}) => SvgPicture.asset(
-        'assets/icons/onboarding-$name.svg',
-        width: size,
-        height: size,
-      );
+  Widget icon(String name, {double size = 24}) => SvgPicture.asset(
+    'assets/icons/onboarding-$name.svg',
+    width: size,
+    height: size,
+    colorFilter: colors.isDark
+        ? ColorFilter.mode(muted, BlendMode.srcIn)
+        : null,
+  );
 }
 
 class OnboardingPage extends StatelessWidget {
@@ -68,9 +77,10 @@ class OnboardingPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = OnboardingStyle.of(context);
     final canPop = Navigator.canPop(context);
     return Scaffold(
-      backgroundColor: OnboardingStyle.background,
+      backgroundColor: style.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,43 +90,49 @@ class OnboardingPage extends StatelessWidget {
                 onPressed: busy
                     ? null
                     : (onBack ?? () => Navigator.maybePop(context)),
-                color: OnboardingStyle.ink,
+                color: style.ink,
               ),
             Expanded(
-        child: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(28, canPop ? 0 : 26, 28, 32),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: OnboardingStyle.text(24,
-                          weight: FontWeight.w700, height: 1.3),
-                    ),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        subtitle!,
-                        textAlign: TextAlign.center,
-                        style: OnboardingStyle.text(13,
-                            color: OnboardingStyle.muted,
-                            weight: FontWeight.w500,
-                            height: 1.5),
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 460),
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(28, canPop ? 0 : 26, 28, 32),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            title,
+                            textAlign: TextAlign.center,
+                            style: style.text(
+                              24,
+                              weight: FontWeight.w700,
+                              height: 1.3,
+                            ),
+                          ),
+                          if (subtitle != null) ...[
+                            const SizedBox(height: 10),
+                            Text(
+                              subtitle!,
+                              textAlign: TextAlign.center,
+                              style: style.text(
+                                13,
+                                color: style.muted,
+                                weight: FontWeight.w500,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                          ...children,
+                        ],
                       ),
-                    ],
-                    ...children,
-                  ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
             ),
           ],
         ),
@@ -133,7 +149,8 @@ class OnboardingBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color tint = color ?? OnboardingStyle.green;
+    final style = OnboardingStyle.of(context);
+    final Color tint = color ?? style.green;
     return Container(
       width: 64,
       height: 64,
@@ -160,6 +177,7 @@ class OnboardingOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = OnboardingStyle.of(context);
     return Semantics(
       button: true,
       selected: selected,
@@ -170,19 +188,19 @@ class OnboardingOptionCard extends StatelessWidget {
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 18),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: style.card,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: selected ? OnboardingStyle.coral : OnboardingStyle.border,
+              color: selected ? style.coral : style.border,
               width: selected ? 1.5 : 1,
             ),
           ),
           child: Text(
             label,
             textAlign: TextAlign.center,
-            style: OnboardingStyle.text(
+            style: style.text(
               14,
-              color: OnboardingStyle.ink,
+              color: style.ink,
               weight: selected ? FontWeight.w600 : FontWeight.w500,
               height: 1.4,
             ),

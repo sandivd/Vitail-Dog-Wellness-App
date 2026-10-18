@@ -1,3 +1,4 @@
+import 'vitail_colors.dart';
 import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'dart:math' as math;
@@ -304,8 +305,10 @@ class _CheckInScreenState extends State<CheckInScreen> {
         width: 72,
         height: 72,
         padding: const EdgeInsets.all(16),
-        decoration: const BoxDecoration(
-          color: Color(0xFFF2F6E7),
+        decoration: BoxDecoration(
+          color: VitailColors.of(
+            context,
+          ).tint(const Color(0xFFF2F6E7), VitailColors.of(context).greenPale),
           shape: BoxShape.circle,
         ),
         child: SvgPicture.asset(
@@ -337,7 +340,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
       child: Column(
         children: [
           _receiptRow('Order', reward.title),
-          const Divider(height: 1, color: Color(0xFFDBD7D1)),
+          Divider(height: 1, color: VitailColors.of(context).border),
           _receiptRow(
             'Place',
             reward.partnerName ?? 'Partner details unavailable',

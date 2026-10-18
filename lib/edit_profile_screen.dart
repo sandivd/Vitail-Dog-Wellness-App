@@ -1,3 +1,4 @@
+import 'vitail_colors.dart';
 import 'dart:io';
 import 'vitail_back_button.dart';
 
@@ -58,17 +59,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     _nameController.text = (dog['dog_name'] ?? '') as String;
     _selectedSex = (dog['sex'] ?? 'Male') as String?;
-    
+
     final breed = dog['breed'] as String?;
     _initialBreed = breed ?? '';
     _selectedBreed = breed != null && _breeds.contains(breed) ? breed : null;
-    
+
     final weight = (dog['weight'] as num?)?.toDouble();
     _weightController.text = weight == null
         ? ''
         : (weight == weight.roundToDouble()
-            ? weight.toInt().toString()
-            : weight.toStringAsFixed(1));
+              ? weight.toInt().toString()
+              : weight.toStringAsFixed(1));
 
     final rawBirthday = dog['birthday'];
     if (rawBirthday != null) {
@@ -100,58 +101,63 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.dispose();
   }
 
-  TextStyle style(double size,
-          {Color? color, FontWeight weight = FontWeight.w600}) =>
-      TextStyle(
-        fontFamily: 'PlusJakartaSans',
-        fontSize: size,
-        fontWeight: weight,
-        color: color ?? ink,
-      );
+  TextStyle style(
+    double size, {
+    Color? color,
+    FontWeight weight = FontWeight.w600,
+  }) => TextStyle(
+    fontFamily: 'PlusJakartaSans',
+    fontSize: size,
+    fontWeight: weight,
+    color: color ?? ink,
+  );
 
   Widget icon(String name) => SvgPicture.asset(
-        'assets/icons/onboarding-$name.svg',
-        width: 24,
-        height: 24,
-        colorFilter: _isDark
-            ? const ColorFilter.mode(Color(0xFFF4F0E9), BlendMode.srcIn)
-            : null,
-      );
+    'assets/icons/onboarding-$name.svg',
+    width: 24,
+    height: 24,
+    colorFilter: _isDark
+        ? const ColorFilter.mode(Color(0xFFF4F0E9), BlendMode.srcIn)
+        : null,
+  );
 
   InputDecoration decoration(String hint, {Widget? suffix}) => InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(color: muted, fontSize: 14),
-        filled: true,
-        fillColor: fieldFill,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        suffixIcon: suffix == null
-            ? null
-            : Padding(
-                padding: const EdgeInsets.only(right: 18),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [suffix],
-                ),
-              ),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: border)),
-        enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: border)),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
-            borderSide: BorderSide(color: coral)),
-      );
+    hintText: hint,
+    hintStyle: TextStyle(color: muted, fontSize: 14),
+    filled: true,
+    fillColor: fieldFill,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    suffixIcon: suffix == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(right: 18),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [suffix],
+            ),
+          ),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: border),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: border),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: coral),
+    ),
+  );
 
   Widget field(String label, Widget child) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(label, style: style(13)),
-          const SizedBox(height: 8),
-          child,
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(label, style: style(13)),
+      const SizedBox(height: 8),
+      child,
+    ],
+  );
 
   ImageProvider? get _avatarImage {
     if (_newPhoto != null) return FileImage(File(_newPhoto!.path));
@@ -199,28 +205,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final manualKm = double.tryParse(_dailyKmController.text.trim());
 
     if (name.isEmpty) {
-      showVitailSnack(context, "Please enter your dog's name",
-          type: VitailSnackType.error);
+      showVitailSnack(
+        context,
+        "Please enter your dog's name",
+        type: VitailSnackType.error,
+      );
       return;
     }
     if (_selectedSex == null) {
-      showVitailSnack(context, 'Please select a sex',
-          type: VitailSnackType.error);
+      showVitailSnack(
+        context,
+        'Please select a sex',
+        type: VitailSnackType.error,
+      );
       return;
     }
     if (_birthday == null) {
-      showVitailSnack(context, 'Please select a date of birth',
-          type: VitailSnackType.error);
+      showVitailSnack(
+        context,
+        'Please select a date of birth',
+        type: VitailSnackType.error,
+      );
       return;
     }
     if (_selectedBreed == null) {
-      showVitailSnack(context, 'Please select a breed from the list',
-          type: VitailSnackType.error);
+      showVitailSnack(
+        context,
+        'Please select a breed from the list',
+        type: VitailSnackType.error,
+      );
       return;
     }
     if (weight == null || weight <= 0) {
-      showVitailSnack(context, 'Please enter a valid weight',
-          type: VitailSnackType.error);
+      showVitailSnack(
+        context,
+        'Please enter a valid weight',
+        type: VitailSnackType.error,
+      );
       return;
     }
 
@@ -246,14 +267,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           oldWeight == null || (oldWeight - weight).abs() > 0.001;
       if (weightChanged) {
         final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day)
-            .toIso8601String()
-            .split('T')[0];
-        await client.rpc('log_weight', params: {
-          'p_dog_id': dogId,
-          'p_weight_kg': weight,
-          'p_recorded_date': today,
-        });
+        final today = DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).toIso8601String().split('T')[0];
+        await client.rpc(
+          'log_weight',
+          params: {
+            'p_dog_id': dogId,
+            'p_weight_kg': weight,
+            'p_recorded_date': today,
+          },
+        );
       }
 
       // 3. Fallback calculation if daily goals left empty
@@ -273,36 +299,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ageYears: ageYears,
         ownerActivityLevel:
             (dog['owner_activity_level'] as String?) ?? 'moderate',
-        healthCondition:
-            (dog['health_condition'] as String?) ?? 'no_condition',
+        healthCondition: (dog['health_condition'] as String?) ?? 'no_condition',
       );
 
       // 4. Update the dog row with manual goals if provided
-      await client.from('dogs').update({
-        'dog_name': name,
-        'sex': _selectedSex,
-        'breed': _selectedBreed,
-        'birthday': birthday.toIso8601String().split('T')[0],
-        'weight': weight,
-        'daily_goal_minutes': manualMins ?? target['targetMinutes'],
-        'daily_goal_km': manualKm ?? target['kmTarget'],
-        if (photoUrl != null) 'photo_url': photoUrl,
-      }).eq('id', dogId);
+      await client
+          .from('dogs')
+          .update({
+            'dog_name': name,
+            'sex': _selectedSex,
+            'breed': _selectedBreed,
+            'birthday': birthday.toIso8601String().split('T')[0],
+            'weight': weight,
+            'daily_goal_minutes': manualMins ?? target['targetMinutes'],
+            'daily_goal_km': manualKm ?? target['kmTarget'],
+            if (photoUrl != null) 'photo_url': photoUrl,
+          })
+          .eq('id', dogId);
 
       if (!mounted) return;
       Navigator.pop(context, true);
     } on PostgrestException {
       if (mounted) {
         setState(() => _isSaving = false);
-        showVitailSnack(context, 'Could not save changes. Please try again.',
-            type: VitailSnackType.error);
+        showVitailSnack(
+          context,
+          'Could not save changes. Please try again.',
+          type: VitailSnackType.error,
+        );
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isSaving = false);
         showVitailSnack(
-            context, 'Network error: could not save. Check your connection.',
-            type: VitailSnackType.error);
+          context,
+          'Network error: could not save. Check your connection.',
+          type: VitailSnackType.error,
+        );
       }
     }
   }
@@ -316,8 +349,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         body: SafeArea(
           child: widget.dog == null
               ? Center(
-                  child: Text('No dog profile found.',
-                      style: style(15, color: muted)))
+                  child: Text(
+                    'No dog profile found.',
+                    style: style(15, color: muted),
+                  ),
+                )
               : SingleChildScrollView(
                   keyboardDismissBehavior:
                       ScrollViewKeyboardDismissBehavior.onDrag,
@@ -338,7 +374,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 controller: _nameController,
                                 textCapitalization: TextCapitalization.words,
                                 textInputAction: TextInputAction.next,
-                                decoration: decoration("What's your dog's name?"),
+                                decoration: decoration(
+                                  "What's your dog's name?",
+                                ),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -370,11 +408,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 18),
-          child: Text('Edit profile', style: style(22, weight: FontWeight.w700)),
+          child: Text(
+            'Edit profile',
+            style: style(22, weight: FontWeight.w700),
+          ),
         ),
         Align(
           alignment: Alignment.topLeft,
-          child: VitailBackButton(onPressed: _isSaving ? null : () => Navigator.maybePop(context)),
+          child: VitailBackButton(
+            onPressed: _isSaving ? null : () => Navigator.maybePop(context),
+          ),
         ),
       ],
     );
@@ -386,13 +429,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       children: [
         CircleAvatar(
           radius: 46,
-          backgroundColor: const Color(0xFFE2DDD5),
+          backgroundColor: VitailColors.of(
+            context,
+          ).tint(const Color(0xFFE2DDD5), VitailColors.of(context).avatar),
           backgroundImage: image,
           child: image == null
               ? SvgPicture.asset(
                   'assets/icons/onboarding-camera.svg',
                   width: 28,
                   height: 28,
+                  colorFilter: _isDark
+                      ? ColorFilter.mode(muted, BlendMode.srcIn)
+                      : null,
                 )
               : null,
         ),
@@ -407,9 +455,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             shape: const StadiumBorder(),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
             textStyle: const TextStyle(
-                fontFamily: 'PlusJakartaSans',
-                fontSize: 13,
-                fontWeight: FontWeight.w600),
+              fontFamily: 'PlusJakartaSans',
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           child: const Text('Change photo'),
         ),
@@ -418,35 +467,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _buildSexSelector() {
-    return Row(children: [
-      for (final value in ['Male', 'Female']) ...[
-        if (value == 'Female') const SizedBox(width: 12),
-        Expanded(
-          child: Semantics(
-            selected: _selectedSex == value,
-            child: OutlinedButton(
-              onPressed: _isSaving
-                  ? null
-                  : () => setState(() => _selectedSex = value),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(52),
-                backgroundColor: _selectedSex == value ? green : fieldFill,
-                foregroundColor: _selectedSex == value ? Colors.white : ink,
-                side: BorderSide(
-                    color: _selectedSex == value ? green : border, width: 1.2),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-              ),
-              child: Text(value.toUpperCase(),
+    return Row(
+      children: [
+        for (final value in ['Male', 'Female']) ...[
+          if (value == 'Female') const SizedBox(width: 12),
+          Expanded(
+            child: Semantics(
+              selected: _selectedSex == value,
+              child: OutlinedButton(
+                onPressed: _isSaving
+                    ? null
+                    : () => setState(() => _selectedSex = value),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  backgroundColor: _selectedSex == value ? green : fieldFill,
+                  foregroundColor: _selectedSex == value ? Colors.white : ink,
+                  side: BorderSide(
+                    color: _selectedSex == value ? green : border,
+                    width: 1.2,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: Text(
+                  value.toUpperCase(),
                   style: const TextStyle(
-                      fontFamily: 'PlusJakartaSans',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700)),
+                    fontFamily: 'PlusJakartaSans',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ],
-    ]);
+    );
   }
 
   Widget _buildBirthdayField() {
@@ -455,75 +512,85 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       readOnly: true,
       controller: null,
       onTap: _isSaving ? null : _pickBirthday,
-      decoration: decoration(
-        hasBirthday
-            ? DateFormat('d MMMM yyyy').format(_birthday!)
-            : 'Select date of birth',
-        suffix: icon('calendar'),
-      ).copyWith(
-        hintStyle: TextStyle(
-          color: hasBirthday ? ink : muted,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+      decoration:
+          decoration(
+            hasBirthday
+                ? DateFormat('d MMMM yyyy').format(_birthday!)
+                : 'Select date of birth',
+            suffix: icon('calendar'),
+          ).copyWith(
+            hintStyle: TextStyle(
+              color: hasBirthday ? ink : muted,
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
     );
   }
 
   Widget _buildBreedField() {
-    return LayoutBuilder(builder: (context, constraints) {
-      return Autocomplete<String>(
-        initialValue: TextEditingValue(text: _initialBreed),
-        optionsBuilder: (value) => _breeds
-            .where((b) => b.toLowerCase().contains(value.text.toLowerCase())),
-        onSelected: (breed) => setState(() => _selectedBreed = breed),
-        optionsViewBuilder: (context, select, options) {
-          final matches = options.toList();
-          return Align(
-            alignment: Alignment.topLeft,
-            child: Material(
-              color: fieldFill,
-              elevation: 4,
-              borderRadius: BorderRadius.circular(14),
-              clipBehavior: Clip.antiAlias,
-              child: Container(
-                width: constraints.maxWidth,
-                constraints: const BoxConstraints(maxHeight: 240),
-                decoration: BoxDecoration(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Autocomplete<String>(
+          initialValue: TextEditingValue(text: _initialBreed),
+          optionsBuilder: (value) => _breeds.where(
+            (b) => b.toLowerCase().contains(value.text.toLowerCase()),
+          ),
+          onSelected: (breed) => setState(() => _selectedBreed = breed),
+          optionsViewBuilder: (context, select, options) {
+            final matches = options.toList();
+            return Align(
+              alignment: Alignment.topLeft,
+              child: Material(
+                color: fieldFill,
+                elevation: 4,
+                borderRadius: BorderRadius.circular(14),
+                clipBehavior: Clip.antiAlias,
+                child: Container(
+                  width: constraints.maxWidth,
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  decoration: BoxDecoration(
                     border: Border.all(color: border),
-                    borderRadius: BorderRadius.circular(14)),
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  shrinkWrap: true,
-                  itemCount: matches.length,
-                  itemBuilder: (context, index) {
-                    final highlighted =
-                        AutocompleteHighlightedOption.of(context) == index;
-                    return InkWell(
-                      onTap: () => select(matches[index]),
-                      child: Container(
-                        color: highlighted ? background : fieldFill,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
-                        child: Text(matches[index],
-                            style: style(14, weight: FontWeight.w500)),
-                      ),
-                    );
-                  },
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    shrinkWrap: true,
+                    itemCount: matches.length,
+                    itemBuilder: (context, index) {
+                      final highlighted =
+                          AutocompleteHighlightedOption.of(context) == index;
+                      return InkWell(
+                        onTap: () => select(matches[index]),
+                        child: Container(
+                          color: highlighted ? background : fieldFill,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          child: Text(
+                            matches[index],
+                            style: style(14, weight: FontWeight.w500),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
+            );
+          },
+          fieldViewBuilder: (context, controller, focus, submit) => TextField(
+            controller: controller,
+            focusNode: focus,
+            onChanged: (value) => setState(
+              () => _selectedBreed = _breeds.contains(value) ? value : null,
             ),
-          );
-        },
-        fieldViewBuilder: (context, controller, focus, submit) => TextField(
-          controller: controller,
-          focusNode: focus,
-          onChanged: (value) => setState(
-              () => _selectedBreed = _breeds.contains(value) ? value : null),
-          decoration: decoration('Select breed', suffix: icon('chevron')),
-        ),
-      );
-    });
+            decoration: decoration('Select breed', suffix: icon('chevron')),
+          ),
+        );
+      },
+    );
   }
 
   Widget _buildAgeWeightRow() {
@@ -545,9 +612,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               child: Text(
                 hasBirthday ? '$_ageYears' : '—',
-                style: style(15,
-                    color: hasBirthday ? ink : muted,
-                    weight: FontWeight.w500),
+                style: style(
+                  15,
+                  color: hasBirthday ? ink : muted,
+                  weight: FontWeight.w500,
+                ),
               ),
             ),
           ),
@@ -558,8 +627,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             'Weight (kg)',
             TextField(
               controller: _weightController,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               inputFormatters: [DogWeightInputFormatter()],
               decoration: decoration('12'),
             ),
@@ -641,13 +711,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white))
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
             : const Text(
                 'Save changes',
                 style: TextStyle(
-                    fontFamily: 'PlusJakartaSans',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700),
+                  fontFamily: 'PlusJakartaSans',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
       ),
     );

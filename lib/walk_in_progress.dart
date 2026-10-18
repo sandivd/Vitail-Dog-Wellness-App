@@ -1,3 +1,5 @@
+import 'vitail_map_style.dart';
+import 'vitail_colors.dart';
 import 'vitail_icon.dart';
 import 'dart:async';
 import 'dart:io';
@@ -10,29 +12,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'walk_summary.dart';
 import 'vitail_snack.dart';
 
-// ---------------------------------------------------------------------------
-// Design tokens from the Figma spec for this screen. Hardcoded on purpose:
-// the app's ColorScheme doesn't define surfaceVariant, so reading it from the
-// theme silently falls back to Material's default purple-grey tint (the
-// "blended" colours after the merge). This is a fixed light design, matching
-// the approach used by onboarding / edit profile.
-// ---------------------------------------------------------------------------
-const Color _kPageBg = Colors.white; // Sheet background
-const Color _kCardBg = Color(0xFFF9F7F3); // Stat / hygiene / add-photo cards
-const Color _kInk = Color(0xFF211F1D); // Primary text
-const Color _kMuted = Color(0xFF6E6A63); // Secondary text
-const Color _kBorder = Color(0xFFDBD7D1); // Borders + progress track
-const Color _kAvatarBg = Color(0xFFE5E1DB); // Dog avatar placeholder
-const Color _kCoral = Color(0xFFDC755C); // Finish btn, progress, polyline
-const Color _kBlue = Color(0xFF5F98BD); // "LIVE MAP" accent
-
+// Page colours follow the current theme through VitailColors.
 class WalkInProgress extends StatefulWidget {
-  const WalkInProgress({super.key, this.dog, this.plannedRoute, this.onProgress,});
+  const WalkInProgress({
+    super.key,
+    this.dog,
+    this.plannedRoute,
+    this.onProgress,
+  });
 
   final Map<String, dynamic>? dog;
   final List<LatLng>? plannedRoute;
   final WalkProgressCallback? onProgress;
-  
 
   @override
   State<WalkInProgress> createState() => _WalkInProgressState();
@@ -163,27 +154,28 @@ class _WalkInProgressState extends State<WalkInProgress> {
       distanceFilter: 5, // update every 5 meters to save battery
     );
 
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
-    ).listen((Position position) {
-      if (_isPaused || !mounted) return;
-      final newPoint = LatLng(position.latitude, position.longitude);
+    _positionStream =
+        Geolocator.getPositionStream(locationSettings: locationSettings).listen(
+          (Position position) {
+            if (_isPaused || !mounted) return;
+            final newPoint = LatLng(position.latitude, position.longitude);
 
-      setState(() {
-        if (_polylinePoints.isNotEmpty) {
-          final distance = Geolocator.distanceBetween(
-            _polylinePoints.last.latitude,
-            _polylinePoints.last.longitude,
-            newPoint.latitude,
-            newPoint.longitude,
-          );
-          _totalDistance += distance;
-        }
-        _polylinePoints.add(newPoint);
-      });
-      _publishProgress();
-      _mapController?.animateCamera(CameraUpdate.newLatLng(newPoint));
-    });
+            setState(() {
+              if (_polylinePoints.isNotEmpty) {
+                final distance = Geolocator.distanceBetween(
+                  _polylinePoints.last.latitude,
+                  _polylinePoints.last.longitude,
+                  newPoint.latitude,
+                  newPoint.longitude,
+                );
+                _totalDistance += distance;
+              }
+              _polylinePoints.add(newPoint);
+            });
+            _publishProgress();
+            _mapController?.animateCamera(CameraUpdate.newLatLng(newPoint));
+          },
+        );
   }
 
   void _togglePause() {
@@ -207,7 +199,6 @@ class _WalkInProgressState extends State<WalkInProgress> {
       setState(() => _photo = image);
     }
   }
-
 
   void _finishWalk() {
     _timer?.cancel();
@@ -237,11 +228,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
   }
 
   Set<Polyline> get _polylines {
+    final colors = VitailColors.of(context);
     final polylines = <Polyline>{
       Polyline(
         polylineId: const PolylineId('walk_route'),
         points: _polylinePoints,
-        color: _kCoral,
+        color: colors.coral,
         width: 6,
       ),
     };
@@ -252,7 +244,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
         Polyline(
           polylineId: const PolylineId('planned_route'),
           points: widget.plannedRoute!,
-          color: Colors.black45,
+          color: colors.isDark ? Colors.white54 : Colors.black45,
           width: 4,
           patterns: [PatternItem.dash(14), PatternItem.gap(10)],
         ),
@@ -292,6 +284,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
       northeast: LatLng(maxLat, maxLng),
     );
   }
+
   void _publishProgress() {
     final progress = WalkProgress(
       elapsedSeconds: _elapsedSeconds,
@@ -303,16 +296,19 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = VitailColors.of(context);
     return Scaffold(
-      backgroundColor: _kPageBg,
+      backgroundColor: colors.card,
       body: Stack(
         children: [
           // Map fills the whole screen; the sheet slides over it.
           Positioned.fill(
             child: GoogleMap(
+              style: vitailMapStyle(context),
               onMapCreated: (c) {
                 _mapController = c;
-                if (widget.plannedRoute != null && widget.plannedRoute!.length >= 2) {
+                if (widget.plannedRoute != null &&
+                    widget.plannedRoute!.length >= 2) {
                   final bounds = _boundsFor(widget.plannedRoute!);
                   Future.delayed(const Duration(milliseconds: 300), () {
                     _mapController?.animateCamera(
@@ -321,8 +317,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                   });
                 }
               },
-              initialCameraPosition:
-                  const CameraPosition(target: _melbourne, zoom: 16.0),
+              initialCameraPosition: const CameraPosition(
+                target: _melbourne,
+                zoom: 16.0,
+              ),
               myLocationEnabled: true,
               myLocationButtonEnabled: false,
               polylines: _polylines,
@@ -334,33 +332,40 @@ class _WalkInProgressState extends State<WalkInProgress> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4.0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const VitailIcon('chevron-left',
-                        size: 28, color: _kInk),
-                    onPressed: () {
-                      if (_isWalking) {
-                        Navigator.of(context).pushNamed('/active-walk-home');
-                      } else {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                  ),
-                  Expanded(
-                    child: Text(
-                      _title,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: _kInk,
-                        fontFamily: 'PlusJakartaSans',
+              child: Material(
+                color: colors.card,
+                borderRadius: BorderRadius.circular(24),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: VitailIcon(
+                        'chevron-left',
+                        size: 28,
+                        color: colors.ink,
+                      ),
+                      onPressed: () {
+                        if (_isWalking) {
+                          Navigator.of(context).pushNamed('/active-walk-home');
+                        } else {
+                          Navigator.of(context).pop();
+                        }
+                      },
+                    ),
+                    Expanded(
+                      child: Text(
+                        _title,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: colors.ink,
+                          fontFamily: 'PlusJakartaSans',
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
+                    const SizedBox(width: 48),
+                  ],
+                ),
               ),
             ),
           ),
@@ -375,8 +380,8 @@ class _WalkInProgressState extends State<WalkInProgress> {
             snapSizes: const [0.28, 0.62, 0.92],
             builder: (context, scrollController) {
               return Container(
-                decoration: const BoxDecoration(
-                  color: _kPageBg,
+                decoration: BoxDecoration(
+                  color: colors.card,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                   boxShadow: [
                     BoxShadow(
@@ -397,7 +402,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         height: 5,
                         margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
-                          color: _kBorder,
+                          color: colors.border,
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
@@ -413,10 +418,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             curve: Curves.easeOut,
                           );
                         },
-                        child: const Text(
+                        child: Text(
                           'LIVE MAP',
                           style: TextStyle(
-                            color: _kBlue,
+                            color: colors.blue,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.5,
                           ),
@@ -429,7 +434,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     Row(
                       children: [
                         Expanded(
-                          child: _StatCard(label: 'TIME', value: _formattedTime),
+                          child: _StatCard(
+                            label: 'TIME',
+                            value: _formattedTime,
+                          ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -445,9 +453,11 @@ class _WalkInProgressState extends State<WalkInProgress> {
                     // Goal progress card
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
                       decoration: BoxDecoration(
-                        color: _kCardBg,
+                        color: colors.softCard,
                         borderRadius: BorderRadius.circular(18),
                       ),
                       child: Column(
@@ -455,10 +465,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         children: [
                           Text(
                             '${_elapsedSeconds ~/ 60} / $_goalMinutes min',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w600,
-                              color: _kInk,
+                              color: colors.ink,
                               fontFamily: 'PlusJakartaSans',
                             ),
                           ),
@@ -468,9 +478,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             child: LinearProgressIndicator(
                               value: _progress,
                               minHeight: 6,
-                              backgroundColor: _kBorder,
-                              valueColor:
-                                  const AlwaysStoppedAnimation<Color>(_kCoral),
+                              backgroundColor: colors.border,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                colors.coral,
+                              ),
                             ),
                           ),
                         ],
@@ -481,7 +492,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
 
                     // Hygiene log for this dog
                     if (widget.dog != null) ...[
-                      const Row(
+                      Row(
                         children: [
                           Expanded(
                             child: Text(
@@ -489,7 +500,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: _kMuted,
+                                color: colors.muted,
                                 letterSpacing: 0.6,
                                 fontFamily: 'PlusJakartaSans',
                               ),
@@ -503,7 +514,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: _kMuted,
+                                color: colors.muted,
                                 letterSpacing: 0.6,
                                 fontFamily: 'PlusJakartaSans',
                               ),
@@ -517,7 +528,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: _kMuted,
+                                color: colors.muted,
                                 letterSpacing: 0.6,
                                 fontFamily: 'PlusJakartaSans',
                               ),
@@ -526,104 +537,113 @@ class _WalkInProgressState extends State<WalkInProgress> {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      Builder(builder: (context) {
-                        final name = widget.dog!['dog_name'] ?? 'Dog';
-                        final breed = widget.dog!['breed'] ?? 'Unknown';
-                        final photoUrl = widget.dog!['photo_url'];
-                        final peeDone = _hygiene['pee'] ?? false;
-                        final pooDone = _hygiene['poo'] ?? false;
+                      Builder(
+                        builder: (context) {
+                          final name = widget.dog!['dog_name'] ?? 'Dog';
+                          final breed = widget.dog!['breed'] ?? 'Unknown';
+                          final photoUrl = widget.dog!['photo_url'];
+                          final peeDone = _hygiene['pee'] ?? false;
+                          final pooDone = _hygiene['poo'] ?? false;
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: _kCardBg,
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: _kAvatarBg,
-                                backgroundImage: photoUrl != null &&
-                                        photoUrl.toString().isNotEmpty
-                                    ? CachedNetworkImageProvider(photoUrl)
-                                    : null,
-                                child: photoUrl == null
-                                  ? const VitailIcon('paw-print', color: _kMuted)
-                                  : null,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 15,
-                                        color: _kInk,
-                                        fontFamily: 'PlusJakartaSans',
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colors.softCard,
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 20,
+                                  backgroundColor: colors.avatar,
+                                  backgroundImage:
+                                      photoUrl != null &&
+                                          photoUrl.toString().isNotEmpty
+                                      ? CachedNetworkImageProvider(photoUrl)
+                                      : null,
+                                  child: photoUrl == null
+                                      ? VitailIcon(
+                                          'paw-print',
+                                          color: colors.muted,
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 15,
+                                          color: colors.ink,
+                                          fontFamily: 'PlusJakartaSans',
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      breed,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: _kMuted,
-                                        fontFamily: 'PlusJakartaSans',
+                                      Text(
+                                        breed,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: colors.muted,
+                                          fontFamily: 'PlusJakartaSans',
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              SizedBox(
-                                width: 70,
-                                child: _HygieneButton(
-                                  label: 'PEE',
-                                  active: peeDone,
-                                  onTap: () => _toggleHygiene('pee'),
+                                SizedBox(
+                                  width: 70,
+                                  child: _HygieneButton(
+                                    label: 'PEE',
+                                    active: peeDone,
+                                    onTap: () => _toggleHygiene('pee'),
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                width: 70,
-                                child: _HygieneButton(
-                                  label: 'POO',
-                                  active: pooDone,
-                                  onTap: () => _toggleHygiene('poo'),
+                                const SizedBox(width: 8),
+                                SizedBox(
+                                  width: 70,
+                                  child: _HygieneButton(
+                                    label: 'POO',
+                                    active: pooDone,
+                                    onTap: () => _toggleHygiene('poo'),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                       const SizedBox(height: 8),
                     ],
 
-
-
-
-
                     // Add photo
-                    _PhotoPicker(photo: _photo, onPick: _pickPhoto, onClear: () {
-                      setState(() => _photo = null);
-                    }),
+                    _PhotoPicker(
+                      photo: _photo,
+                      onPick: _pickPhoto,
+                      onClear: () {
+                        setState(() => _photo = null);
+                      },
+                    ),
                     const SizedBox(height: 20),
 
                     // Note
                     Text(
                       'NOTE',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: _kMuted,
+                        color: colors.muted,
                         letterSpacing: 0.6,
                         fontFamily: 'PlusJakartaSans',
                       ),
@@ -633,23 +653,27 @@ class _WalkInProgressState extends State<WalkInProgress> {
                       controller: _noteController,
                       decoration: InputDecoration(
                         hintText: 'Walk note...',
-                        hintStyle: const TextStyle(
-                            color: _kMuted, fontFamily: 'PlusJakartaSans'),
+                        hintStyle: TextStyle(
+                          color: colors.muted,
+                          fontFamily: 'PlusJakartaSans',
+                        ),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: colors.card,
                         contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: _kBorder),
+                          borderSide: BorderSide(color: colors.border),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: _kBorder),
+                          borderSide: BorderSide(color: colors.border),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: _kCoral),
+                          borderSide: BorderSide(color: colors.coral),
                         ),
                       ),
                     ),
@@ -664,7 +688,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             child: OutlinedButton(
                               onPressed: _togglePause,
                               style: OutlinedButton.styleFrom(
-                                backgroundColor: _kCardBg,
+                                backgroundColor: colors.softCard,
                                 side: BorderSide.none,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(26),
@@ -672,10 +696,10 @@ class _WalkInProgressState extends State<WalkInProgress> {
                               ),
                               child: Text(
                                 _isPaused ? 'Resume' : 'Pause',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: _kInk,
+                                  color: colors.ink,
                                   fontFamily: 'PlusJakartaSans',
                                 ),
                               ),
@@ -689,7 +713,7 @@ class _WalkInProgressState extends State<WalkInProgress> {
                             child: ElevatedButton(
                               onPressed: _finishWalk,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: _kCoral,
+                                backgroundColor: colors.coral,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
@@ -728,20 +752,21 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = VitailColors.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
-        color: _kCardBg,
+        color: colors.softCard,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: _kMuted,
+              color: colors.muted,
               letterSpacing: 0.6,
               fontFamily: 'PlusJakartaSans',
             ),
@@ -749,10 +774,10 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
-              color: _kInk,
+              color: colors.ink,
               fontFamily: 'PlusJakartaSans',
             ),
           ),
@@ -775,17 +800,16 @@ class _HygieneButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = VitailColors.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? _kCoral : Colors.white,
+          color: active ? colors.coral : colors.card,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: active ? _kCoral : _kBorder,
-          ),
+          border: Border.all(color: active ? colors.coral : colors.border),
         ),
         child: Text(
           label,
@@ -793,7 +817,7 @@ class _HygieneButton extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: active ? Colors.white : _kInk,
+            color: active ? Colors.white : colors.ink,
             fontFamily: 'PlusJakartaSans',
           ),
         ),
@@ -815,6 +839,7 @@ class _PhotoPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = VitailColors.of(context);
     if (photo == null) {
       return InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -823,16 +848,17 @@ class _PhotoPicker extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: Color(0xFFF9F7F3),
+            color: colors.softCard,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Center(
+          child: Center(
             child: Text(
               '+ Add photo',
               style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: _kMuted,
-                  fontFamily: 'PlusJakartaSans'),
+                fontWeight: FontWeight.w600,
+                color: colors.muted,
+                fontFamily: 'PlusJakartaSans',
+              ),
             ),
           ),
         ),

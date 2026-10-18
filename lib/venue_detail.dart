@@ -15,7 +15,6 @@ import 'exercise_data.dart';
 import 'venue_walk.dart';
 import 'detail_image_header.dart';
 import 'vitail_snack.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 typedef WalkingRouteDistanceEstimator =
     Future<double?> Function(LatLng origin, LatLng destination);
@@ -220,14 +219,12 @@ class VenueDetailScreen extends StatefulWidget {
     this.onCheckRewards,
     this.rewardsRepository,
     this.venueLoader = loadRewardVenues,
-    this.routeDistanceEstimator,
   });
 
   final RewardsRepository? rewardsRepository;
   final Future<List<VenueInfo>> Function() venueLoader;
   final VoidCallback? onCheckRewards;
   final VenueInfo venue;
-  final Future<double?> Function()? dailyGoalKmLoader;
 
   /// The user's position if the caller already has it. If null, this screen
   /// looks it up itself so the distance still fills in.
@@ -246,10 +243,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   bool _locating = false;
   bool _startingWalk = false;
   bool _loadingReward = false;
-  bool _estimatingRoute = false;
-  bool _routeEstimateUnavailable = false;
-  double? _routeDistanceMeters;
-  int _routeRequestId = 0;
 
   Future<void> _checkRewards() async {
     if (_loadingReward) return;
@@ -306,7 +299,8 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
           'Could not load rewards. Please try CHECK REWARDS again.',
           type: VitailSnackType.error,
         );
-    }} finally {
+      }
+    } finally {
       if (mounted) setState(() => _loadingReward = false);
     }
   }
@@ -315,7 +309,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   void initState() {
     super.initState();
     _userLocation = widget.userLocation;
-    _loadDailyWalkGoal();
     if (_userLocation == null) {
       _locating = true;
       _locateUser();
@@ -454,9 +447,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
-    final points = _routeDistanceMeters == null
+    final distanceMeters = venue.distanceMetersFrom(_userLocation);
+    final points = distanceMeters == null
         ? null
-        : ExerciseCalculator.pointsForDistanceMeters(_routeDistanceMeters!);
+        : ExerciseCalculator.pointsForDistanceMeters(distanceMeters);
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -539,9 +533,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     children: [
                       Text(
                         points == null
-                            ? (_estimatingRoute
-                                  ? 'Calculating route points…'
-                                  : 'Route points unavailable')
+                            ? (_locating
+                                  ? 'Calculating points…'
+                                  : 'Points unavailable')
                             : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
                         style: TextStyle(
                           fontSize: 22,
@@ -552,16 +546,12 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       const SizedBox(height: 6),
                       Text(
                         points != null
-                            ? 'Estimated from a walking route to this venue; actual points may vary.'
-                            : _estimatingRoute
-                            ? 'Estimating points from a walking route.'
-                            : _routeEstimateUnavailable
-                            ? 'Walking route could not be estimated.'
+                            ? 'Estimated from your distance to this venue.'
                             : _locating
-                            ? 'Locating you to estimate the walking route.'
+                            ? 'Locating you to estimate points.'
                             : venue.location == null
                             ? 'This venue location is unavailable.'
-                            : 'Enable location to estimate route points for this venue.',
+                            : 'Enable location to estimate points for this venue.',
                         style: TextStyle(
                           fontSize: 13,
                           color: colors.onSurfaceVariant,
@@ -631,52 +621,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     color: colors.onSurfaceVariant,
                   ),
                 ),
-                if (!_loadingDailyGoal) ...[
-                  const SizedBox(height: 24),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 22,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          points == null
-                              ? 'Walk goal unavailable'
-                              : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w600,
-                            color: colors.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          points == null
-                              ? 'Set a daily walk goal to estimate points.'
-                              : 'Estimated from your daily walk goal.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: colors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ]),
             ),
           ),

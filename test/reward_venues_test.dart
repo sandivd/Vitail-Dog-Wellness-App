@@ -26,10 +26,8 @@ RewardOffer offer({String? id, String name = 'Other'}) => RewardOffer(
 );
 
 void main() {
-  testWidgets('venue points estimate uses each walking route distance', (
-    tester,
-  ) async {
-    Future<void> openVenue(double longitude, double routeDistanceMeters) async {
+  testWidgets('venue points estimate uses each venue distance', (tester) async {
+    Future<void> openVenue(double longitude) async {
       await tester.pumpWidget(
         MaterialApp(
           home: VenueDetailScreen(
@@ -41,25 +39,22 @@ void main() {
               'points': 999,
             }),
             userLocation: const LatLng(0, 0),
-            routeDistanceEstimator: (_, _) async => routeDistanceMeters,
           ),
         ),
       );
       await tester.pumpAndSettle();
     }
 
-    await openVenue(0.01, 1200);
-    expect(find.text('+ 12 pts'), findsOneWidget);
+    await openVenue(0.01);
+    expect(find.text('+ 11 pts'), findsOneWidget);
     expect(find.text('+ 999 pts'), findsNothing);
     expect(
-      find.text(
-        'Estimated from a walking route to this venue; actual points may vary.',
-      ),
+      find.text('Estimated from your distance to this venue.'),
       findsOneWidget,
     );
 
-    await openVenue(0.02, 2400);
-    expect(find.text('+ 24 pts'), findsOneWidget);
+    await openVenue(0.02);
+    expect(find.text('+ 22 pts'), findsOneWidget);
   });
 
   testWidgets('Explore opens all venue offers and Back returns to venue', (

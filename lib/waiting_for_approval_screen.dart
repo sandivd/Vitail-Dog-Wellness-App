@@ -19,6 +19,8 @@ class WaitingForApprovalScreen extends StatefulWidget {
 }
 
 class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
+  OnboardingStyle get _style => OnboardingStyle.of(context);
+
   Timer? _timer;
   late String _status = widget.request.status;
   bool _leaving = false;
@@ -91,34 +93,43 @@ class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
         Center(
           child: OnboardingBadge(
             icon: declined ? 'x' : 'clock',
-            color: declined ? OnboardingStyle.coral : null,
+            color: declined ? _style.coral : null,
           ),
         ),
         const SizedBox(height: 32),
         if (!declined) ...[
-          const Center(
+          Center(
             child: SizedBox(
               width: 22,
               height: 22,
               child: CircularProgressIndicator(
-                  strokeWidth: 2.5, color: OnboardingStyle.coral),
+                strokeWidth: 2.5,
+                color: _style.coral,
+              ),
             ),
           ),
           const SizedBox(height: 24),
           Center(
             child: TextButton(
               onPressed: _leaving ? null : _leave,
-              child: Text('Cancel request',
-                  style: OnboardingStyle.text(13,
-                      color: OnboardingStyle.muted, weight: FontWeight.w500)),
+              child: Text(
+                'Cancel request',
+                style: _style.text(
+                  13,
+                  color: _style.muted,
+                  weight: FontWeight.w500,
+                ),
+              ),
             ),
           ),
         ] else
           ElevatedButton(
             onPressed: _leaving ? null : _leave,
-            style: OnboardingStyle.primaryButton,
-            child: Text('Back to log in',
-                style: OnboardingStyle.text(16, color: Colors.white)),
+            style: _style.primaryButton,
+            child: Text(
+              'Back to log in',
+              style: _style.text(16, color: Colors.white),
+            ),
           ),
       ],
     );

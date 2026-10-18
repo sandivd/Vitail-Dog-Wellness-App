@@ -4,13 +4,13 @@ import 'vitail_back_button.dart';
 import 'onboarding_style.dart';
 
 Route<T> onboardingFadeRoute<T>(Widget page) => PageRouteBuilder<T>(
-      transitionDuration: const Duration(milliseconds: 220),
-      reverseTransitionDuration: const Duration(milliseconds: 180),
-      opaque: true,
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-          FadeTransition(opacity: animation, child: child),
-    );
+  transitionDuration: const Duration(milliseconds: 220),
+  reverseTransitionDuration: const Duration(milliseconds: 180),
+  opaque: true,
+  pageBuilder: (context, animation, secondaryAnimation) => page,
+  transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+      FadeTransition(opacity: animation, child: child),
+);
 
 class OnboardingGoalAnswers {
   const OnboardingGoalAnswers({
@@ -46,6 +46,8 @@ class _GoalFlow extends StatefulWidget {
 }
 
 class _GoalFlowState extends State<_GoalFlow> {
+  OnboardingStyle get _style => OnboardingStyle.of(context);
+
   int _step = 0;
   String? _help;
   String? _matters;
@@ -91,7 +93,7 @@ class _GoalFlowState extends State<_GoalFlow> {
         if (!didPop) setState(() => _step = 0);
       },
       child: Scaffold(
-        backgroundColor: OnboardingStyle.background,
+        backgroundColor: _style.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -99,7 +101,7 @@ class _GoalFlowState extends State<_GoalFlow> {
                 height: 48,
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: VitailBackButton(onPressed: _back, color: OnboardingStyle.ink),
+                  child: VitailBackButton(onPressed: _back, color: _style.ink),
                 ),
               ),
               Expanded(
@@ -116,12 +118,12 @@ class _GoalFlowState extends State<_GoalFlow> {
                           switchOutCurve: Curves.easeIn,
                           layoutBuilder: (currentChild, previousChildren) =>
                               Stack(
-                            alignment: Alignment.topCenter,
-                            children: <Widget>[
-                              ...previousChildren,
-                              if (currentChild != null) currentChild,
-                            ],
-                          ),
+                                alignment: Alignment.topCenter,
+                                children: <Widget>[
+                                  ...previousChildren,
+                                  if (currentChild != null) currentChild,
+                                ],
+                              ),
                           child: _GoalQuestion(
                             key: ValueKey<int>(_step),
                             title: onFirstStep
@@ -130,8 +132,7 @@ class _GoalFlowState extends State<_GoalFlow> {
                             options: onFirstStep
                                 ? OnboardingGoals.helpOptions
                                 : OnboardingGoals.mattersOptions,
-                            badgeIcon:
-                                onFirstStep ? 'paw-print' : 'heart',
+                            badgeIcon: onFirstStep ? 'paw-print' : 'heart',
                             initialValue: onFirstStep ? _help : _matters,
                             onSelected: _select,
                           ),
@@ -170,6 +171,8 @@ class _GoalQuestion extends StatefulWidget {
 }
 
 class _GoalQuestionState extends State<_GoalQuestion> {
+  OnboardingStyle get _style => OnboardingStyle.of(context);
+
   static const double _titleBlockHeight = 82;
 
   String? _selected;
@@ -199,11 +202,7 @@ class _GoalQuestionState extends State<_GoalQuestion> {
             child: Text(
               widget.title,
               textAlign: TextAlign.center,
-              style: OnboardingStyle.text(
-                26,
-                weight: FontWeight.w700,
-                height: 1.3,
-              ),
+              style: _style.text(26, weight: FontWeight.w700, height: 1.3),
             ),
           ),
         ),

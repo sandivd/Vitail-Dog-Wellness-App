@@ -26,8 +26,9 @@ Future<void> main() async {
   await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseAnonKey);
 
   appPrefs = await SharedPreferences.getInstance();
-  themeNotifier.value =
-      (appPrefs.getBool('darkMode') ?? false) ? ThemeMode.dark : ThemeMode.light;
+  themeNotifier.value = (appPrefs.getBool('darkMode') ?? false)
+      ? ThemeMode.dark
+      : ThemeMode.light;
 
   await Notifications.init();
   runApp(const VitailApp());
@@ -63,17 +64,28 @@ final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.light);
 final ThemeData lightTheme = ThemeData(
   useMaterial3: true,
   fontFamily: 'PlusJakartaSans',
-  actionIconTheme: ActionIconThemeData(backButtonIconBuilder: (_) => const VitailIcon('chevron-left')),
+  actionIconTheme: ActionIconThemeData(
+    backButtonIconBuilder: (_) => const VitailIcon('chevron-left'),
+  ),
   colorScheme: const ColorScheme.light(
-    surface: Color(0xFFF4F0E9),          // Beige background
-    primary: Color(0xFFDC755C),          // Coral button
-    onSurface: Color(0xFF1E1E1E),        // Dark Ink text
+    surface: Color(0xFFF4F0E9),
+    surfaceContainerLowest: Colors.white,
+    surfaceContainerLow: Colors.white,
+    surfaceContainer: Color(0xFFF7F5F0),
+    surfaceContainerHigh: Color(0xFFE5E1DB),
+    surfaceContainerHighest: Color(0xFFF9F7F3),
+    secondaryContainer: Color(0xFFD1E8E1),
+    onSecondaryContainer: Color(0xFF211F1D),
+    tertiaryContainer: Color(0xFFEAF0D8),
+    onTertiaryContainer: Color(0xFF5A7224),
+    primary: Color(0xFFDC755C), // Coral button
+    onSurface: Color(0xFF1E1E1E), // Dark Ink text
     onSurfaceVariant: Color(0xFF7C776E), // Muted grey text
-    secondary: Color(0xFF5F98BD),        // Blue ring
-    tertiary: Color(0xFFAEC568),         // Green ring
+    secondary: Color(0xFF5F98BD), // Blue ring
+    tertiary: Color(0xFFAEC568), // Green ring
     onPrimary: Colors.white,
     outline: Color(0xFFDED2D6),
-    error: Color(0xFFB3402E),            // Warm terracotta — harmonises with the coral
+    error: Color(0xFFB3402E), // Warm terracotta — harmonises with the coral
     onError: Colors.white,
   ),
 );
@@ -81,21 +93,31 @@ final ThemeData lightTheme = ThemeData(
 final ThemeData darkTheme = ThemeData(
   useMaterial3: true,
   fontFamily: 'PlusJakartaSans',
-  actionIconTheme: ActionIconThemeData(backButtonIconBuilder: (_) => const VitailIcon('chevron-left')),
+  actionIconTheme: ActionIconThemeData(
+    backButtonIconBuilder: (_) => const VitailIcon('chevron-left'),
+  ),
   colorScheme: const ColorScheme.dark(
-    surface: Color(0xFF121212),          // True dark background
-    primary: Color(0xFFDC755C),          // Coral button (stays same)
-    onSurface: Color(0xFFF4F0E9),        // Beige text (inverted)
+    surface: Color(0xFF121212),
+    surfaceContainerLowest: Color(0xFF181818),
+    surfaceContainerLow: Color(0xFF242321),
+    surfaceContainer: Color(0xFF282828),
+    surfaceContainerHigh: Color(0xFF393632),
+    surfaceContainerHighest: Color(0xFF302E2B),
+    secondaryContainer: Color(0xFF2E3A44),
+    onSecondaryContainer: Color(0xFFD1E8E1),
+    tertiaryContainer: Color(0xFF303B24),
+    onTertiaryContainer: Color(0xFFAEC568),
+    onPrimary: Colors.white,
+    primary: Color(0xFFDC755C), // Coral button (stays same)
+    onSurface: Color(0xFFF4F0E9), // Beige text (inverted)
     onSurfaceVariant: Color(0xFFAAAAAA), // Lighter muted grey
-    secondary: Color(0xFF5F98BD),        // Blue ring
-    tertiary: Color(0xFFAEC568),         // Green ring
+    secondary: Color(0xFF5F98BD), // Blue ring
+    tertiary: Color(0xFFAEC568), // Green ring
     outline: Color(0xFF444444),
-    error: Color(0xFFF2B8B5),            // M3 dark error — soft red that reads on dark
+    error: Color(0xFFF2B8B5), // M3 dark error — soft red that reads on dark
     onError: Color(0xFF601410),
   ),
 );
-
-
 
 /// Restores the session on cold start so returning users skip the login
 /// screen, then routes to onboarding or home depending on whether they've
@@ -126,7 +148,8 @@ class _AuthGateState extends State<AuthGate> {
     // `await Supabase.initialize()`, or we pick the session up from the
     // first event on the auth stream — which always fires on subscribe,
     // carrying the restored session (or null if signed out).
-    final session = client.auth.currentSession ??
+    final session =
+        client.auth.currentSession ??
         (await client.auth.onAuthStateChange.first).session;
 
     if (!mounted) return;
@@ -205,10 +228,8 @@ class _VitailAppState extends State<VitailApp> {
           themeMode: currentMode,
           themeAnimationDuration: const Duration(milliseconds: 150),
           themeAnimationCurve: Curves.easeOut,
-          home: const VitailLaunch(child: AuthGate()),     
-          routes: {
-           '/active-walk-home': (_) => const HomeScreen(),
-         },
+          home: const VitailLaunch(child: AuthGate()),
+          routes: {'/active-walk-home': (_) => const HomeScreen()},
         );
       },
     );
