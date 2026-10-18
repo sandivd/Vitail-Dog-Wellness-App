@@ -33,6 +33,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _totalPoints = 0;
   int _dailyStreak = 0;
   bool _isLoading = true;
+  bool _activeWalkUpdateScheduled = false;
+  WalkProgress? _pendingActiveWalk;
 
   String _dogName = 'Dog';
   String? _dogPhotoUrl;
