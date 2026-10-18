@@ -15,6 +15,7 @@ import 'home_screen.dart';
 import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
 import 'vitail_snack.dart';
+import 'all_set_screen.dart';
 
 enum _View { form, verified, failed, submitted }
 
@@ -63,9 +64,12 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     if (widget.isFromProfile) {
       Navigator.pop(context, true);
     } else {
+      final String? dogId = widget.dogId;
       Navigator.pushReplacement<void, void>(
         context,
-        onboardingFadeRoute<void>(const HomeScreen()),
+        onboardingFadeRoute<void>(
+          dogId == null ? const HomeScreen() : AllSetScreen(dogId: dogId),
+        ),
       );
     }
   }
