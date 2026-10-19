@@ -114,7 +114,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
     }
   }
 
-  Future<void> _submitCertificate() async {
+    Future<void> _submitCertificate() async {
     if (_certificateFile == null) {
       showVitailSnack(
         context,
@@ -124,41 +124,59 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       return;
     }
 
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    final dogId = widget.dogId;
+    if (userId == null || dogId == null || dogId.isEmpty) {
+      showVitailSnack(
+        context,
+        'Something went wrong. Please try again.',
+        type: VitailSnackType.error,
+      );
+      return;
+    }
+
+    final ext =
+        _certificateFileName != null && _certificateFileName!.contains('.')
+        ? _certificateFileName!.split('.').last.toLowerCase()
+        : 'jpg';
+    const contentTypes = {
+      'pdf': 'application/pdf',
+      'png': 'image/png',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'heic': 'image/heic',
+    };
+    final storagePath =
+        '$userId/$dogId/${DateTime.now().millisecondsSinceEpoch}.$ext';
+
     setState(() => _isSaving = true);
     try {
-      final client = Supabase.instance.client;
-      final userId = client.auth.currentUser?.id;
-      if (userId == null) throw Exception('Not signed in');
-
-      final ext =
-          _certificateFileName != null && _certificateFileName!.contains('.')
-          ? _certificateFileName!.split('.').last.toLowerCase()
-          : 'jpg';
-      final fileName =
-          '${userId}_certificate_${DateTime.now().millisecondsSinceEpoch}.$ext';
-
-      // Upload certificate to Supabase Storage
       await client.storage
-          .from('dog_photos')
+          .from('microchip_certificates')
           .upload(
-            fileName,
+            storagePath,
             _certificateFile!,
-            fileOptions: const FileOptions(upsert: true),
+            fileOptions: FileOptions(
+              contentType: contentTypes[ext] ?? 'application/octet-stream',
+            ),
           );
-      final certUrl = client.storage.from('dog_photos').getPublicUrl(fileName);
-
-      var query = client
-          .from('dogs')
-          .update({'microchip_certificate_url': certUrl})
-          .eq('owner_id', userId);
-      if (widget.dogId != null && widget.dogId!.isNotEmpty) {
-        query = query.eq('id', widget.dogId!);
+      try {
+        await client.from('microchip_submissions').insert({
+          'dog_id': dogId,
+          'file_path': storagePath,
+        });
+      } catch (_) {
+        await client.storage
+            .from('microchip_certificates')
+            .remove([storagePath]);
+        rethrow;
       }
-      await query.select('id').single();
 
       if (!mounted) return;
       setState(() => _view = _View.submitted);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Certificate upload failed: $e');
       if (!mounted) return;
       showVitailSnack(
         context,
