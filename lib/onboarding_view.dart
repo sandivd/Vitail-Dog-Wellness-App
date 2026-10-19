@@ -563,7 +563,7 @@ class OnboardingView extends StatelessWidget {
 
                           field(
                             context,
-                            'Your activity level *',
+                            "Your dog's activity level *",
                             choiceRow(
                               context,
                               const ['Low', 'Moderate', 'High'],
