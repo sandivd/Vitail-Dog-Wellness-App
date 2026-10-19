@@ -98,7 +98,12 @@ class _WalkInProgressState extends State<WalkInProgress> {
     _timer?.cancel();
     _noteController.dispose();
     _sheetController.dispose();
-    activeWalkProgress.value = null;
+    // Defer: notifying HomeScreen's listener synchronously from dispose()
+    // lands mid-navigation when the tree is locked -> FlutterError.
+    final pendingClear = activeWalkProgress.value != null;
+    if (pendingClear) {
+      Future.microtask(() => activeWalkProgress.value = null);
+    }
     widget.onProgress?.call(null);
     super.dispose();
   }

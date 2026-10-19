@@ -1,6 +1,7 @@
 import 'vitail_icon.dart';
 import 'vitail_loading.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'walk_screen.dart';
@@ -52,9 +53,25 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchHomeData();
   }
 
+  WalkProgress? _activeWalk;
+  bool _syncScheduled = false;
+
   void _syncActiveWalk() {
     if (!mounted) return;
-    setState(() => _activeWalk = activeWalkProgress.value);
+    // ValueNotifier fires synchronously - if WalkInProgress publishes
+    // mid-build / mid-navigation the tree is locked and setState throws.
+    // Defer to next frame when locked, coalescing rapid (1s timer) ticks.
+    if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.idle) {
+      if (_syncScheduled) return;
+      _syncScheduled = true;
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        _syncScheduled = false;
+        if (!mounted) return;
+        setState(() => _activeWalk = activeWalkProgress.value);
+      });
+    } else {
+      setState(() => _activeWalk = activeWalkProgress.value);
+    }
   }
 
   @override
@@ -63,11 +80,17 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  WalkProgress? _activeWalk;
-
   void _handleWalkProgress(WalkProgress? progress) {
     if (!mounted) return;
-    setState(() => _activeWalk = progress);
+    // Same lock risk as above: callback can arrive during another build.
+    if (SchedulerBinding.instance.schedulerPhase != SchedulerPhase.idle) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(() => _activeWalk = progress);
+      });
+    } else {
+      setState(() => _activeWalk = progress);
+    }
   }
 
   Future<void> _fetchHomeData() async {
