@@ -10,19 +10,20 @@
 </div>
 
 
-> Vitail is a cross-platform mobile application designed to reward dog owners for keeping their pets healthy and active. Track your daily walks, log your dog's weight, complete weekly quests, and earn points to redeem real-world discounts from local pet-friendly businesses!
+> Vitail is a cross-platform mobile application designed to reward dog owners for keeping their pets healthy and active. Track your daily walks, log your dog's weight, and earn points to redeem real-world discounts from local pet-friendly businesses!
 
 ---
 
 ## Key Features
 
-- **Live GPS Walk Tracking:** Accurate, real-time route mapping using Google Maps SDK and the device's Fused Location Provider.
-- **Rewards & Perks System:** Earn points for every 100 metres walked and redeem them for partner vouchers and premium perks (e.g., free grooming, council fee waivers).
-- **Dynamic Weight Tracker:** Log your dog's weight history with a calendar date-picker and visualize their progress on an interactive line chart (MyFitnessPal style!).
-- **Gamification & Streaks:** Maintain daily walking streaks and complete weekly quests (e.g., "Walk 1km", "Log Weight") for bonus points.
-- **Pet-Friendly Venues:** Explore a curated list of local dog parks, beaches, and cafes with list/map toggle views.
-- **Rich Pet Profiles:** Set up your dog's profile with breed autocomplete, birthday calculation, sex selection, and upload a profile picture via Supabase Storage.
-- **Polished UI/UX:** Beautiful, modern interface featuring a dedicated settings hub, light/dark mode toggles, and native splash screens.
+- **Daily Goals & Progress:** Personalised walking goals, time and distance progress rings, points balance and daily streaks.
+- **Live GPS Walk Tracking:** Track routes, time and distance, pause and resume walks, and view live progress from Home.
+- **Walk Records & Activity History:** Browse previous walks by date and view saved routes, duration, distance, points, mood, toilet activity, notes and photos.
+- **Rewards & Coupons:** Earn walking points, redeem partner offers, manage saved coupons and collect rewards through the check-in flow.
+- **Nearby Venues:** Discover parks, vets and cafés, view venue details and start walks towards a selected destination.
+- **Dog Profiles & Care Score:** Edit dog details, photos, weight and goals, and view a care-score breakdown covering activity and recorded care information.
+- **Shared Dog Care:** Invite carers using a sharing code, approve or decline join requests and access the shared dog’s activity.
+- **Reminders & Settings:** Set daily walking reminders, switch between light and dark modes, export personal data and manage account settings.
 
 ---
 
