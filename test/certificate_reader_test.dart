@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vitail/certificate_layout.dart';
 import 'package:vitail/certificate_reader.dart';
 
 const String registryText = '''
@@ -29,6 +30,21 @@ Expiry Date: 09-Apr-2026
 ''';
 
 final DateTime today = DateTime(2026, 10, 25);
+
+const List<List<String>> councilRows = <List<String>>[
+  <String>['Animal ID', '500001'],
+  <String>['Animal Type', 'Dog'],
+  <String>['Animal Name', 'Der'],
+  <String>['Classification', '1. Domestic Standard Dog'],
+  <String>['Primary Breed', 'Airedale Terrier'],
+  <String>['Colour', 'Black and Tan'],
+  <String>['Microchip No.', '900012345678901'],
+  <String>['Tag Number', '200001'],
+  <String>['Date of Birth', '06-Oct-2026'],
+];
+
+const String councilHeader =
+    'Animal Registration Certificate\nCity of Testhaven\nREGISTRATION DETAILS\n';
 
 void main() {
   test('reads a matching registry certificate with no issues', () {
@@ -198,5 +214,57 @@ void main() {
     expect(reading.microchipNumber, isNull);
     expect(reading.issues, contains(CertificateIssue.noMicrochipFound));
     expect(reading.canSubmit, isTrue);
+  });
+
+  test('column layout read out of order gives no false name or breed warnings', () {
+    final String columns = councilHeader +
+        councilRows.map((List<String> row) => row[0]).join('\n') +
+        '\n' +
+        councilRows.map((List<String> row) => row[1]).join('\n');
+    final CertificateReading reading = readCertificateText(
+      columns,
+      dogName: 'Der',
+      dogBreed: 'Airedale Terrier',
+      dogBirthday: DateTime(2026, 10, 6),
+      today: today,
+    );
+    expect(reading.microchipNumber, '900012345678901');
+    expect(reading.animalName, isNull);
+    expect(reading.breed, isNull);
+    expect(reading.issues, isEmpty);
+  });
+
+  test('joinTextRows puts each label next to its value', () {
+    final List<OcrLine> lines = <OcrLine>[
+      for (int i = 0; i < councilRows.length; i++)
+        OcrLine(councilRows[i][0], 40, 300.0 + i * 32, 160, 318.0 + i * 32),
+      for (int i = 0; i < councilRows.length; i++)
+        OcrLine(councilRows[i][1], 200, 304.0 + i * 32, 420, 322.0 + i * 32),
+      const OcrLine('COPP Certificate Of Registration', 760, 20, 776, 400),
+    ];
+    final String joined = joinTextRows(lines);
+    expect(joined.split('\n'), contains('Animal Name   Der'));
+    expect(joined, isNot(contains('COPP')));
+
+    final CertificateReading reading = readCertificateText(
+      councilHeader + joined,
+      dogName: 'Der',
+      dogBreed: 'Airedale Terrier',
+      dogBirthday: DateTime(2026, 10, 6),
+      today: today,
+    );
+    expect(reading.animalName, 'Der');
+    expect(reading.breed, 'Airedale Terrier');
+    expect(reading.dateOfBirth, DateTime(2026, 10, 6));
+    expect(reading.isDog, isTrue);
+    expect(reading.issues, isEmpty);
+  });
+
+  test('joinTextRows keeps paragraph lines separate', () {
+    final String joined = joinTextRows(const <OcrLine>[
+      OcrLine('Please check we have recorded', 40, 600, 500, 618),
+      OcrLine('your pet details correctly.', 40, 622, 480, 640),
+    ]);
+    expect(joined.split('\n'), hasLength(2));
   });
 }

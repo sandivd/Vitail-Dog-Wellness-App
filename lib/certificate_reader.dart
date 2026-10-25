@@ -419,10 +419,52 @@ String? _valueAfter(List<String> lines, RegExp label) {
     final String rest =
         lines[i].substring(match.end).replaceFirst(RegExp(r'^[\s:.\-]+'), '');
     if (rest.isNotEmpty) return rest;
-    if (i + 1 < lines.length) return lines[i + 1];
+    if (i + 1 < lines.length && !_looksLikeLabel(lines[i + 1])) {
+      return lines[i + 1];
+    }
+    return null;
   }
   return null;
 }
+
+const Set<String> _commonLabels = {
+  'animal id',
+  'animal type',
+  'animal name',
+  'pet name',
+  'dog name',
+  'name',
+  'species',
+  'classification',
+  'breed',
+  'primary breed',
+  'secondary breed',
+  'colour',
+  'color',
+  'markings',
+  'microchip',
+  'microchip no',
+  'microchip number',
+  'tag number',
+  'tag no',
+  'date of birth',
+  'dob',
+  'gender',
+  'sex',
+  'desexed',
+  'owner',
+  'owner name',
+  'location',
+  'address',
+  'issue date',
+  'expiry',
+  'expiry date',
+  'date',
+  'registration number',
+  'account number',
+};
+
+bool _looksLikeLabel(String line) => _commonLabels.contains(_normalise(line));
 
 bool? _isDog(String? value) {
   if (value == null) return null;

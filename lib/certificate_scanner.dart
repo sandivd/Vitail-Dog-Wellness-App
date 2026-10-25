@@ -4,6 +4,8 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
 
+import 'certificate_layout.dart';
+
 Future<String> extractCertificateText(String path, {String? fileName}) async {
   final bool isPdf =
       (fileName ?? path).toLowerCase().endsWith('.pdf');
@@ -17,7 +19,18 @@ Future<String> extractCertificateText(String path, {String? fileName}) async {
     for (final String imagePath in imagePaths) {
       final RecognizedText result =
           await recognizer.processImage(InputImage.fromFilePath(imagePath));
-      text.writeln(result.text);
+      final List<OcrLine> lines = <OcrLine>[
+        for (final TextBlock block in result.blocks)
+          for (final TextLine line in block.lines)
+            OcrLine(
+              line.text,
+              line.boundingBox.left,
+              line.boundingBox.top,
+              line.boundingBox.right,
+              line.boundingBox.bottom,
+            ),
+      ];
+      text.writeln(lines.isEmpty ? result.text : joinTextRows(lines));
     }
     return text.toString();
   } finally {
