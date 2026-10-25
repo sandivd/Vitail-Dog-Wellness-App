@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'dog_sharing.dart';
 import 'vitail_snack.dart';
@@ -12,21 +13,41 @@ class JoinRequestsBanner extends StatefulWidget {
   State<JoinRequestsBanner> createState() => _JoinRequestsBannerState();
 }
 
-class _JoinRequestsBannerState extends State<JoinRequestsBanner> {
+class _JoinRequestsBannerState extends State<JoinRequestsBanner>
+    with WidgetsBindingObserver {
   List<JoinRequest> _requests = const <JoinRequest>[];
   final Set<String> _busy = <String>{};
   Timer? _timer;
+  RealtimeChannel? _channel;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
     _timer = Timer.periodic(const Duration(seconds: 15), (_) => _load());
+    _channel = Supabase.instance.client
+        .channel('join-requests-${identityHashCode(this)}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'dog_join_requests',
+          callback: (_) => _load(),
+        )
+        .subscribe();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
+    final RealtimeChannel? channel = _channel;
+    if (channel != null) Supabase.instance.client.removeChannel(channel);
     super.dispose();
   }
 

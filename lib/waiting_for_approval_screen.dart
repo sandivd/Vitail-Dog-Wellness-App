@@ -18,10 +18,12 @@ class WaitingForApprovalScreen extends StatefulWidget {
       _WaitingForApprovalScreenState();
 }
 
-class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
+class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen>
+    with WidgetsBindingObserver {
   OnboardingStyle get _style => OnboardingStyle.of(context);
 
   Timer? _timer;
+  RealtimeChannel? _channel;
   late String _status = widget.request.status;
   bool _leaving = false;
 
@@ -31,13 +33,42 @@ class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
     if (_status == 'approved') {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openHome());
     } else if (_status == 'pending') {
+      WidgetsBinding.instance.addObserver(this);
       _timer = Timer.periodic(const Duration(seconds: 4), (_) => _check());
+      _channel = Supabase.instance.client
+          .channel('join-request-${widget.request.id}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.update,
+            schema: 'public',
+            table: 'dog_join_requests',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'id',
+              value: widget.request.id,
+            ),
+            callback: (_) => _check(),
+          )
+          .subscribe();
     }
   }
 
   @override
-  void dispose() {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _status == 'pending') _check();
+  }
+
+  void _stopListening() {
     _timer?.cancel();
+    _timer = null;
+    final RealtimeChannel? channel = _channel;
+    _channel = null;
+    if (channel != null) Supabase.instance.client.removeChannel(channel);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopListening();
     super.dispose();
   }
 
@@ -46,7 +77,7 @@ class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
       final String? status = await joinRequestStatus(widget.request.id);
       if (!mounted || status == null || status == _status) return;
       setState(() => _status = status);
-      if (status != 'pending') _timer?.cancel();
+      if (status != 'pending') _stopListening();
       if (status == 'approved') _openHome();
     } catch (e) {
       debugPrint('Status check failed: ${e.runtimeType}');
@@ -64,7 +95,7 @@ class _WaitingForApprovalScreenState extends State<WaitingForApprovalScreen> {
   Future<void> _leave() async {
     if (_leaving) return;
     setState(() => _leaving = true);
-    _timer?.cancel();
+    _stopListening();
     try {
       if (_status == 'pending') await cancelJoinRequest(widget.request.id);
       await Supabase.instance.client.auth.signOut();
