@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'vitail_map_style.dart';
 import 'vitail_icon.dart';
 import 'package:flutter/material.dart';
@@ -9,11 +11,13 @@ import 'venue_detail.dart';
 import 'walk_in_progress.dart';
 import 'vitail_snack.dart';
 import 'dog_sharing.dart';
+import 'walking_route.dart';
 
 class WalkScreen extends StatefulWidget {
-  const WalkScreen({super.key, this.onProgress});
+  const WalkScreen({super.key, this.onProgress, this.routeDistanceEstimator});
 
   final WalkProgressCallback? onProgress;
+  final WalkingRouteDistanceEstimator? routeDistanceEstimator;
 
   @override
   State<WalkScreen> createState() => _WalkScreenState();
@@ -38,16 +42,21 @@ class _WalkScreenState extends State<WalkScreen> {
 
   LatLng? _currentPosition;
   LatLng? _droppedPin;
+  double? _pinRouteDistanceMeters;
+  bool _estimatingPinRoute = false;
+  int _pinRouteRequestId = 0;
 
   bool _isStartingWalk = false;
 
   // Partner venues loaded from the Supabase 'partnered_venues' table.
   List<VenueInfo> _nearbyVenues = [];
+  final Map<String, double> _venueRouteDistances = {};
+  final Set<String> _venueRouteEstimatesComplete = {};
+  final Set<String> _venueRouteEstimatesInProgress = {};
   bool _loadingVenues = true;
   String? _venueError;
 
-  /// Venues matching the search box, nearest first. Until the user's location
-  /// is known (or for venues without coordinates) they fall back to A–Z.
+  /// Venues matching the search box, nearest first by walking-route distance.
   List<VenueInfo> get _visibleVenues {
     final query = _searchController.text.trim().toLowerCase();
     final matches = query.isEmpty
@@ -57,8 +66,8 @@ class _WalkScreenState extends State<WalkScreen> {
               .toList();
 
     matches.sort((a, b) {
-      final distanceA = a.distanceMetersFrom(_currentPosition);
-      final distanceB = b.distanceMetersFrom(_currentPosition);
+      final distanceA = _venueRouteDistances[_venueRouteKey(a)];
+      final distanceB = _venueRouteDistances[_venueRouteKey(b)];
       if (distanceA != null && distanceB != null) {
         final byDistance = distanceA.compareTo(distanceB);
         if (byDistance != 0) return byDistance;
@@ -107,6 +116,9 @@ class _WalkScreenState extends State<WalkScreen> {
         _currentPosition = LatLng(position.latitude, position.longitude);
       });
       _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
+      _loadNearbyVenueRouteEstimates();
+      final droppedPin = _droppedPin;
+      if (droppedPin != null) _estimatePinRoute(_currentPosition!, droppedPin);
     } catch (_) {
       // Keep the default camera position if location isn't available yet.
     }
@@ -129,6 +141,7 @@ class _WalkScreenState extends State<WalkScreen> {
         _venueError = null;
         _loadingVenues = false;
       });
+      _loadNearbyVenueRouteEstimates();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -152,10 +165,76 @@ class _WalkScreenState extends State<WalkScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            VenueDetailScreen(venue: venue, userLocation: _currentPosition),
+        builder: (_) => VenueDetailScreen(
+          venue: venue,
+          userLocation: _currentPosition,
+          routeDistanceEstimator: (origin, destination) async {
+            final key = _venueRouteKey(venue);
+            if (_venueRouteEstimatesComplete.contains(key)) {
+              return _venueRouteDistances[key];
+            }
+            return _estimateWalkingRoute(origin, destination);
+          },
+        ),
       ),
     );
+  }
+
+  String _venueRouteKey(VenueInfo venue) {
+    final location = venue.location;
+    return '${venue.partnerId}|${location?.latitude}|${location?.longitude}';
+  }
+
+  Future<double?> _estimateWalkingRoute(LatLng origin, LatLng destination) {
+    final estimator =
+        widget.routeDistanceEstimator ?? estimateWalkingRouteDistance;
+    return estimator(origin, destination);
+  }
+
+  void _loadNearbyVenueRouteEstimates() {
+    final origin = _currentPosition;
+    if (origin == null) return;
+
+    for (final venue in _nearbyVenues) {
+      final destination = venue.location;
+      if (destination == null) continue;
+      final key = _venueRouteKey(venue);
+      if (_venueRouteEstimatesComplete.contains(key) ||
+          _venueRouteEstimatesInProgress.contains(key)) {
+        continue;
+      }
+      _venueRouteEstimatesInProgress.add(key);
+      unawaited(_estimateVenueRoute(venue, origin, destination, key));
+    }
+  }
+
+  Future<void> _estimateVenueRoute(
+    VenueInfo venue,
+    LatLng origin,
+    LatLng destination,
+    String key,
+  ) async {
+    try {
+      final distanceMeters = await _estimateWalkingRoute(origin, destination);
+      if (distanceMeters == null ||
+          !distanceMeters.isFinite ||
+          distanceMeters < 0) {
+        throw StateError('Walking route service returned no valid distance.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _venueRouteDistances[key] = distanceMeters;
+        _venueRouteEstimatesInProgress.remove(key);
+        _venueRouteEstimatesComplete.add(key);
+      });
+    } catch (error) {
+      debugPrint('Could not estimate route to ${venue.name}: $error');
+      if (!mounted) return;
+      setState(() {
+        _venueRouteEstimatesInProgress.remove(key);
+        _venueRouteEstimatesComplete.add(key);
+      });
+    }
   }
 
   void _recenter() {
@@ -169,8 +248,34 @@ class _WalkScreenState extends State<WalkScreen> {
   void _dropPinAt(LatLng point) {
     setState(() {
       _droppedPin = point;
+      _pinRouteDistanceMeters = null;
     });
+    final origin = _currentPosition;
+    if (origin != null) _estimatePinRoute(origin, point);
     _mapController?.animateCamera(CameraUpdate.newLatLng(point));
+  }
+
+  Future<void> _estimatePinRoute(LatLng origin, LatLng destination) async {
+    final requestId = ++_pinRouteRequestId;
+    setState(() => _estimatingPinRoute = true);
+    try {
+      final distanceMeters = await _estimateWalkingRoute(origin, destination);
+      if (distanceMeters == null ||
+          !distanceMeters.isFinite ||
+          distanceMeters < 0) {
+        throw StateError('Walking route service returned no valid distance.');
+      }
+      if (!mounted || requestId != _pinRouteRequestId) return;
+      setState(() => _pinRouteDistanceMeters = distanceMeters);
+    } catch (error) {
+      debugPrint('Could not estimate route to selected map point: $error');
+      if (!mounted || requestId != _pinRouteRequestId) return;
+      setState(() => _pinRouteDistanceMeters = null);
+    } finally {
+      if (mounted && requestId == _pinRouteRequestId) {
+        setState(() => _estimatingPinRoute = false);
+      }
+    }
   }
 
   void _onSearchSubmitted(String query) {
@@ -207,14 +312,24 @@ class _WalkScreenState extends State<WalkScreen> {
     if (_currentPosition == null || _droppedPin == null) {
       return 'Search or drop a pin for a route';
     }
-    final meters = Geolocator.distanceBetween(
-      _currentPosition!.latitude,
-      _currentPosition!.longitude,
-      _droppedPin!.latitude,
-      _droppedPin!.longitude,
-    );
+    if (_estimatingPinRoute) return 'Calculating walking route…';
+    final meters = _pinRouteDistanceMeters;
+    if (meters == null) return 'Walking route unavailable';
     final minutes = (meters / _walkingSpeedMetersPerSecond / 60).round();
     return '${(meters / 1000).toStringAsFixed(1)} km · $minutes min';
+  }
+
+  String _venueDistanceLabel(VenueInfo venue) {
+    if (venue.location == null || _currentPosition == null) {
+      return 'Distance unavailable';
+    }
+    final key = _venueRouteKey(venue);
+    return walkingRouteDistanceLabel(
+      _venueRouteDistances[key],
+      estimating:
+          _venueRouteEstimatesInProgress.contains(key) ||
+          !_venueRouteEstimatesComplete.contains(key),
+    );
   }
 
   Future<void> _startWalk({LatLng? destination}) async {
@@ -571,7 +686,7 @@ class _WalkScreenState extends State<WalkScreen> {
                       ..._visibleVenues.map(
                         (venue) => _VenueCard(
                           name: venue.name,
-                          subtitle: venue.distanceLabelFrom(_currentPosition),
+                          subtitle: _venueDistanceLabel(venue),
                           tag: venue.hoursLabel,
                           tagColor: colorScheme.tertiary.withValues(alpha: 0.3),
                           photoUrl: venue.photoUrl,
@@ -589,8 +704,7 @@ class _WalkScreenState extends State<WalkScreen> {
   }
 }
 
-/// A single nearby-venue row: placeholder thumbnail, name/subtitle, tag pill,
-/// and a chevron. Backed by placeholder data for now (see _nearbyVenues).
+/// A single nearby-venue row with its name, route distance, hours, and photo.
 class _VenueCard extends StatelessWidget {
   const _VenueCard({
     required this.name,

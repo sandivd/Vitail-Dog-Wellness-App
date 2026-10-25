@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'reward_flow.dart';
 import 'reward_venues.dart';
@@ -15,9 +14,7 @@ import 'exercise_data.dart';
 import 'venue_walk.dart';
 import 'detail_image_header.dart';
 import 'vitail_snack.dart';
-
-typedef WalkingRouteDistanceEstimator =
-    Future<double?> Function(LatLng origin, LatLng destination);
+import 'walking_route.dart';
 
 /// One row of the `partnered_venues` table.
 ///
@@ -352,7 +349,7 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     try {
       final distanceMeters = widget.routeDistanceEstimator != null
           ? await widget.routeDistanceEstimator!(origin, destination)
-          : await _requestWalkingRoute(origin, destination);
+          : await estimateWalkingRouteDistance(origin, destination);
       if (distanceMeters == null ||
           !distanceMeters.isFinite ||
           distanceMeters < 0) {
@@ -372,30 +369,6 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
         setState(() => _estimatingRoute = false);
       }
     }
-  }
-
-  Future<double?> _requestWalkingRoute(
-    LatLng origin,
-    LatLng destination,
-  ) async {
-    final response = await Supabase.instance.client.functions.invoke(
-      'estimate-walking-route',
-      body: {
-        'origin': {'latitude': origin.latitude, 'longitude': origin.longitude},
-        'destination': {
-          'latitude': destination.latitude,
-          'longitude': destination.longitude,
-        },
-      },
-    );
-    final data = response.data;
-    if (response.status < 200 ||
-        response.status >= 300 ||
-        data is! Map ||
-        data['distanceMeters'] is! num) {
-      throw StateError('Walking route service returned an invalid response.');
-    }
-    return (data['distanceMeters'] as num).toDouble();
   }
 
   Future<void> _locateUser() async {
@@ -437,13 +410,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
   }
 
   String get _distanceLabel {
-    final meters = _routeDistanceMeters;
-    if (meters == null) {
-      if (_estimatingRoute) return 'Calculating route…';
-      return 'Route distance unavailable';
-    }
-    if (meters < 1000) return '${meters.round()} m by route';
-    return '${(meters / 1000).toStringAsFixed(1)} km by route';
+    return walkingRouteDistanceLabel(
+      _routeDistanceMeters,
+      estimating: _estimatingRoute,
+    );
   }
 
   @override
@@ -452,10 +422,10 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = dark ? const Color(0xFF242321) : Colors.white;
-    final distanceMeters = venue.distanceMetersFrom(_userLocation);
-    final points = distanceMeters == null
+    final routeDistanceMeters = _routeDistanceMeters;
+    final points = routeDistanceMeters == null
         ? null
-        : ExerciseCalculator.pointsForDistanceMeters(distanceMeters);
+        : ExerciseCalculator.pointsForDistanceMeters(routeDistanceMeters);
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -538,9 +508,9 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                     children: [
                       Text(
                         points == null
-                            ? (_locating
-                                  ? 'Calculating points…'
-                                  : 'Points unavailable')
+                            ? _estimatingRoute
+                                  ? 'Calculating route points…'
+                                  : 'Route points unavailable'
                             : '+ ${NumberFormat.decimalPattern('en').format(points)} pts',
                         style: TextStyle(
                           fontSize: 22,
@@ -551,12 +521,18 @@ class _VenueDetailScreenState extends State<VenueDetailScreen> {
                       const SizedBox(height: 6),
                       Text(
                         points != null
-                            ? 'Estimated from your distance to this venue.'
-                            : _locating
-                            ? 'Locating you to estimate points.'
+                            ? 'Estimated from a walking route to this venue; actual points may vary.'
+                            : _estimatingRoute
+                            ? 'Estimating points from a walking route.'
                             : venue.location == null
                             ? 'This venue location is unavailable.'
-                            : 'Enable location to estimate points for this venue.',
+                            : _userLocation == null
+                            ? _locating
+                                  ? 'Locating you to estimate the walking route.'
+                                  : 'Enable location to estimate route points.'
+                            : _routeEstimateUnavailable
+                            ? 'Walking route could not be estimated.'
+                            : 'Walking route estimate is unavailable.',
                         style: TextStyle(
                           fontSize: 13,
                           color: colors.onSurfaceVariant,

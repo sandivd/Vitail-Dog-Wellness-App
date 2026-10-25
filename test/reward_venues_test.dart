@@ -26,8 +26,10 @@ RewardOffer offer({String? id, String name = 'Other'}) => RewardOffer(
 );
 
 void main() {
-  testWidgets('venue points estimate uses each venue distance', (tester) async {
-    Future<void> openVenue(double longitude) async {
+  testWidgets('venue points estimate uses each walking route distance', (
+    tester,
+  ) async {
+    Future<void> openVenue(double longitude, double routeDistanceMeters) async {
       await tester.pumpWidget(
         MaterialApp(
           home: VenueDetailScreen(
@@ -39,22 +41,49 @@ void main() {
               'points': 999,
             }),
             userLocation: const LatLng(0, 0),
+            routeDistanceEstimator: (_, _) async => routeDistanceMeters,
           ),
         ),
       );
       await tester.pumpAndSettle();
     }
 
-    await openVenue(0.01);
-    expect(find.text('+ 11 pts'), findsOneWidget);
+    await openVenue(0.01, 1200);
+    expect(find.text('+ 12 pts'), findsOneWidget);
     expect(find.text('+ 999 pts'), findsNothing);
     expect(
-      find.text('Estimated from your distance to this venue.'),
+      find.text(
+        'Estimated from a walking route to this venue; actual points may vary.',
+      ),
       findsOneWidget,
     );
 
-    await openVenue(0.02);
-    expect(find.text('+ 22 pts'), findsOneWidget);
+    await openVenue(0.02, 2400);
+    expect(find.text('+ 24 pts'), findsOneWidget);
+  });
+
+  testWidgets('does not show straight-line points when route is unavailable', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VenueDetailScreen(
+          venue: VenueInfo.fromJson({
+            'partner_id': 'a',
+            'venue_name': 'Cafe',
+            'latitude': 0,
+            'longitude': 0.01,
+          }),
+          userLocation: const LatLng(0, 0),
+          routeDistanceEstimator: (_, _) async => null,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Route points unavailable'), findsOneWidget);
+    expect(find.text('Walking route could not be estimated.'), findsOneWidget);
+    expect(find.textContaining('pts'), findsNothing);
   });
 
   testWidgets('Explore opens all venue offers and Back returns to venue', (
