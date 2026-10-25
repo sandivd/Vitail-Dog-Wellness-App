@@ -8,10 +8,16 @@ enum CertificateIssue {
   unrecognisedDocument,
   dogNameNotFound,
   birthdayMismatch,
-  registrationExpired;
+  registrationExpired,
+  numberMismatch,
+  dogNameMismatch,
+  breedMismatch,
+  numberAlreadyUsed;
 
   bool get blocksSubmit =>
-      this == CertificateIssue.notADog || this == CertificateIssue.testChip;
+      this == CertificateIssue.notADog ||
+      this == CertificateIssue.testChip ||
+      this == CertificateIssue.numberAlreadyUsed;
 
   String get message => switch (this) {
         CertificateIssue.noMicrochipFound =>
@@ -30,6 +36,14 @@ enum CertificateIssue {
           "The date of birth doesn't match the one you entered for your dog.",
         CertificateIssue.registrationExpired =>
           'This council registration has expired. The microchip number still counts, but you may want to renew it.',
+        CertificateIssue.numberMismatch =>
+          "The number on this certificate doesn't match the microchip number you entered.",
+        CertificateIssue.dogNameMismatch =>
+          "The dog's name on this certificate doesn't match your dog's name.",
+        CertificateIssue.breedMismatch =>
+          "The breed on this certificate doesn't match your dog's breed.",
+        CertificateIssue.numberAlreadyUsed =>
+          'This microchip number is already linked to another dog in Vitail. If you think this is a mistake, contact us.',
       };
 }
 
@@ -41,6 +55,8 @@ class CertificateReading {
     this.isDog,
     this.dateOfBirth,
     this.expiryDate,
+    this.animalName,
+    this.breed,
   });
 
   final CertificateKind kind;
@@ -49,8 +65,23 @@ class CertificateReading {
   final bool? isDog;
   final DateTime? dateOfBirth;
   final DateTime? expiryDate;
+  final String? animalName;
+  final String? breed;
 
   bool get canSubmit => !issues.any((issue) => issue.blocksSubmit);
+
+  CertificateReading withIssue(CertificateIssue issue) => CertificateReading(
+        kind: kind,
+        issues: List<CertificateIssue>.unmodifiable(
+          issues.contains(issue) ? issues : <CertificateIssue>[...issues, issue],
+        ),
+        microchipNumber: microchipNumber,
+        isDog: isDog,
+        dateOfBirth: dateOfBirth,
+        expiryDate: expiryDate,
+        animalName: animalName,
+        breed: breed,
+      );
 }
 
 const List<String> _registryPhrases = [
@@ -129,6 +160,63 @@ final RegExp _speciesLabel = RegExp(
 );
 final RegExp _breedLabel =
     RegExp(r'\b(?:primary\s*)?breed\b', caseSensitive: false);
+final RegExp _nameLabel = RegExp(
+  r"\b(?:(?:animal|pet|dog)(?:'s|s)?\s*name|name\s*of\s*(?:animal|pet|dog))\b",
+  caseSensitive: false,
+);
+
+const Map<String, String> _breedAliases = {
+  'staffy': 'staffordshire',
+  'staffie': 'staffordshire',
+  'amstaff': 'american staffordshire',
+  'lab': 'labrador',
+  'gsd': 'german',
+  'alsatian': 'german',
+  'westie': 'west highland white',
+  'sharpei': 'shar pei',
+  'frenchie': 'french',
+  'husky': 'siberian',
+};
+
+const Set<String> _genericBreedWords = {
+  'dog',
+  'dogs',
+  'breed',
+  'cross',
+  'crossbreed',
+  'x',
+  'mix',
+  'mixed',
+  'terrier',
+  'retriever',
+  'spaniel',
+  'hound',
+  'shepherd',
+  'setter',
+  'pointer',
+  'sheepdog',
+  'mountain',
+  'miniature',
+  'mini',
+  'standard',
+  'toy',
+  'the',
+  'and',
+  'des',
+  'of',
+  'coated',
+  'haired',
+  'wirehaired',
+  'smooth',
+  'wire',
+  'long',
+  'short',
+  'colour',
+  'color',
+  'sex',
+  'male',
+  'female',
+};
 final RegExp _birthLabel = RegExp(
   r'\b(?:date\s*of\s*birth|d\.?o\.?b)\b\.?',
   caseSensitive: false,
@@ -143,6 +231,8 @@ CertificateReading readCertificateText(
   String text, {
   String? dogName,
   DateTime? dogBirthday,
+  String? dogBreed,
+  String? expectedNumber,
   DateTime? today,
 }) {
   final List<String> lines = text
@@ -165,6 +255,12 @@ CertificateReading readCertificateText(
   } else {
     issues.add(CertificateIssue.multipleMicrochips);
   }
+  final String expected = expectedNumber?.replaceAll(RegExp(r'\s'), '') ?? '';
+  if (microchip != null &&
+      RegExp(r'^\d{15}$').hasMatch(expected) &&
+      microchip != expected) {
+    issues.add(CertificateIssue.numberMismatch);
+  }
 
   final CertificateKind kind = _kindOf(flat);
   if (kind == CertificateKind.unknown) {
@@ -178,8 +274,15 @@ CertificateReading readCertificateText(
   final DateTime? birth = _parseDate(_valueAfter(lines, _birthLabel));
   if (dogBirthday != null &&
       birth != null &&
-      birth.difference(dogBirthday).inDays.abs() > 31) {
+      !_sameDay(birth, dogBirthday) &&
+      !(birth.day <= 12 &&
+          _sameDay(DateTime(birth.year, birth.day, birth.month), dogBirthday))) {
     issues.add(CertificateIssue.birthdayMismatch);
+  }
+
+  final String? certBreed = _valueAfter(lines, _breedLabel);
+  if (dogBreed != null && certBreed != null && _breedsDiffer(certBreed, dogBreed)) {
+    issues.add(CertificateIssue.breedMismatch);
   }
 
   final DateTime? expiry = _parseDate(_valueAfter(lines, _expiryLabel));
@@ -190,9 +293,16 @@ CertificateReading readCertificateText(
     issues.add(CertificateIssue.registrationExpired);
   }
 
-  final String name = dogName?.trim().toLowerCase() ?? '';
-  if (name.isNotEmpty && !flat.contains(name)) {
-    issues.add(CertificateIssue.dogNameNotFound);
+  final String? certName = _valueAfter(lines, _nameLabel);
+  final String name = _normalise(dogName ?? '');
+  if (name.isNotEmpty) {
+    if (certName != null) {
+      if (!' ${_normalise(certName)} '.contains(' $name ')) {
+        issues.add(CertificateIssue.dogNameMismatch);
+      }
+    } else if (!' ${_normalise(text)} '.contains(' $name ')) {
+      issues.add(CertificateIssue.dogNameNotFound);
+    }
   }
 
   return CertificateReading(
@@ -202,7 +312,36 @@ CertificateReading readCertificateText(
     isDog: isDog,
     dateOfBirth: birth,
     expiryDate: expiry,
+    animalName: certName,
+    breed: certBreed,
   );
+}
+
+String _normalise(String value) => value
+    .toLowerCase()
+    .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+    .trim();
+
+bool _sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+Set<String> _breedWords(String value) {
+  final Set<String> words = <String>{};
+  for (final String word in _normalise(value).split(' ')) {
+    if (word.isEmpty) continue;
+    final String expanded = _breedAliases[word] ?? word;
+    for (final String part in expanded.split(' ')) {
+      if (!_genericBreedWords.contains(part)) words.add(part);
+    }
+  }
+  return words;
+}
+
+bool _breedsDiffer(String certificateBreed, String appBreed) {
+  final Set<String> certificate = _breedWords(certificateBreed);
+  final Set<String> app = _breedWords(appBreed);
+  if (certificate.isEmpty || app.isEmpty) return false;
+  return certificate.intersection(app).isEmpty;
 }
 
 Set<String> _labelledNumbers(List<String> lines) {

@@ -1,14 +1,12 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdfx/pdfx.dart';
 
-Future<String> extractCertificateText(PlatformFile file) async {
-  final String? path = file.path;
-  if (path == null) throw StateError('Picked file has no path');
-  final bool isPdf = file.name.toLowerCase().endsWith('.pdf');
+Future<String> extractCertificateText(String path, {String? fileName}) async {
+  final bool isPdf =
+      (fileName ?? path).toLowerCase().endsWith('.pdf');
   final TextRecognizer recognizer =
       TextRecognizer(script: TextRecognitionScript.latin);
   final List<File> tempFiles = <File>[];
