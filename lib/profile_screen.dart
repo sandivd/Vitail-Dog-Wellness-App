@@ -34,6 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _dailyStreak = 0;
   String? _dogRole;
   int? _availableCoupons;
+  bool _microchipPending = false;
   
   int _careScore = 0;
   Map<String, Map<String, dynamic>> _scoreComponents = {};
@@ -80,6 +81,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               .limit(1)
               .maybeSingle();
 
+      bool microchipPending = false;
+      final Object? dogId = dogResponse?['id'];
+      if (dogId != null) {
+        try {
+          final pendingRow = await Supabase.instance.client
+              .from('microchip_submissions')
+              .select('id')
+              .eq('dog_id', dogId)
+              .eq('status', 'pending')
+              .limit(1)
+              .maybeSingle();
+          microchipPending = pendingRow != null;
+        } catch (_) {}
+      }
+
       final profileResponse = await Supabase.instance.client
           .from('profiles')
           .select('daily_streak')
@@ -105,6 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _dogData = dogResponse;
         _dogRole = link?.role;
         _availableCoupons = coupons;
+        _microchipPending = microchipPending;
         _dailyStreak = profileResponse['daily_streak'] ?? 0;
         
         _calculateCareScore(List<Map<String, dynamic>>.from(walksResponse), dogResponse);
@@ -144,7 +161,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     int totalScore = (activityScore * 0.40 + vaccScore * 0.20 + microchipScore * 0.15 + insuranceScore * 0.15 + vetScore * 0.10).round();
 
     final String microchipNum = dog['microchip_number']?.toString() ?? '';
-    final String microchipStatus = microchipScore == 100 ? 'Accepted · $microchipNum' : 'Verify to unlock rewards';
+    final String microchipStatus = microchipScore == 100
+        ? 'Accepted · $microchipNum'
+        : _microchipPending
+        ? 'Certificate under review'
+        : 'Verify to unlock rewards';
     
     final String vaccDate = dog['vaccination_date']?.toString() ?? '';
     final String vaccStatus = vaccDate.isNotEmpty ? 'Up to date' : 'Unknown';
@@ -479,6 +500,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 title: 'Microchip',
                 subtitle: _microchipAccepted
                     ? 'Accepted · $microchipNum'
+                    : _microchipPending
+                    ? 'Certificate under review'
                     : 'Verify to unlock rewards',
                 subtitleColor: _microchipAccepted ? _kGreen : null,
                 onTap: _openMicrochip,

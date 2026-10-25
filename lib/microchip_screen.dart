@@ -16,6 +16,9 @@ import 'onboarding_goal_screen.dart';
 import 'onboarding_style.dart';
 import 'vitail_snack.dart';
 import 'all_set_screen.dart';
+import 'certificate_reader.dart';
+import 'certificate_scanner.dart';
+import 'dog_sharing.dart';
 
 enum _View { form, verified, failed, submitted }
 
@@ -48,11 +51,172 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
   String? _certificateFileName;
   bool _isSaving = false;
 
+  static const int _maxBytes = 10 * 1024 * 1024;
+  bool _isReading = false;
+  CertificateReading? _reading;
+  String? _dogId;
+  String? _dogName;
+  DateTime? _dogBirthday;
+  String? _dogBreed;
+  DateTime? _pendingSince;
+
   @override
   void initState() {
     super.initState();
     _numberController = TextEditingController(text: widget.initialNumber ?? '');
+    _dogId = widget.dogId;
+    _loadDog();
   }
+
+  Future<void> _loadDog() async {
+    try {
+      Map<String, dynamic>? dog;
+      final String? dogId = _dogId;
+      if (dogId != null && dogId.isNotEmpty) {
+        dog = await Supabase.instance.client
+            .from('dogs')
+            .select('id, dog_name, birthday, breed')
+            .eq('id', dogId)
+            .maybeSingle();
+      } else {
+        dog = (await primaryDogForCurrentUser())?.dog;
+        final String? userId = Supabase.instance.client.auth.currentUser?.id;
+        if (dog == null && userId != null) {
+          dog = await Supabase.instance.client
+              .from('dogs')
+              .select('id, dog_name, birthday, breed')
+              .eq('owner_id', userId)
+              .limit(1)
+              .maybeSingle();
+        }
+      }
+      if (dog == null || !mounted) return;
+      _dogId ??= dog['id']?.toString();
+      _dogName = dog['dog_name'] as String?;
+      _dogBreed = dog['breed']?.toString();
+      final String? birthday = dog['birthday']?.toString();
+      _dogBirthday = birthday == null ? null : DateTime.tryParse(birthday);
+    } catch (e) {
+      debugPrint('Could not load dog details: ${e.runtimeType}');
+    }
+    await _loadPending();
+  }
+
+  Future<void> _loadPending() async {
+    final String? dogId = _dogId;
+    if (dogId == null || dogId.isEmpty) return;
+    try {
+      final Map<String, dynamic>? row = await Supabase.instance.client
+          .from('microchip_submissions')
+          .select('created_at')
+          .eq('dog_id', dogId)
+          .eq('status', 'pending')
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(
+        () => _pendingSince = row == null
+            ? null
+            : DateTime.tryParse(row['created_at'].toString())?.toLocal(),
+      );
+    } catch (e) {
+      debugPrint('Could not load pending certificate: ${e.runtimeType}');
+    }
+  }
+
+  Future<bool> _microchipInUse(String number) async {
+    final String? dogId = _dogId;
+    if (dogId == null || dogId.isEmpty) return false;
+    try {
+      final dynamic result = await Supabase.instance.client.rpc(
+        'microchip_in_use',
+        params: <String, dynamic>{'p_number': number, 'p_dog_id': dogId},
+      );
+      return result == true;
+    } catch (e) {
+      debugPrint('Microchip duplicate check failed: ${e.runtimeType}');
+      return false;
+    }
+  }
+
+  bool _isDuplicateError(Object error) =>
+      error is PostgrestException && error.code == '23505';
+
+  String? get _expectedNumber {
+    final String typed = _numberController.text.trim();
+    return microchipNumberError(typed) == null ? typed : null;
+  }
+
+  Future<void> _setCertificate(File file, String name) async {
+    final int bytes = await file.length();
+    if (!mounted) return;
+    if (bytes == 0) {
+      showVitailSnack(
+        context,
+        "We couldn't read that file. Try another one.",
+        type: VitailSnackType.error,
+      );
+      return;
+    }
+    if (bytes > _maxBytes) {
+      showVitailSnack(
+        context,
+        'That file is over 10 MB. Try a smaller scan or photo.',
+        type: VitailSnackType.error,
+      );
+      return;
+    }
+    setState(() {
+      _certificateFile = file;
+      _certificateFileName = name;
+      _reading = null;
+      _isReading = true;
+    });
+    await _readCertificate(file, name);
+  }
+
+  Future<void> _readCertificate(File file, String name) async {
+    try {
+      final String text = await extractCertificateText(
+        file.path,
+        fileName: name,
+      );
+      CertificateReading reading = readCertificateText(
+        text,
+        dogName: _dogName,
+        dogBirthday: _dogBirthday,
+        dogBreed: _dogBreed,
+        expectedNumber: _expectedNumber,
+      );
+      final String? number = reading.microchipNumber;
+      if (number != null && await _microchipInUse(number)) {
+        reading = reading.withIssue(CertificateIssue.numberAlreadyUsed);
+      }
+      if (mounted && identical(_certificateFile, file)) {
+        setState(() => _reading = reading);
+      }
+    } catch (e) {
+      debugPrint('Certificate reader failed: ${e.runtimeType}');
+    } finally {
+      if (mounted && identical(_certificateFile, file)) {
+        setState(() => _isReading = false);
+      }
+    }
+  }
+
+  void _clearCertificate() => setState(() {
+    _certificateFile = null;
+    _certificateFileName = null;
+    _reading = null;
+    _isReading = false;
+  });
+
+  bool get _submitDisabled =>
+      _isSaving ||
+      _isReading ||
+      _pendingSince != null ||
+      _reading?.canSubmit == false;
 
   @override
   void dispose() {
@@ -90,23 +254,36 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
       final chipNumber = _numberController.text.trim();
 
+      if (await _microchipInUse(chipNumber)) {
+        if (!mounted) return;
+        showVitailSnack(
+          context,
+          'This microchip number is already linked to another dog. If it is yours, upload the certificate and we will check it.',
+          type: VitailSnackType.error,
+        );
+        return;
+      }
+
       var query = client
           .from('dogs')
           .update({'microchip_number': chipNumber})
           .eq('owner_id', userId);
-      if (widget.dogId != null && widget.dogId!.isNotEmpty) {
-        query = query.eq('id', widget.dogId!);
+      final String? dogId = _dogId;
+      if (dogId != null && dogId.isNotEmpty) {
+        query = query.eq('id', dogId);
       }
       final saved = await query.select('id').single();
       if (saved['id'] == null) throw StateError('Dog was not updated');
 
       if (!mounted) return;
       setState(() => _view = _View.verified);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       showVitailSnack(
         context,
-        'Could not save microchip number. Please try again.',
+        _isDuplicateError(e)
+            ? 'This microchip number is already linked to another dog. If it is yours, upload the certificate and we will check it.'
+            : 'Could not save microchip number. Please try again.',
         type: VitailSnackType.error,
       );
     } finally {
@@ -124,9 +301,12 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       return;
     }
 
+    if (_submitDisabled) return;
+    final CertificateReading? reading = _reading;
+
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
-    final dogId = widget.dogId;
+    final dogId = _dogId;
     if (userId == null || dogId == null || dogId.isEmpty) {
       showVitailSnack(
         context,
@@ -165,6 +345,10 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         await client.from('microchip_submissions').insert({
           'dog_id': dogId,
           'file_path': storagePath,
+          'extracted_microchip': reading?.microchipNumber,
+          'reader_flags': reading == null
+              ? <String>['reader_failed']
+              : reading.issues.map((issue) => issue.name).toList(),
         });
       } catch (_) {
         await client.storage
@@ -174,15 +358,25 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
       }
 
       if (!mounted) return;
-      setState(() => _view = _View.submitted);
+      setState(() {
+        _certificateFile = null;
+        _certificateFileName = null;
+        _reading = null;
+        _pendingSince = DateTime.now();
+        _view = _View.submitted;
+      });
     } catch (e) {
       debugPrint('Certificate upload failed: $e');
       if (!mounted) return;
+      final bool alreadyPending = _isDuplicateError(e);
       showVitailSnack(
         context,
-        'Could not upload certificate. Please try again.',
+        alreadyPending
+            ? 'You already have a certificate waiting for review.'
+            : 'Could not upload certificate. Please try again.',
         type: VitailSnackType.error,
       );
+      if (alreadyPending) await _loadPending();
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -269,10 +463,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           }
 
           if (pickedPath != null) {
-            setState(() {
-              _certificateFile = File(pickedPath!);
-              _certificateFileName = pickedName ?? 'certificate';
-            });
+            await _setCertificate(File(pickedPath), pickedName ?? 'certificate');
           }
         }
       } else {
@@ -283,10 +474,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           imageQuality: 85,
         );
         if (picked != null) {
-          setState(() {
-            _certificateFile = File(picked.path);
-            _certificateFileName = picked.name;
-          });
+          await _setCertificate(File(picked.path), picked.name);
         }
       }
     } catch (_) {
@@ -571,25 +759,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         'Optional: Needed only to redeem reward coupons. You can still track walks and keep a journal without it.',
       ),
       const SizedBox(height: 20),
-      _uploadBox(dashed: false),
-      const SizedBox(height: 20),
-      ElevatedButton(
-        onPressed: _isSaving ? null : _submitCertificate,
-        style: _style.primaryButton,
-        child: _isSaving
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : Text(
-                'Submit certificate',
-                style: _style.text(16, color: Colors.white),
-              ),
-      ),
+      ..._certificateSection(dashed: false),
       const SizedBox(height: 8),
       _skipLink(),
     ],
@@ -607,25 +777,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
         'Double-check the number on your dog\'s chip, or upload a certificate and we\'ll confirm it for you.',
       ),
       const SizedBox(height: 24),
-      _uploadBox(dashed: true),
-      const SizedBox(height: 20),
-      ElevatedButton(
-        onPressed: _isSaving ? null : _submitCertificate,
-        style: _style.primaryButton,
-        child: _isSaving
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
-            : Text(
-                'Submit certificate',
-                style: _style.text(16, color: Colors.white),
-              ),
-      ),
+      ..._certificateSection(dashed: true),
       const SizedBox(height: 10),
       Center(
         child: TextButton(
@@ -783,10 +935,18 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Ready to submit · Tap to change',
+                        _isReading
+                            ? 'Reading certificate…'
+                            : _reading?.canSubmit == false
+                            ? "Can't submit this file · Tap to change"
+                            : 'Ready to submit · Tap to change',
                         style: _style.text(
                           12,
-                          color: _style.green,
+                          color: _isReading
+                              ? _style.muted
+                              : _reading?.canSubmit == false
+                              ? _style.coral
+                              : _style.green,
                           weight: FontWeight.w600,
                         ),
                       ),
@@ -795,10 +955,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
                 ),
                 IconButton(
                   icon: VitailIcon('x', size: 20, color: _style.muted),
-                  onPressed: () => setState(() {
-                    _certificateFile = null;
-                    _certificateFileName = null;
-                  }),
+                  onPressed: _clearCertificate,
                 ),
               ],
             ),
@@ -806,7 +963,7 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: _pickCertificate,
+      onTap: _isSaving ? null : _pickCertificate,
       child: dashed
           ? CustomPaint(
               painter: _DashedBorderPainter(_style.border),
@@ -815,6 +972,199 @@ class _MicrochipScreenState extends State<MicrochipScreen> {
           : inner,
     );
   }
+
+  List<Widget> _certificateSection({required bool dashed}) {
+    final DateTime? pendingSince = _pendingSince;
+    if (pendingSince != null) return <Widget>[_pendingCard(pendingSince)];
+    return <Widget>[
+      _uploadBox(dashed: dashed),
+      _readingSummary(),
+      const SizedBox(height: 20),
+      ElevatedButton(
+        onPressed: _submitDisabled ? null : _submitCertificate,
+        style: _style.primaryButton,
+        child: _isSaving
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : Text(
+                'Submit certificate',
+                style: _style.text(16, color: Colors.white),
+              ),
+      ),
+    ];
+  }
+
+  Widget _pendingCard(DateTime since) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: _colors.card,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: _style.border),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        VitailIcon('clock', size: 22, color: _style.coral),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Certificate under review',
+                style: _style.text(14, weight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'We received your certificate on ${_formatDate(since)}. You can upload a new one if this one is rejected.',
+                style: _style.text(
+                  12,
+                  color: _style.muted,
+                  weight: FontWeight.w500,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  String _formatDate(DateTime date) {
+    const List<String> months = <String>[
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  Widget _readingSummary() {
+    if (_certificateFile == null) return const SizedBox.shrink();
+    if (_isReading) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: _style.coral,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Reading your certificate…',
+              style: _style.text(
+                12,
+                color: _style.muted,
+                weight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final CertificateReading? reading = _reading;
+    final List<Widget> rows = <Widget>[];
+    if (reading == null) {
+      rows.add(
+        _readingRow(
+          'info',
+          "We couldn't read this file automatically. You can still submit it and our team will check it.",
+          _style.muted,
+        ),
+      );
+    } else {
+      final List<String> details = <String>[
+        if (reading.animalName != null) reading.animalName!.trim(),
+        if (reading.breed != null) reading.breed!.trim(),
+        if (reading.dateOfBirth != null)
+          'born ${_formatDate(reading.dateOfBirth!)}',
+      ];
+      if (details.isNotEmpty) {
+        rows.add(
+          _readingRow(
+            'file-text',
+            'On the certificate: ${details.join(' · ')}',
+            _style.muted,
+          ),
+        );
+      }
+      final String? number = reading.microchipNumber;
+      if (number != null) {
+        rows.add(
+          _readingRow(
+            'circle-check',
+            'Microchip number found: ${_groupDigits(number)}',
+            _style.ink,
+          ),
+        );
+      }
+      for (final CertificateIssue issue in reading.issues) {
+        rows.add(
+          _readingRow(
+            issue.blocksSubmit ? 'circle-alert' : 'info',
+            issue.message,
+            issue.blocksSubmit ? _style.coral : _style.muted,
+          ),
+        );
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
+      ),
+    );
+  }
+
+  Widget _readingRow(String icon, String text, Color color) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        VitailIcon(icon, size: 16, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: _style.text(
+              12,
+              color: color,
+              weight: FontWeight.w500,
+              height: 1.4,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  String _groupDigits(String digits) => [
+    for (int i = 0; i < digits.length; i += 3)
+      digits.substring(i, i + 3 > digits.length ? digits.length : i + 3),
+  ].join(' ');
 
   OutlineInputBorder _fieldBorder(Color color) => OutlineInputBorder(
     borderRadius: BorderRadius.circular(14),
